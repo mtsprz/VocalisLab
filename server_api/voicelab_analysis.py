@@ -143,7 +143,8 @@ def measure_jitter(sound, pitch_floor=None, pitch_ceiling=None):
         pitch_floor = pitch_floor or pf
         pitch_ceiling = pitch_ceiling or pc
 
-    point_process = call(sound, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    pitch = call(sound, "To Pitch (ac)", 0.0, pitch_floor, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pitch_ceiling)
+    point_process = call(pitch, "To PointProcess")
 
     jitter_local = _safe_call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
     jitter_local_abs = _safe_call(point_process, "Get jitter (local, absolute)", 0, 0, 0.0001, 0.02, 1.3)
@@ -167,7 +168,8 @@ def measure_shimmer(sound, pitch_floor=None, pitch_ceiling=None):
         pitch_floor = pitch_floor or pf
         pitch_ceiling = pitch_ceiling or pc
 
-    point_process = call(sound, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    pitch = call(sound, "To Pitch (ac)", 0.0, pitch_floor, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pitch_ceiling)
+    point_process = call(pitch, "To PointProcess")
 
     shimmer_local = _safe_call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
     shimmer_local_db = _safe_call([sound, point_process], "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
@@ -203,7 +205,7 @@ def measure_cpp(sound, pitch_floor=None, pitch_ceiling=None):
     try:
         spectrum = sound.to_spectrum()
         cepstrum = call(spectrum, "To PowerCepstrum")
-        cpp = call(cepstrum, "Get peak prominence", pitch_floor, pitch_ceiling, 0.01, "Straight", "Robust")
+        cpp = call(cepstrum, "Get peak prominence", pitch_floor, pitch_ceiling, "Parabolic", 0.0, 0.0, "Straight", "Robust")
         return {"cpps_db": round(float(cpp), 2)}
     except Exception:
         try:
