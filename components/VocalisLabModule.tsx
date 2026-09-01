@@ -192,7 +192,7 @@ export default function VocalisLabModule() {
   };
 
   const detenerHabla = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.stop) {
       mediaRecorderRef.current.stop();
       setGrabandoHabla(false);
     }
