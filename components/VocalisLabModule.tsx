@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity, Mic, Square, FileText, CheckCircle2,
-  Sparkles, Layers, Sliders, Volume2, User, Stethoscope, Save, AlertCircle,
-  ChevronDown, ChevronRight, Shield, Edit3
+  Sparkles, Sliders, Volume2, User, Stethoscope, AlertCircle,
+  Shield, Edit3, ArrowRight, ChevronDown, ChevronRight, Layers, Upload
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
-import SeverityScale, { getSeverityLevel } from './SeverityScale';
-import AnalysisControl from './AnalysisControl';
-import VoxPlotImport from './VoxPlotImport';
+import ClinicalReviewScreen from './ClinicalReviewScreen';
+import TaskProtocolSelector from './TaskProtocolSelector';
 import ReportEditor from './ReportEditor';
+import VoxPlotImport from './VoxPlotImport';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -19,7 +19,33 @@ interface AnalysisResult {
   tools: any[];
   jsonExport: any;
   csvExport: string;
+  harmonics: any[];
+  formants: any;
+  ltas: any;
+  spectral: any;
+  timestamp: string;
+  engineVersion: string;
+  scriptVersion: string;
+  fileHash: string;
+  modo: string;
 }
+
+type FlowStep = 'protocol' | 'capture' | 'analyzing' | 'review' | 'editor';
+
+const ANALYSIS_STAGES = [
+  'Validando señal de audio...',
+  'Ejecutando Praat / Parselmouth...',
+  'Calculando F0 y frecuencia fundamental...',
+  'Midiendo Jitter (5 métodos)...',
+  'Midiendo Shimmer (6 métodos)...',
+  'Calculando HNR (Harmonics-to-Noise Ratio)...',
+  'Calculando CPPS (Cepstral Peak Prominence)...',
+  'Extrayendo formantes (Burg)...',
+  'Calculando componentes AVQI v03.01...',
+  'Generando espectrograma...',
+  'Generando gráficos clínicos...',
+  'Informe listo para revisión.',
+];
 
 export default function VocalisLabModule() {
   const [dispositivos, setDispositivos] = useState<MediaDeviceInfo[]>([]);
@@ -31,29 +57,32 @@ export default function VocalisLabModule() {
   const [motivo, setMotivo] = useState('');
   const [derivador, setDerivador] = useState('');
   const [tmf, setTmf] = useState('15');
-
   const [grbas, setGrbas] = useState({ G: 0, R: 0, B: 0, A: 0, S: 0 });
   const [rasati, setRasati] = useState({ R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 });
 
+  const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [grabandoVocal, setGrabandoVocal] = useState(false);
   const [grabandoHabla, setGrabandoHabla] = useState(false);
   const [blobVocal, setBlobVocal] = useState<Blob | null>(null);
   const [blobHabla, setBlobHabla] = useState<Blob | null>(null);
   const [procesando, setProcesando] = useState(false);
+  const [analysisStage, setAnalysisStage] = useState(0);
   const [mensajeExito, setMensajeExito] = useState('');
   const [errorBackend, setErrorBackend] = useState('');
 
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'capture' | 'control' | 'editor' | 'voxplot'>('capture');
+  const [flowStep, setFlowStep] = useState<FlowStep>('protocol');
   const [showRawData, setShowRawData] = useState(false);
   const [showJson, setShowJson] = useState(false);
   const [approved, setApproved] = useState(false);
+  const [showVoxplot, setShowVoxplot] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<any>(null);
+  const analysisIntervalRef = useRef<any>(null);
 
   useEffect(() => {
     async function cargarDispositivos() {
@@ -70,6 +99,12 @@ export default function VocalisLabModule() {
     cargarDispositivos();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (analysisIntervalRef.current) clearInterval(analysisIntervalRef.current);
+    };
+  }, []);
+
   const iniciarVisualizador = (stream: MediaStream) => {
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const analyser = audioCtx.createAnalyser();
@@ -78,15 +113,12 @@ export default function VocalisLabModule() {
     source.connect(analyser);
     audioContextRef.current = audioCtx;
     analyserRef.current = analyser;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
-
     const draw = () => {
       animationFrameRef.current = requestAnimationFrame(draw);
       analyser.getByteTimeDomainData(dataArray);
@@ -100,8 +132,7 @@ export default function VocalisLabModule() {
       for (let i = 0; i < bufferLength; i++) {
         const v = dataArray[i] / 128.0;
         const y = (v * canvas.height) / 2;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         x += sliceWidth;
       }
       ctx.lineTo(canvas.width, canvas.height / 2);
@@ -146,10 +177,7 @@ export default function VocalisLabModule() {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          sampleRate: 44100,
+          echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 44100,
         },
       });
       iniciarVisualizador(stream);
@@ -157,12 +185,9 @@ export default function VocalisLabModule() {
       const source = audioCtx.createMediaStreamSource(stream);
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       const recordedSamples: Float32Array[] = [];
-      processor.onaudioprocess = (e) => {
-        recordedSamples.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-      };
+      processor.onaudioprocess = (e) => { recordedSamples.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
       source.connect(processor);
       processor.connect(audioCtx.destination);
-
       const stopRecording = () => {
         processor.disconnect();
         source.disconnect();
@@ -174,10 +199,8 @@ export default function VocalisLabModule() {
         let offset = 0;
         recordedSamples.forEach((s) => { merged.set(s, offset); offset += s.length; });
         const wavBlob = encodeWav(merged, 44100);
-        if (tipo === 'vocal') setBlobVocal(wavBlob);
-        else setBlobHabla(wavBlob);
+        if (tipo === 'vocal') setBlobVocal(wavBlob); else setBlobHabla(wavBlob);
       };
-
       mediaRecorderRef.current = { stop: stopRecording };
       if (tipo === 'vocal') {
         setGrabandoVocal(true);
@@ -186,25 +209,30 @@ export default function VocalisLabModule() {
         setGrabandoHabla(true);
       }
     } catch (err) {
-      alert('Error al acceder al micrófono o placa de audio.');
+      alert('Error al acceder al micrófono.');
     }
   };
 
   const detenerHabla = () => {
-    if (mediaRecorderRef.current?.stop) {
-      mediaRecorderRef.current.stop();
-      setGrabandoHabla(false);
-    }
+    if (mediaRecorderRef.current?.stop) { mediaRecorderRef.current.stop(); setGrabandoHabla(false); }
   };
 
   const ejecutarAnalisis = async () => {
-    if (!blobVocal) { alert('Debes grabar la muestra de la vocal /a/ sostenida.'); return; }
-    if (!BACKEND_URL) { alert('ERROR CRÍTICO: Configure VITE_BACKEND_URL en Vercel.'); return; }
+    if (!blobVocal) { alert('Debes grabar la muestra de audio.'); return; }
+    if (!BACKEND_URL) { alert('ERROR: Configure VITE_BACKEND_URL en Vercel.'); return; }
 
     setProcesando(true);
+    setFlowStep('analyzing');
+    setAnalysisStage(0);
     setErrorBackend('');
     setMensajeExito('');
     setAnalysisResult(null);
+
+    let stage = 0;
+    analysisIntervalRef.current = setInterval(() => {
+      stage++;
+      if (stage < ANALYSIS_STAGES.length) setAnalysisStage(stage);
+    }, 800);
 
     try {
       const formData = new FormData();
@@ -220,18 +248,15 @@ export default function VocalisLabModule() {
       formData.append('rasati', JSON.stringify(rasati));
 
       const resJson = await fetch(`${BACKEND_URL}/api/analizar`, { method: 'POST', body: formData });
-
-      if (!resJson.ok) {
-        const errText = await resJson.text();
-        throw new Error(`Error ${resJson.status}: ${errText}`);
-      }
-
+      if (!resJson.ok) { const errText = await resJson.text(); throw new Error(`Error ${resJson.status}: ${errText}`); }
       const data = await resJson.json();
       setAnalysisResult(data);
-      setActiveTab('control');
+      setFlowStep('review');
     } catch (err: any) {
       setErrorBackend(err.message || 'Error al procesar el análisis.');
+      setFlowStep('capture');
     } finally {
+      if (analysisIntervalRef.current) clearInterval(analysisIntervalRef.current);
       setProcesando(false);
     }
   };
@@ -251,7 +276,6 @@ export default function VocalisLabModule() {
       formData.append('derivador', derivador || 'Consulta directa');
       formData.append('tmf', tmf);
       formData.append('rasati', JSON.stringify(rasati));
-
       const res = await fetch(`${BACKEND_URL}/api/analizar-y-reportar`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const blobPdf = await res.blob();
@@ -260,7 +284,6 @@ export default function VocalisLabModule() {
       a.href = url;
       a.download = `VocalisLab_Informe_${dni || 'Clinico'}.pdf`;
       a.click();
-
       try {
         const grbasStr = `G${grbas.G} R${grbas.R} B${grbas.B} A${grbas.A} S${grbas.S}`;
         const rasatiStr = `R${rasati.R} A${rasati.A} S${rasati.S} A2${rasati.A2} T${rasati.T} I${rasati.I}`;
@@ -270,7 +293,6 @@ export default function VocalisLabModule() {
           derivador: derivador || 'Consulta directa', grbas: grbasStr, rasati: rasatiStr, tmf: parseFloat(tmf) || 0,
         });
       } catch (e) { console.warn('Error guardando en Supabase:', e); }
-
       setMensajeExito('Informe generado y descargado.');
       setTimeout(() => setMensajeExito(''), 5000);
     } catch (err: any) {
@@ -280,38 +302,70 @@ export default function VocalisLabModule() {
     }
   };
 
-  const handleVoxPlotImport = (data: any) => {
-    console.log('VOXplot importado:', data);
-  };
-
   const r = analysisResult;
-  const m = r?.metrics;
-  const avqi = r?.avqiComponents;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row items-start md:items-center justify-between border-b border-slate-800 pb-6 gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-sky-500/10 border border-sky-500/30 rounded-xl text-sky-400">
-            <Activity className="w-7 h-7 animate-pulse" />
+            <Activity className="w-7 h-7" />
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-sky-400 bg-clip-text text-transparent">
               VocalisLab Pro
             </h1>
-            <p className="text-sm text-slate-400">Bioacústica Fonoaudiológica — AVQI v03.01 — Praat/Parselmouth</p>
+            <p className="text-sm text-slate-400">Bioacústica Fonoaudiológica — Praat/Parselmouth — VoiceLab v2.0</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl">
-          <Volume2 className="w-4 h-4 text-sky-400" />
-          <select value={selectedDeviceId} onChange={(e) => setSelectedDeviceId(e.target.value)}
-            className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer max-w-[220px] truncate">
-            {dispositivos.map((d) => (
-              <option key={d.deviceId} value={d.deviceId} className="bg-slate-900 text-white">
-                {d.label || `Mic ${d.deviceId.slice(0, 5)}`}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl">
+            <Volume2 className="w-4 h-4 text-sky-400" />
+            <select value={selectedDeviceId} onChange={(e) => setSelectedDeviceId(e.target.value)}
+              className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer max-w-[220px] truncate">
+              {dispositivos.map((d) => (
+                <option key={d.deviceId} value={d.deviceId} className="bg-slate-900 text-white">
+                  {d.label || `Mic ${d.deviceId.slice(0, 5)}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button onClick={() => setShowVoxplot(!showVoxplot)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-900/90 border border-slate-800 rounded-xl text-xs text-slate-400 hover:text-slate-200 transition-colors">
+            <Layers className="w-3.5 h-3.5" /> VOXplot
+          </button>
+        </div>
+      </div>
+
+      {/* Flow progress indicator */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1">
+          {([
+            { id: 'protocol' as const, label: '1. Protocolo', icon: FileText },
+            { id: 'capture' as const, label: '2. Captura', icon: Mic },
+            { id: 'analyzing' as const, label: '3. Análisis', icon: Sparkles },
+            { id: 'review' as const, label: '4. Revisión', icon: Shield, disabled: !r },
+            { id: 'editor' as const, label: '5. Informe', icon: Edit3, disabled: !r },
+          ]).map((step) => {
+            const stepIdx = ['protocol', 'capture', 'analyzing', 'review', 'editor'].indexOf(step.id);
+            const currentIdx = ['protocol', 'capture', 'analyzing', 'review', 'editor'].indexOf(flowStep);
+            const isActive = step.id === flowStep;
+            const isDone = stepIdx < currentIdx;
+            const isDisabled = step.disabled || (stepIdx > currentIdx && !isDone);
+            return (
+              <button key={step.id} onClick={() => !isDisabled && setFlowStep(step.id as FlowStep)}
+                disabled={isDisabled}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  isActive ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                  : isDone ? 'text-emerald-400 hover:text-emerald-300'
+                  : 'text-slate-500 hover:text-slate-300 disabled:opacity-30'
+                }`}>
+                <step.icon className="w-3.5 h-3.5" />
+                {step.label}
+                {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -323,14 +377,12 @@ export default function VocalisLabModule() {
           </p>
         </div>
       )}
-
       {errorBackend && (
         <div className="max-w-7xl mx-auto mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
           <p className="text-sm text-red-300">{errorBackend}</p>
         </div>
       )}
-
       {mensajeExito && (
         <div className="max-w-7xl mx-auto mb-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-3">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -338,26 +390,17 @@ export default function VocalisLabModule() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto mb-4 flex gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1">
-        {[
-          { id: 'capture' as const, label: 'Captura', icon: Mic },
-          { id: 'control' as const, label: 'Control', icon: Shield, disabled: !r },
-          { id: 'editor' as const, label: 'Editor', icon: Edit3, disabled: !r },
-          { id: 'voxplot' as const, label: 'VOXplot', icon: Layers },
-        ].map((tab) => (
-          <button key={tab.id} onClick={() => !tab.disabled && setActiveTab(tab.id)}
-            disabled={tab.disabled}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-              activeTab === tab.id ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'text-slate-500 hover:text-slate-300 disabled:opacity-30'
-            }`}>
-            <tab.icon className="w-3.5 h-3.5" />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       <div className="max-w-7xl mx-auto">
-        {activeTab === 'capture' && (
+        {/* STEP 1: Protocol */}
+        {flowStep === 'protocol' && (
+          <div className="space-y-6">
+            <TaskProtocolSelector selectedTask={selectedTask} onSelect={(id) => { setSelectedTask(id); setFlowStep('capture'); }}
+              hasVocal={!!blobVocal} hasHabla={!!blobHabla} />
+          </div>
+        )}
+
+        {/* STEP 2: Capture */}
+        {flowStep === 'capture' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-7 space-y-6">
               <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl">
@@ -464,10 +507,9 @@ export default function VocalisLabModule() {
 
               <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl space-y-4">
                 <div className="flex items-center gap-2 text-sky-400 font-semibold text-sm">
-                  <Layers className="w-4 h-4" />
-                  <span>Captura de Muestras Estandarizadas</span>
+                  <Mic className="w-4 h-4" />
+                  <span>Captura de Muestras</span>
                 </div>
-
                 <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-200">1. Vocal /a/ sostenida</p>
@@ -478,7 +520,6 @@ export default function VocalisLabModule() {
                     {grabandoVocal ? <><Square className="w-3.5 h-3.5 fill-current" /> Grabando...</> : blobVocal ? <><CheckCircle2 className="w-3.5 h-3.5" /> Lista</> : <><Mic className="w-3.5 h-3.5" /> Grabar</>}
                   </button>
                 </div>
-
                 <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-200">2. Habla continua</p>
@@ -495,142 +536,122 @@ export default function VocalisLabModule() {
                     </button>
                   )}
                 </div>
-
                 <button type="button" onClick={ejecutarAnalisis} disabled={procesando || !blobVocal}
                   className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-xl transition-all ${procesando || !blobVocal ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-sky-500/20 active:scale-[0.98]'}`}>
-                  {procesando ? (
-                    <><Sparkles className="w-4 h-4 animate-spin text-sky-200" /> Procesando con Praat...</>
-                  ) : (
-                    <><FileText className="w-4 h-4" /> Analizar con Praat</>
-                  )}
+                  <><FileText className="w-4 h-4" /> Analizar con Praat</>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {activeTab === 'control' && r && (
-          <div className="space-y-6">
+        {/* STEP 3: Analyzing */}
+        {flowStep === 'analyzing' && (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-8 rounded-2xl shadow-xl text-center">
+              <div className="mb-6">
+                <div className="w-16 h-16 mx-auto bg-sky-500/10 border border-sky-500/30 rounded-2xl flex items-center justify-center">
+                  <Sparkles className="w-8 h-8 text-sky-400 animate-spin" />
+                </div>
+              </div>
+              <h2 className="text-lg font-bold text-slate-100 mb-2">Analizando con Praat/Parselmouth</h2>
+              <p className="text-sm text-slate-400 mb-6">Procesando audio y calculando métricas bioacústicas...</p>
+              <div className="space-y-2">
+                {ANALYSIS_STAGES.slice(0, analysisStage + 1).map((stage, i) => (
+                  <div key={i} className={`flex items-center gap-2 text-xs px-4 py-2 rounded-lg transition-all ${
+                    i === analysisStage ? 'bg-sky-500/10 text-sky-300 border border-sky-500/30' : 'text-emerald-400'
+                  }`}>
+                    {i < analysisStage ? (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    ) : i === analysisStage ? (
+                      <div className="w-3.5 h-3.5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <div className="w-3.5 h-3.5" />
+                    )}
+                    {stage}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: Clinical Review */}
+        {flowStep === 'review' && r && (
+          <ClinicalReviewScreen
+            audioInfo={r.audio}
+            metrics={r.metrics}
+            avqiComponents={r.avqiComponents}
+            tools={r.tools || []}
+            timestamp={r.timestamp || new Date().toISOString()}
+            engineVersion={r.engineVersion || 'N/D'}
+            scriptVersion={r.scriptVersion || 'N/D'}
+            fileHash={r.fileHash || r.audio?.file_hash_sha256 || 'N/D'}
+            harmonics={r.harmonics || r.metrics?.harmonics || []}
+            formants={r.formants || r.metrics?.formants || {}}
+            ltas={r.ltas || r.metrics?.ltas || {}}
+            spectral={r.spectral || r.metrics?.spectral || {}}
+            modo={r.modo || 'clinico'}
+            onViewJson={() => setShowJson(true)}
+            onViewCsv={() => {
+              if (r.csvExport) {
+                const blob = new Blob([r.csvExport], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'VocalisLab_Datos.csv'; a.click();
+              }
+            }}
+            onViewGraphs={() => {}}
+            onRecalculate={() => { setFlowStep('capture'); ejecutarAnalisis(); }}
+            onDownloadPreliminar={descargarPdf}
+            onApprove={() => { setApproved(true); setFlowStep('editor'); }}
+          />
+        )}
+
+        {/* STEP 5: Report Editor */}
+        {flowStep === 'editor' && r && (
+          <div className="space-y-4">
             <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl">
-              <AnalysisControl
-                audioInfo={r.audio}
-                metrics={m}
-                avqiComponents={avqi}
-                tools={r.tools || []}
-                timestamp={r.jsonExport?.timestamp || new Date().toISOString()}
-                engineVersion={m?.parselmouth_version || 'N/D'}
-                scriptVersion={m?.praat_script || 'N/D'}
-                fileHash={r.audio?.file_hash_sha256 || 'N/D'}
-                onViewRaw={() => setShowRawData(true)}
-                onViewJson={() => setShowJson(true)}
-                onViewGraphs={() => {}}
-                onRecalculate={ejecutarAnalisis}
-                onDownloadPreliminar={descargarPdf}
-                onEdit={() => setActiveTab('editor')}
-                onApprove={() => { setApproved(true); setActiveTab('editor'); }}
-                criticalErrors={r.audio?.valid === false ? r.audio.issues : []}
+              <ReportEditor
+                patientData={{ nombre, dni, edad, sexo, motivo, derivador }}
+                metrics={r.metrics}
+                aiText={r.jsonExport?.sintesis_ia || ''}
+                onSave={(fields, author) => console.log('Guardado:', { fields, author })}
+                onExport={(fields) => { descargarPdf(); }}
               />
             </div>
-
-            {m && (
-              <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl space-y-4">
-                <div className="flex items-center gap-2 text-sky-400 font-semibold text-sm">
-                  <Activity className="w-4 h-4" />
-                  <span>Resultados Bioacústicos</span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <SeverityScale value={m.f0_mean} level={getSeverityLevel(m.f0_mean, [0, 0, 0])} label="F0 media" reference="Variable (edad, sexo)" unit=" Hz" />
-                  <SeverityScale value={m.jitter_pct} level={getSeverityLevel(m.jitter_pct, [1.04, 2.0, 3.0])} label="Jitter local" reference="< 1.04%" unit="%" />
-                  <SeverityScale value={m.shimmer_pct} level={getSeverityLevel(m.shimmer_pct, [3.81, 5.0, 7.0])} label="Shimmer local" reference="< 3.81%" unit="%" />
-                  <SeverityScale value={m.shimmer_db} level={getSeverityLevel(m.shimmer_db, [0.5, 1.0, 2.0])} label="Shimmer dB" reference="< 0.5 dB" unit=" dB" />
-                  <SeverityScale value={m.hnr_db} level={getSeverityLevel(m.hnr_db, [20, 15, 10], 'higher_better')} label="HNR" reference="> 20 dB" unit=" dB" />
-                  <SeverityScale value={m.cpps_db} level={getSeverityLevel(m.cpps_db, [5.5, 3.0, 1.0], 'higher_better')} label="CPPS" reference="> 5.5 dB" unit=" dB" />
-                </div>
-
-                {avqi && (
-                  <div className="mt-4 p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider mb-3">AVQI v03.01 — Componentes</div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                      {[
-                        { label: 'CPPs', val: avqi.cpps_db, unit: 'dB' },
-                        { label: 'HNR', val: avqi.hnr_db, unit: 'dB' },
-                        { label: 'Shimmer local', val: avqi.shimmer_local_pct, unit: '%' },
-                        { label: 'Shimmer dB', val: avqi.shimmer_local_db, unit: 'dB' },
-                        { label: 'Spectral Slope', val: avqi.spectral_slope, unit: 'dB/oct' },
-                        { label: 'Spectral Tilt', val: avqi.spectral_tilt, unit: 'dB' },
-                      ].map((c) => (
-                        <div key={c.label} className="flex justify-between px-2 py-1 bg-slate-900/50 rounded">
-                          <span className="text-slate-400">{c.label}</span>
-                          <span className={`font-mono ${c.val === null ? 'text-red-400' : 'text-slate-200'}`}>{c.val !== null ? `${c.val}${c.unit}` : 'N/D'}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-xs text-slate-500">AVQI v03.01:</span>
-                      {avqi.calculable ? (
-                        <SeverityScale value={avqi.avqi} level={getSeverityLevel(avqi.avqi, [2.0, 2.9, 3.5])} label="" reference="corte ≤ 2.9" compact />
-                      ) : (
-                        <span className="text-xs text-red-400 font-semibold">NO CALCULABLE — {avqi.error || 'Faltan componentes obligatorios'}</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {m.harmonics && m.harmonics.length > 0 && (
-                  <div className="mt-4 p-4 bg-slate-950/50 border border-slate-800 rounded-xl">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider mb-2">Armónicos detectados</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {m.harmonics.map((h: any) => (
-                        <span key={h.number} className="px-2 py-0.5 bg-sky-500/10 border border-sky-500/30 rounded text-[10px] text-sky-300 font-mono">
-                          H{h.number}: {h.frequency_hz} Hz ({h.amplitude_db} dB)
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {m.formants && Object.keys(m.formants).length > 0 && (
-                  <div className="mt-2 p-3 bg-slate-950/50 border border-slate-800 rounded-xl text-xs">
-                    <span className="text-slate-400">Formantes:</span>
-                    {m.formants.f1_hz && <span className="ml-2 text-slate-200">F1={m.formants.f1_hz} Hz</span>}
-                    {m.formants.f2_hz && <span className="ml-2 text-slate-200">F2={m.formants.f2_hz} Hz</span>}
-                  </div>
-                )}
-              </div>
-            )}
-
             <div className="flex gap-3">
+              <button onClick={() => setFlowStep('review')}
+                className="px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all">
+                ← Volver a Revisión
+              </button>
               <button onClick={descargarPdf} disabled={procesando}
                 className="flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-lg shadow-sky-500/20 transition-all disabled:opacity-40">
-                <FileText className="w-4 h-4" /> Descargar Informe PDF
-              </button>
-              <button onClick={() => setActiveTab('editor')}
-                className="px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all">
-                <Edit3 className="w-4 h-4" /> Editar Informe
+                <FileText className="w-4 h-4" /> Generar y Descargar PDF
               </button>
             </div>
           </div>
         )}
 
-        {activeTab === 'editor' && r && (
-          <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl">
-            <ReportEditor
-              patientData={{ nombre, dni, edad, sexo, motivo, derivador }}
-              metrics={m}
-              aiText={r.jsonExport?.sintesis_ia || ''}
-              onSave={(fields, author) => console.log('Guardado:', { fields, author })}
-              onExport={(fields) => { console.log('Exportar:', fields); descargarPdf(); }}
-            />
+        {/* VOXplot optional panel */}
+        {showVoxplot && (
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setShowVoxplot(false)}>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-amber-400" />
+                  VOXplot — Importación Avanzada (Opcional)
+                </h3>
+                <button onClick={() => setShowVoxplot(false)} className="text-slate-400 hover:text-white text-lg">✕</button>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">
+                Importación opcional de datos exportados desde VOXplot. No es requerida para el análisis clínico.
+              </p>
+              <VoxPlotImport onImport={(data) => console.log('VOXplot importado:', data)} />
+            </div>
           </div>
         )}
 
-        {activeTab === 'voxplot' && (
-          <div className="space-y-4">
-            <VoxPlotImport onImport={handleVoxPlotImport} />
-          </div>
-        )}
-
+        {/* Raw data modal */}
         {showRawData && r && (
           <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setShowRawData(false)}>
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
@@ -643,6 +664,7 @@ export default function VocalisLabModule() {
           </div>
         )}
 
+        {/* JSON modal */}
         {showJson && r && (
           <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setShowJson(false)}>
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
