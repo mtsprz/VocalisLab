@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Shield, Activity, Mic, FileText, AlertTriangle, CheckCircle2, XCircle,
+  Shield, Activity, Mic, FileText, AlertTriangle, CheckCircle2, XCircle, Minus,
   ChevronDown, ChevronRight, Clock, Hash, Cpu, BarChart3, Eye, Download,
   RefreshCw, FileJson, FileSpreadsheet, Image, Settings, Volume2
 } from 'lucide-react';
