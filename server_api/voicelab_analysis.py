@@ -124,8 +124,8 @@ def measure_pitch(sound, pitch_floor=None, pitch_ceiling=None):
     f0_mean = float(call(pitch, "Get mean", 0, 0, "Hertz"))
     f0_median = float(call(pitch, "Get quantile", 0, 0, 0.5, "Hertz"))
     f0_sd = float(call(pitch, "Get standard deviation", 0, 0, "Hertz"))
-    f0_min = float(call(pitch, "Get minimum", 0, 0, "Hertz"))
-    f0_max = float(call(pitch, "Get maximum", 0, 0, "Hertz"))
+    f0_min = float(call(pitch, "Get minimum", 0, 0, "Hertz", "Parabolic"))
+    f0_max = float(call(pitch, "Get maximum", 0, 0, "Hertz", "Parabolic"))
 
     return {
         "pitch_object": pitch, "pitch_floor": pitch_floor, "pitch_ceiling": pitch_ceiling,
