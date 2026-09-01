@@ -102,6 +102,32 @@ export default function VocalisLabModule() {
     if (audioContextRef.current) audioContextRef.current.close();
   };
 
+  const encodeWav = (samples: Float32Array, sampleRate: number): Blob => {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    };
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
+  };
+
   const grabarMuestra = async (tipo: 'vocal' | 'habla') => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -116,28 +142,46 @@ export default function VocalisLabModule() {
 
       iniciarVisualizador(stream);
 
-      const recorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
+      const audioCtx = new AudioContext({ sampleRate: 44100 });
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      const recordedSamples: Float32Array[] = [];
 
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' });
-        if (tipo === 'vocal') setBlobVocal(blob);
-        else setBlobHabla(blob);
-        detenerVisualizador();
-        stream.getTracks().forEach((t) => t.stop());
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        recordedSamples.push(new Float32Array(input));
       };
 
-      mediaRecorderRef.current = recorder;
-      recorder.start();
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
+      const stopRecording = () => {
+        processor.disconnect();
+        source.disconnect();
+        audioCtx.close();
+        detenerVisualizador();
+        stream.getTracks().forEach((t) => t.stop());
+
+        const totalLength = recordedSamples.reduce((acc, s) => acc + s.length, 0);
+        const merged = new Float32Array(totalLength);
+        let offset = 0;
+        recordedSamples.forEach((s) => {
+          merged.set(s, offset);
+          offset += s.length;
+        });
+
+        const wavBlob = encodeWav(merged, 44100);
+        if (tipo === 'vocal') setBlobVocal(wavBlob);
+        else setBlobHabla(wavBlob);
+      };
+
+      mediaRecorderRef.current = { stop: stopRecording } as any;
 
       if (tipo === 'vocal') {
         setGrabandoVocal(true);
         setTimeout(() => {
-          if (recorder.state === 'recording') {
-            recorder.stop();
-            setGrabandoVocal(false);
-          }
+          stopRecording();
+          setGrabandoVocal(false);
         }, 4000);
       } else {
         setGrabandoHabla(true);
