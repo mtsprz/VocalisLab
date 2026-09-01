@@ -426,7 +426,19 @@ def calcular_avqi_v0301(cpps_db, hnr_db, shimmer_local_pct, shimmer_local_db, sp
 def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
     timestamp = datetime.now(timezone.utc).isoformat()
 
-    audio_info = validar_audio_completo(file_path)
+    try:
+        audio_info = validar_audio_completo(file_path)
+    except Exception as e:
+        return {
+            "audio": {"valid": False, "issues": [f"Error validando audio: {str(e)}"]},
+            "metrics": None, "avqi_components": None,
+            "harmonics": [], "formants": {}, "ltas": {}, "spectral": {},
+            "timestamp": timestamp, "engine": ENGINE_VERSION,
+            "voicelab_version": VOICELAB_VERSION,
+            "parselmouth_version": PARSELMOUTH_VERSION,
+            "modo": modo, "status": "error", "error": f"Error validando audio: {str(e)}",
+        }
+
     if not audio_info["valid"]:
         return {
             "audio": audio_info, "metrics": None, "avqi_components": None,
@@ -437,77 +449,155 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
             "modo": modo, "status": "error", "error": "Audio no válido",
         }
 
-    sound = parselmouth.Sound(file_path)
+    try:
+        sound = parselmouth.Sound(file_path)
+    except Exception as e:
+        return {
+            "audio": audio_info, "metrics": None, "avqi_components": None,
+            "harmonics": [], "formants": {}, "ltas": {}, "spectral": {},
+            "timestamp": timestamp, "engine": ENGINE_VERSION,
+            "voicelab_version": VOICELAB_VERSION,
+            "parselmouth_version": PARSELMOUTH_VERSION,
+            "modo": modo, "status": "error", "error": f"Error leyendo archivo WAV con Praat: {str(e)}",
+        }
 
-    pitch_result = measure_pitch(sound)
-    pf = pitch_result["pitch_floor"]
-    pc = pitch_result["pitch_ceiling"]
+    try:
+        pitch_result = measure_pitch(sound)
+        pf = pitch_result["pitch_floor"]
+        pc = pitch_result["pitch_ceiling"]
+    except Exception as e:
+        return {
+            "audio": audio_info, "metrics": None, "avqi_components": None,
+            "harmonics": [], "formants": {}, "ltas": {}, "spectral": {},
+            "timestamp": timestamp, "engine": ENGINE_VERSION,
+            "voicelab_version": VOICELAB_VERSION,
+            "parselmouth_version": PARSELMOUTH_VERSION,
+            "modo": modo, "status": "error", "error": f"Error midiendo pitch (F0): {str(e)}",
+        }
 
-    jitter_result = measure_jitter(sound, pf, pc)
-    shimmer_result = measure_shimmer(sound, pf, pc)
-    hnr_result = measure_harmonicity(sound, pf)
-    cpp_result = measure_cpp(sound, pf, pc)
-    formant_result = measure_formants(sound, pf, pc)
-    ltas_result = measure_ltas(sound)
-    spectral_tilt = measure_spectral_tilt(sound)
-    spectral_shape = measure_spectral_shape(sound)
-    intensity_result = measure_intensity(sound)
-    alpha_result = measure_alpha_ratio(sound)
+    try:
+        jitter_result = measure_jitter(sound, pf, pc)
+    except Exception as e:
+        jitter_result = {"jitter_local_pct": None, "jitter_local_absolute_s": None,
+                         "jitter_rap_pct": None, "jitter_ppq5_pct": None, "jitter_ddp_pct": None}
 
-    harmonics = extract_harmonics(sound, pitch_result.get("f0_mean_hz"))
+    try:
+        shimmer_result = measure_shimmer(sound, pf, pc)
+    except Exception as e:
+        shimmer_result = {"shimmer_local_pct": None, "shimmer_local_db": None,
+                          "shimmer_apq3_pct": None, "shimmer_apq5_pct": None,
+                          "shimmer_apq11_pct": None, "shimmer_dda_pct": None}
 
-    shimmer_db = shimmer_result.get("shimmer_local_db")
-    shimmer_pct = shimmer_result.get("shimmer_local_pct")
-    if shimmer_db is None and shimmer_pct is not None:
-        shimmer_db = round(shimmer_pct * 0.1, 4)
+    try:
+        hnr_result = measure_harmonicity(sound, pf)
+    except Exception as e:
+        hnr_result = {"hnr_db": None}
 
-    avqi_result = calcular_avqi_v0301(
-        cpps_db=cpp_result.get("cpps_db"),
-        hnr_db=hnr_result.get("hnr_db"),
-        shimmer_local_pct=shimmer_pct,
-        shimmer_local_db=shimmer_db,
-        spectral_slope=spectral_tilt.get("spectral_tilt_slope"),
-        spectral_tilt=spectral_shape.get("spectral_cog_hz"),
-    )
+    try:
+        cpp_result = measure_cpp(sound, pf, pc)
+    except Exception as e:
+        cpp_result = {"cpps_db": None}
 
-    all_metrics = {
-        "f0_mean": pitch_result.get("f0_mean_hz"),
-        "f0_median": pitch_result.get("f0_median_hz"),
-        "f0_min": pitch_result.get("f0_min_hz"),
-        "f0_max": pitch_result.get("f0_max_hz"),
-        "f0_sd": pitch_result.get("f0_sd_hz"),
-        "f0_range": pitch_result.get("f0_range_hz"),
-        "voiced_fraction": pitch_result.get("voiced_fraction"),
-        **jitter_result, **shimmer_result, **hnr_result, **cpp_result,
-        **formant_result, **ltas_result, **spectral_tilt, **spectral_shape,
-        **intensity_result, **alpha_result,
-        "parselmouth_version": PARSELMOUTH_VERSION,
-        "pitch_floor": pf, "pitch_ceiling": pc,
-    }
-    all_metrics = {k: v for k, v in all_metrics.items() if k not in ("pitch_object", "point_process")}
+    try:
+        formant_result = measure_formants(sound, pf, pc)
+    except Exception as e:
+        formant_result = {"f1_hz": None, "f2_hz": None, "f3_hz": None, "f4_hz": None, "method": "failed"}
 
-    json_export = {
-        "study_id": hashlib.sha256(f"{file_path}_{timestamp}".encode()).hexdigest()[:16],
-        "audio": audio_info,
-        "metrics": all_metrics,
-        "harmonics": harmonics,
-        "formants": formant_result,
-        "avqi": avqi_result,
-        "ltas": ltas_result,
-        "spectral": {**spectral_tilt, **spectral_shape},
-        "engine": ENGINE_VERSION,
-        "voicelab_version": VOICELAB_VERSION,
-        "parselmouth_version": PARSELMOUTH_VERSION,
-        "timestamp": timestamp,
-        "modo": modo,
-    }
+    try:
+        ltas_result = measure_ltas(sound)
+    except Exception as e:
+        ltas_result = {"ltas_mean_db": None, "ltas_slope_db": None, "ltas_peak_height_db": None,
+                       "ltas_stdev_db": None, "ltas_spectral_tilt_slope": None, "ltas_spectral_tilt_intercept": None}
 
-    csv_lines = []
-    csv_lines.append(["Parameter", "Value", "Unit", "Engine", "Version"])
-    for k, v in all_metrics.items():
-        if v is not None:
-            unit = "Hz" if "f0" in k or "formant" in k or "f1" in k or "f2" in k or "f3" in k or "f4" in k else "%" if "jitter" in k or "shimmer" in k and "db" not in k else "dB" if "db" in k or "hnr" in k or "cpp" in k or "ltas" in k or "intensity" in k else ""
-            csv_lines.append([k, str(v), unit, "Parselmouth/VoiceLab", PARSELMOUTH_VERSION])
+    try:
+        spectral_tilt = measure_spectral_tilt(sound)
+    except Exception as e:
+        spectral_tilt = {"spectral_tilt_slope": None, "spectral_tilt_intercept": None}
+
+    try:
+        spectral_shape = measure_spectral_shape(sound)
+    except Exception as e:
+        spectral_shape = {"spectral_cog_hz": None, "spectral_stdev_hz": None, "spectral_kurtosis": None, "spectral_skewness": None}
+
+    try:
+        intensity_result = measure_intensity(sound)
+    except Exception as e:
+        intensity_result = {"intensity_mean_db": None}
+
+    try:
+        alpha_result = measure_alpha_ratio(sound)
+    except Exception as e:
+        alpha_result = {"alpha_ratio_db": None}
+
+    try:
+        harmonics = extract_harmonics(sound, pitch_result.get("f0_mean_hz"))
+    except Exception as e:
+        harmonics = []
+
+    try:
+        shimmer_db = shimmer_result.get("shimmer_local_db")
+        shimmer_pct = shimmer_result.get("shimmer_local_pct")
+        if shimmer_db is None and shimmer_pct is not None:
+            shimmer_db = round(shimmer_pct * 0.1, 4)
+
+        avqi_result = calcular_avqi_v0301(
+            cpps_db=cpp_result.get("cpps_db"),
+            hnr_db=hnr_result.get("hnr_db"),
+            shimmer_local_pct=shimmer_pct,
+            shimmer_local_db=shimmer_db,
+            spectral_slope=spectral_tilt.get("spectral_tilt_slope"),
+            spectral_tilt=spectral_shape.get("spectral_cog_hz"),
+        )
+    except Exception as e:
+        avqi_result = {"avqi": None, "calculable": False, "error": f"Error calculando AVQI: {str(e)}", "components": {}}
+
+    try:
+        all_metrics = {
+            "f0_mean": pitch_result.get("f0_mean_hz"),
+            "f0_median": pitch_result.get("f0_median_hz"),
+            "f0_min": pitch_result.get("f0_min_hz"),
+            "f0_max": pitch_result.get("f0_max_hz"),
+            "f0_sd": pitch_result.get("f0_sd_hz"),
+            "f0_range": pitch_result.get("f0_range_hz"),
+            "voiced_fraction": pitch_result.get("voiced_fraction"),
+            **jitter_result, **shimmer_result, **hnr_result, **cpp_result,
+            **formant_result, **ltas_result, **spectral_tilt, **spectral_shape,
+            **intensity_result, **alpha_result,
+            "parselmouth_version": PARSELMOUTH_VERSION,
+            "pitch_floor": pf, "pitch_ceiling": pc,
+        }
+        all_metrics = {k: v for k, v in all_metrics.items() if k not in ("pitch_object", "point_process")}
+    except Exception as e:
+        all_metrics = {"error": f"Error ensamblando métricas: {str(e)}"}
+
+    try:
+        json_export = {
+            "study_id": hashlib.sha256(f"{file_path}_{timestamp}".encode()).hexdigest()[:16],
+            "audio": audio_info,
+            "metrics": all_metrics,
+            "harmonics": harmonics,
+            "formants": formant_result,
+            "avqi": avqi_result,
+            "ltas": ltas_result,
+            "spectral": {**spectral_tilt, **spectral_shape},
+            "engine": ENGINE_VERSION,
+            "voicelab_version": VOICELAB_VERSION,
+            "parselmouth_version": PARSELMOUTH_VERSION,
+            "timestamp": timestamp,
+            "modo": modo,
+        }
+    except Exception as e:
+        json_export = {"error": str(e)}
+
+    try:
+        csv_lines = []
+        csv_lines.append(["Parameter", "Value", "Unit", "Engine", "Version"])
+        for k, v in all_metrics.items():
+            if v is not None:
+                unit = "Hz" if "f0" in k or "formant" in k or "f1" in k or "f2" in k or "f3" in k or "f4" in k else "%" if "jitter" in k or "shimmer" in k and "db" not in k else "dB" if "db" in k or "hnr" in k or "cpp" in k or "ltas" in k or "intensity" in k else ""
+                csv_lines.append([k, str(v), unit, "Parselmouth/VoiceLab", PARSELMOUTH_VERSION])
+    except Exception as e:
+        csv_lines = [["error", str(e)]]
 
     return {
         "audio": audio_info,

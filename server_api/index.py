@@ -133,8 +133,15 @@ async def analizar(
         except Exception:
             pass
 
-    if resultado["status"] == "error":
+    if resultado.get("status") == "error":
         return JSONResponse(status_code=422, content=resultado)
+
+    if resultado.get("metrics") is None:
+        return JSONResponse(status_code=500, content={
+            "error": "El análisis no produjo resultados",
+            "detail": resultado.get("error", "Error desconocido"),
+            "audio": resultado.get("audio"),
+        })
 
     metrics_raw = resultado.get("metrics", {})
     avqi = resultado.get("avqi_components", {})
