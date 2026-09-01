@@ -1,10 +1,11 @@
+import "./index.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import VocalisLabModule from "./components/VocalisLabModule";
 
 const App = () => {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-950">
       <VocalisLabModule />
     </div>
   );
