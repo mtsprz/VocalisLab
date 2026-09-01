@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import ClinicalReviewScreen from './ClinicalReviewScreen';
-import TaskProtocolSelector from './TaskProtocolSelector';
 import ReportEditor from './ReportEditor';
 import VoxPlotImport from './VoxPlotImport';
 
@@ -30,7 +29,7 @@ interface AnalysisResult {
   modo: string;
 }
 
-type FlowStep = 'protocol' | 'capture' | 'analyzing' | 'review' | 'editor';
+type FlowStep = 'capture' | 'analyzing' | 'review' | 'editor';
 
 const ANALYSIS_STAGES = [
   'Validando señal de audio...',
@@ -60,7 +59,6 @@ export default function VocalisLabModule() {
   const [grbas, setGrbas] = useState({ G: 0, R: 0, B: 0, A: 0, S: 0 });
   const [rasati, setRasati] = useState({ R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 });
 
-  const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [grabandoVocal, setGrabandoVocal] = useState(false);
   const [grabandoHabla, setGrabandoHabla] = useState(false);
   const [blobVocal, setBlobVocal] = useState<Blob | null>(null);
@@ -71,7 +69,7 @@ export default function VocalisLabModule() {
   const [errorBackend, setErrorBackend] = useState('');
 
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [flowStep, setFlowStep] = useState<FlowStep>('protocol');
+  const [flowStep, setFlowStep] = useState<FlowStep>('capture');
   const [showRawData, setShowRawData] = useState(false);
   const [showJson, setShowJson] = useState(false);
   const [approved, setApproved] = useState(false);
@@ -341,14 +339,13 @@ export default function VocalisLabModule() {
       <div className="max-w-7xl mx-auto mb-6">
         <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1">
           {([
-            { id: 'protocol' as const, label: '1. Protocolo', icon: FileText },
-            { id: 'capture' as const, label: '2. Captura', icon: Mic },
-            { id: 'analyzing' as const, label: '3. Análisis', icon: Sparkles },
-            { id: 'review' as const, label: '4. Revisión', icon: Shield, disabled: !r },
-            { id: 'editor' as const, label: '5. Informe', icon: Edit3, disabled: !r },
+            { id: 'capture' as const, label: '1. Captura', icon: Mic },
+            { id: 'analyzing' as const, label: '2. Análisis', icon: Sparkles },
+            { id: 'review' as const, label: '3. Revisión', icon: Shield, disabled: !r },
+            { id: 'editor' as const, label: '4. Informe', icon: Edit3, disabled: !r },
           ]).map((step) => {
-            const stepIdx = ['protocol', 'capture', 'analyzing', 'review', 'editor'].indexOf(step.id);
-            const currentIdx = ['protocol', 'capture', 'analyzing', 'review', 'editor'].indexOf(flowStep);
+            const stepIdx = ['capture', 'analyzing', 'review', 'editor'].indexOf(step.id);
+            const currentIdx = ['capture', 'analyzing', 'review', 'editor'].indexOf(flowStep);
             const isActive = step.id === flowStep;
             const isDone = stepIdx < currentIdx;
             const isDisabled = step.disabled || (stepIdx > currentIdx && !isDone);
@@ -391,15 +388,7 @@ export default function VocalisLabModule() {
       )}
 
       <div className="max-w-7xl mx-auto">
-        {/* STEP 1: Protocol */}
-        {flowStep === 'protocol' && (
-          <div className="space-y-6">
-            <TaskProtocolSelector selectedTask={selectedTask} onSelect={(id) => { setSelectedTask(id); setFlowStep('capture'); }}
-              hasVocal={!!blobVocal} hasHabla={!!blobHabla} />
-          </div>
-        )}
-
-        {/* STEP 2: Capture */}
+        {/* STEP 1: Capture */}
         {flowStep === 'capture' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-7 space-y-6">
@@ -545,7 +534,7 @@ export default function VocalisLabModule() {
           </div>
         )}
 
-        {/* STEP 3: Analyzing */}
+        {/* STEP 2: Analyzing */}
         {flowStep === 'analyzing' && (
           <div className="max-w-2xl mx-auto">
             <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-8 rounded-2xl shadow-xl text-center">
@@ -576,7 +565,7 @@ export default function VocalisLabModule() {
           </div>
         )}
 
-        {/* STEP 4: Clinical Review */}
+        {/* STEP 3: Clinical Review */}
         {flowStep === 'review' && r && (
           <ClinicalReviewScreen
             audioInfo={r.audio}
@@ -607,7 +596,7 @@ export default function VocalisLabModule() {
           />
         )}
 
-        {/* STEP 5: Report Editor */}
+        {/* STEP 4: Report Editor */}
         {flowStep === 'editor' && r && (
           <div className="space-y-4">
             <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl">
