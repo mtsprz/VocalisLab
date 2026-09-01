@@ -93,7 +93,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
         
     # AI Synthesis
     elements.append(Paragraph("<b>Síntesis Diagnóstica (IA - Rioplatense)</b>", body_style))
-    synthesis = paciente.get('synthesis_ia', 'Sin síntesis disponible.')
+    synthesis = paciente.get('sintesis_ia', 'Sin sintesis disponible.')
     for para in synthesis.split('\n'):
         if para.strip():
             elements.append(Paragraph(para, body_style))

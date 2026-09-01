@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Activity, Mic, Square, FileText, CheckCircle2, 
-  Sparkles, Layers, Sliders, Volume2, User, Stethoscope 
+  Sparkles, Layers, Sliders, Volume2, User, Stethoscope, Save
 } from 'lucide-react';
+import { supabase } from '../utils/supabase';
 
 export default function VocalisLabModule() {
   const [dispositivos, setDispositivos] = useState<MediaDeviceInfo[]>([]);
@@ -163,7 +164,7 @@ export default function VocalisLabModule() {
       formData.append('dni', dni || 'S/D');
       formData.append('edad', edad || '0');
       formData.append('sexo', sexo);
-      formData.append('motivo', motivo || 'Evaluación de control');
+      formData.append('motivo', motivo || 'Evaluacion de control');
       formData.append('derivador', derivador || 'Consulta directa');
       formData.append('tmf', tmf);
       formData.append('rasati', JSON.stringify(rasati));
@@ -173,7 +174,7 @@ export default function VocalisLabModule() {
         body: formData,
       });
 
-      if (!res.ok) throw new Error('Error procesando el análisis en el servidor.');
+      if (!res.ok) throw new Error('Error procesando el analisis en el servidor.');
 
       const blobPdf = await res.blob();
       const url = window.URL.createObjectURL(blobPdf);
@@ -181,8 +182,27 @@ export default function VocalisLabModule() {
       a.href = url;
       a.download = `Informe_Vocal_${dni || 'Clinico'}.pdf`;
       a.click();
+
+      // Guardar evaluacion en Supabase
+      try {
+        const grbasStr = `G${grbas.G} R${grbas.R} B${grbas.B} A${grbas.A} S${grbas.S}`;
+        const rasatiStr = `R${rasati.R} A${rasati.A} S${rasati.S} A2${rasati.A2} T${rasati.T} I${rasati.I}`;
+        await supabase.from('evaluaciones_vocales').insert({
+          nombre_paciente: nombre || 'Paciente Sin Nombre',
+          dni: dni || 'S/D',
+          edad: parseInt(edad) || 0,
+          sexo: sexo,
+          motivo: motivo || 'Evaluacion de control',
+          derivador: derivador || 'Consulta directa',
+          grbas: grbasStr,
+          rasati: rasatiStr,
+          tmf: parseFloat(tmf) || 0,
+        });
+      } catch (e) {
+        console.warn('Error guardando en Supabase (no critico):', e);
+      }
     } catch (err) {
-      alert('Ocurrió un error al generar el reporte.');
+      alert('Ocurrio un error al generar el reporte.');
     } finally {
       setProcesando(false);
     }
