@@ -1,20 +1,6 @@
 {
   "version": 3,
-  "buildCommand": "npm install && npm run build",
-  "outputDirectory": "dist",
   "framework": "vite",
-  "functions": {
-    "api/index.py": {
-      "runtime": "@vercel/python@4.1.0",
-      "maxDuration": 30
-    }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.py" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.py" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
 }
