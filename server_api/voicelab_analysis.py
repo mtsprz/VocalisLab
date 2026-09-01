@@ -373,6 +373,206 @@ def measure_alpha_ratio(sound):
         return {"alpha_ratio_db": None}
 
 
+def measure_nne_nhr(sound, pitch_floor=None):
+    try:
+        if pitch_floor is None:
+            pitch_floor, _ = _pitch_bounds(sound)
+        harmonicity = call(sound, "To Harmonicity (cc)", 0.01, pitch_floor, 0.1, 1.0)
+        hnr_db = call(harmonicity, "Get mean", 0, 0)
+        hnr_linear = 10 ** (float(hnr_db) / 10) if hnr_db is not None else None
+        nhr = 1.0 / hnr_linear if hnr_linear and hnr_linear > 0 else None
+        nne_db = -float(hnr_db) if hnr_db is not None else None
+        return {
+            "nhr": round(float(nhr), 4) if nhr is not None else None,
+            "nne_db": round(float(nne_db), 2) if nne_db is not None else None,
+            "hnr_linear": round(float(hnr_linear), 4) if hnr_linear is not None else None,
+        }
+    except Exception:
+        return {"nhr": None, "nne_db": None, "hnr_linear": None}
+
+
+def measure_formant_bandwidths(sound, pitch_floor=None, pitch_ceiling=None):
+    mean_f0 = None
+    if pitch_floor is None or pitch_ceiling is None:
+        try:
+            pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
+            mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
+        except Exception:
+            pass
+    max_formant = _max_formant_from_f0(mean_f0)
+    try:
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis=50)
+        bw = formant.selected_array['bandwidth']
+        bw1 = bw[0]
+        bw2 = bw[1]
+        b1 = float(np.median(bw1[(bw1 > 0) & (bw1 < 1000)])) if np.any((bw1 > 0) & (bw1 < 1000)) else None
+        b2 = float(np.median(bw2[(bw2 > 0) & (bw2 < 1000)])) if np.any((bw2 > 0) & (bw2 < 1000)) else None
+        return {
+            "f1_bandwidth_hz": round(b1, 1) if b1 is not None else None,
+            "f2_bandwidth_hz": round(b2, 1) if b2 is not None else None,
+        }
+    except Exception:
+        return {"f1_bandwidth_hz": None, "f2_bandwidth_hz": None}
+
+
+def extract_waveform_data(sound, max_points=2000):
+    try:
+        samples = sound.values.flatten()
+        sr = sound.sampling_frequency
+        duration = sound.get_total_duration()
+        step = max(1, len(samples) // max_points)
+        downsampled = samples[::step].tolist()
+        time_step = step / sr
+        time_axis = [round(i * time_step, 4) for i in range(len(downsampled))]
+        return {
+            "waveform": [round(float(v), 5) for v in downsampled],
+            "time_s": time_axis,
+            "duration_s": round(duration, 4),
+            "sample_rate_hz": sr,
+        }
+    except Exception:
+        return {"waveform": [], "time_s": [], "duration_s": 0, "sample_rate_hz": 0}
+
+
+def extract_spectrogram_data(sound, nfft=1024, max_freq=5000):
+    try:
+        samples = sound.values.flatten()
+        sr = sound.sampling_frequency
+        from scipy.signal import stft as scipy_stft
+        noverlap = nfft - nfft // 4
+        freqs, times, Zxx = scipy_stft(samples, fs=sr, nperseg=nfft, noverlap=noverlap)
+        power = np.abs(Zxx) ** 2
+        power_db = 10 * np.log10(np.maximum(power, 1e-10))
+        freq_mask = freqs <= max_freq
+        freqs_out = freqs[freq_mask].tolist()
+        db_matrix = power_db[freq_mask, :].tolist()
+        return {
+            "frequencies_hz": [round(float(f), 1) for f in freqs_out],
+            "times_s": [round(float(t), 4) for t in times],
+            "power_db": [[round(float(v), 1) for v in row] for row in db_matrix],
+            "max_freq_hz": max_freq,
+        }
+    except Exception:
+        return {"frequencies_hz": [], "times_s": [], "power_db": [], "max_freq_hz": max_freq}
+
+
+def extract_f0_contour(sound, pitch_floor=None, pitch_ceiling=None):
+    if pitch_floor is None or pitch_ceiling is None:
+        pf, pc = _pitch_bounds(sound)
+        pitch_floor = pitch_floor or pf
+        pitch_ceiling = pitch_ceiling or pc
+    try:
+        pitch = call(sound, "To Pitch (ac)", 0.0, pitch_floor, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pitch_ceiling)
+        f0_values = pitch.selected_array['frequency']
+        time_step = pitch.get_time_step()
+        times = [round(i * time_step, 4) for i in range(len(f0_values))]
+        f0_list = [None if v <= 0 else round(float(v), 2) for v in f0_values]
+        return {"f0_times_s": times, "f0_values_hz": f0_list}
+    except Exception:
+        return {"f0_times_s": [], "f0_values_hz": []}
+
+
+def extract_intensity_contour(sound):
+    try:
+        intensity = call(sound, "To Intensity", 100, 0.0, True)
+        values = intensity.values.flatten()
+        time_step = intensity.get_time_step()
+        times = [round(i * time_step, 4) for i in range(len(values))]
+        return {"intensity_times_s": times, "intensity_values_db": [round(float(v), 2) for v in values]}
+    except Exception:
+        return {"intensity_times_s": [], "intensity_values_db": []}
+
+
+def classify_titze(hnr_db, shimmer_pct, jitter_pct, cpps_db, spectral_tilt):
+    scores = {"Type_1_vocal_fatigue": 0, "Type_2_muscle_tension": 0, "Type_3_mucosal_wave": 0}
+    if hnr_db is not None:
+        if hnr_db < 10: scores["Type_3_mucosal_wave"] += 2
+        elif hnr_db < 15: scores["Type_3_mucosal_wave"] += 1; scores["Type_1_vocal_fatigue"] += 1
+        elif hnr_db > 20: scores["Type_1_vocal_fatigue"] += 1
+    if shimmer_pct is not None:
+        if shimmer_pct > 5: scores["Type_3_mucosal_wave"] += 2
+        elif shimmer_pct > 3.8: scores["Type_2_muscle_tension"] += 1
+    if jitter_pct is not None:
+        if jitter_pct > 2: scores["Type_2_muscle_tension"] += 2
+        elif jitter_pct > 1.0: scores["Type_1_vocal_fatigue"] += 1
+    if cpps_db is not None:
+        if cpps_db < 3: scores["Type_3_mucosal_wave"] += 2
+        elif cpps_db < 5.5: scores["Type_2_muscle_tension"] += 1
+    if spectral_tilt is not None:
+        if spectral_tilt < -1.0: scores["Type_3_mucosal_wave"] += 1
+    best = max(scores, key=scores.get)
+    best_score = scores[best]
+    type_map = {"Type_1_vocal_fatigue": 1, "Type_2_muscle_tension": 2, "Type_3_mucosal_wave": 3}
+    labels = {1: "Fatiga Vocal (Tensión Muscular)", 2: "Disfonía por Tensión Muscular", 3: "Déficit de Onda Mucosa"}
+    return {"titze_type": type_map[best], "titze_label": labels[type_map[best]], "scores": scores, "confidence": best_score}
+
+
+def classify_yanagihara(hnr_db, shimmer_pct, shimmer_db, cpps_db, spectral_tilt):
+    score = 0
+    if hnr_db is not None:
+        if hnr_db > 20: score += 0
+        elif hnr_db > 15: score += 1
+        elif hnr_db > 10: score += 2
+        else: score += 3
+    if shimmer_pct is not None:
+        if shimmer_pct < 3.8: score += 0
+        elif shimmer_pct < 5: score += 1
+        elif shimmer_pct < 7: score += 2
+        else: score += 3
+    if cpps_db is not None:
+        if cpps_db > 5.5: score += 0
+        elif cpps_db > 3: score += 1
+        elif cpps_db > 1: score += 2
+        else: score += 3
+    avg = score / 3
+    if avg <= 0.3: grade, label = "I", "Normal"
+    elif avg <= 1.0: grade, label = "II", "Disfonía Leve"
+    elif avg <= 2.0: grade, label = "III", "Disfonía Moderada"
+    else: grade, label = "IV", "Disfonía Severa"
+    return {"yanagihara_grade": grade, "yanagihara_label": label, "raw_score": round(avg, 2)}
+
+
+def classify_nunez_batalla(jitter_pct, shimmer_pct, hnr_db, f0_sd, f0_range):
+    astenia_score = 0
+    if jitter_pct is not None:
+        if jitter_pct > 2.0: astenia_score += 3
+        elif jitter_pct > 1.0: astenia_score += 2
+        elif jitter_pct > 0.5: astenia_score += 1
+    if shimmer_pct is not None:
+        if shimmer_pct > 5.0: astenia_score += 3
+        elif shimmer_pct > 3.8: astenia_score += 2
+        elif shimmer_pct > 2.0: astenia_score += 1
+    if hnr_db is not None:
+        if hnr_db < 10: astenia_score += 3
+        elif hnr_db < 15: astenia_score += 2
+        elif hnr_db < 20: astenia_score += 1
+    if f0_range is not None:
+        if f0_range > 100: astenia_score += 1
+    avg = astenia_score / 3
+    if avg <= 0.3: grade, label = "I", "Normal"
+    elif avg <= 1.0: grade, label = "II", "Astenia Leve"
+    elif avg <= 2.0: grade, label = "III", "Astenia Moderada"
+    else: grade, label = "IV", "Astenia Severa"
+    return {"nunez_batalla_grade": grade, "nunez_batalla_label": label, "raw_score": round(avg, 2)}
+
+
+def classify_cecconello(harmonics, f0_mean):
+    if not harmonics or f0_mean is None or f0_mean <= 0:
+        return {"harmonic_loss_pct": None, "classification": "No calculable"}
+    total_power = sum(10 ** (h["amplitude_db"] / 10) for h in harmonics if h["amplitude_db"] is not None)
+    if total_power == 0:
+        return {"harmonic_loss_pct": None, "classification": "No calculable"}
+    h1_power = 10 ** (harmonics[0]["amplitude_db"] / 10) if harmonics[0]["amplitude_db"] is not None else 0
+    harmonic_power = sum(10 ** (h["amplitude_db"] / 10) for h in harmonics[1:] if h["amplitude_db"] is not None)
+    loss_pct = (1 - harmonic_power / (total_power - h1_power)) * 100 if (total_power - h1_power) > 0 else 0
+    loss_pct = max(0, min(100, loss_pct))
+    if loss_pct < 20: label = "Conservación normal de armónicos"
+    elif loss_pct < 40: label = "Pérdida armónica leve"
+    elif loss_pct < 60: label = "Pérdida armónica moderada"
+    else: label = "Pérdida armónica severa"
+    return {"harmonic_loss_pct": round(loss_pct, 1), "classification": label}
+
+
 def extract_harmonics(sound, f0_mean=None, n_harmonics=10):
     if f0_mean is None or f0_mean <= 0:
         return []
@@ -537,6 +737,36 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
         harmonics = []
 
     try:
+        nne_nhr = measure_nne_nhr(sound, pf)
+    except Exception:
+        nne_nhr = {"nhr": None, "nne_db": None, "hnr_linear": None}
+
+    try:
+        bw = measure_formant_bandwidths(sound, pf, pc)
+    except Exception:
+        bw = {"f1_bandwidth_hz": None, "f2_bandwidth_hz": None}
+
+    try:
+        waveform_data = extract_waveform_data(sound)
+    except Exception:
+        waveform_data = {"waveform": [], "time_s": [], "duration_s": 0, "sample_rate_hz": 0}
+
+    try:
+        spectrogram_data = extract_spectrogram_data(sound, nfft=1024)
+    except Exception:
+        spectrogram_data = {"frequencies_hz": [], "times_s": [], "power_db": [], "max_freq_hz": 5000}
+
+    try:
+        f0_contour = extract_f0_contour(sound, pf, pc)
+    except Exception:
+        f0_contour = {"f0_times_s": [], "f0_values_hz": []}
+
+    try:
+        intensity_contour = extract_intensity_contour(sound)
+    except Exception:
+        intensity_contour = {"intensity_times_s": [], "intensity_values_db": []}
+
+    try:
         shimmer_db = shimmer_result.get("shimmer_local_db")
         shimmer_pct = shimmer_result.get("shimmer_local_pct")
         if shimmer_db is None and shimmer_pct is not None:
@@ -554,6 +784,36 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
         avqi_result = {"avqi": None, "calculable": False, "error": f"Error calculando AVQI: {str(e)}", "components": {}}
 
     try:
+        titze = classify_titze(
+            hnr_result.get("hnr_db"), shimmer_pct, jitter_result.get("jitter_local_pct"),
+            cpp_result.get("cpps_db"), spectral_tilt.get("spectral_tilt_slope")
+        )
+    except Exception:
+        titze = {"titze_type": None, "titze_label": "No clasificable", "scores": {}, "confidence": 0}
+
+    try:
+        yanagihara = classify_yanagihara(
+            hnr_result.get("hnr_db"), shimmer_pct, shimmer_db,
+            cpp_result.get("cpps_db"), spectral_tilt.get("spectral_tilt_slope")
+        )
+    except Exception:
+        yanagihara = {"yanagihara_grade": "N/D", "yanagihara_label": "No clasificable", "raw_score": 0}
+
+    try:
+        nunez = classify_nunez_batalla(
+            jitter_result.get("jitter_local_pct"), shimmer_pct,
+            hnr_result.get("hnr_db"), pitch_result.get("f0_sd_hz"),
+            pitch_result.get("f0_range_hz")
+        )
+    except Exception:
+        nunez = {"nunez_batalla_grade": "N/D", "nunez_batalla_label": "No clasificable", "raw_score": 0}
+
+    try:
+        cecconello = classify_cecconello(harmonics, pitch_result.get("f0_mean_hz"))
+    except Exception:
+        cecconello = {"harmonic_loss_pct": None, "classification": "No clasificable"}
+
+    try:
         all_metrics = {
             "f0_mean": pitch_result.get("f0_mean_hz"),
             "f0_median": pitch_result.get("f0_median_hz"),
@@ -564,7 +824,7 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
             "voiced_fraction": pitch_result.get("voiced_fraction"),
             **jitter_result, **shimmer_result, **hnr_result, **cpp_result,
             **formant_result, **ltas_result, **spectral_tilt, **spectral_shape,
-            **intensity_result, **alpha_result,
+            **intensity_result, **alpha_result, **nne_nhr, **bw,
             "parselmouth_version": PARSELMOUTH_VERSION,
             "pitch_floor": pf, "pitch_ceiling": pc,
         }
@@ -582,6 +842,7 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
             "avqi": avqi_result,
             "ltas": ltas_result,
             "spectral": {**spectral_tilt, **spectral_shape},
+            "classifications": {"titze": titze, "yanagihara": yanagihara, "nunez_batalla": nunez, "cecconello": cecconello},
             "engine": ENGINE_VERSION,
             "voicelab_version": VOICELAB_VERSION,
             "parselmouth_version": PARSELMOUTH_VERSION,
@@ -609,6 +870,11 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
         "formants": formant_result,
         "ltas": ltas_result,
         "spectral": {**spectral_tilt, **spectral_shape},
+        "classifications": {"titze": titze, "yanagihara": yanagihara, "nunez_batalla": nunez, "cecconello": cecconello},
+        "waveform": waveform_data,
+        "spectrogram": spectrogram_data,
+        "f0_contour": f0_contour,
+        "intensity_contour": intensity_contour,
         "json_export": json_export,
         "csv_export": csv_lines,
         "timestamp": timestamp,

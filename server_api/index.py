@@ -103,6 +103,30 @@ def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:
         "message": f"Pendiente = {tilt}" if tilt is not None else "No disponible",
     })
 
+    nhr = metrics.get("nhr")
+    tools.append({
+        "name": "NHR (Noise-to-Harmonics Ratio)",
+        "status": "ok" if nhr is not None else "warning",
+        "message": f"NHR = {nhr}" if nhr is not None else "No disponible",
+    })
+
+    classifications = metrics.get("classifications", {})
+    titze = classifications.get("titze", {})
+    if titze.get("titze_type"):
+        tools.append({
+            "name": "Clasificación Titze",
+            "status": "ok",
+            "message": f"Tipo {titze['titze_type']}: {titze.get('titze_label', '')}",
+        })
+
+    yanagihara = classifications.get("yanagihara", {})
+    if yanagihara.get("yanagihara_grade") and yanagihara["yanagihara_grade"] != "N/D":
+        tools.append({
+            "name": "Clasificación Yanagihara",
+            "status": "ok",
+            "message": f"Grado {yanagihara['yanagihara_grade']}: {yanagihara.get('yanagihara_label', '')}",
+        })
+
     return tools
 
 
@@ -173,16 +197,21 @@ async def analizar(
         "shimmer_dda_pct": metrics_raw.get("shimmer_dda_pct"),
         "hnr_db": metrics_raw.get("hnr_db"),
         "cpps_db": metrics_raw.get("cpps_db"),
+        "nhr": metrics_raw.get("nhr"),
+        "nne_db": metrics_raw.get("nne_db"),
         "f1_hz": formants.get("f1_hz"),
         "f2_hz": formants.get("f2_hz"),
         "f3_hz": formants.get("f3_hz"),
         "f4_hz": formants.get("f4_hz"),
+        "f1_bandwidth_hz": metrics_raw.get("f1_bandwidth_hz"),
+        "f2_bandwidth_hz": metrics_raw.get("f2_bandwidth_hz"),
         "intensity_mean_db": metrics_raw.get("intensity_mean_db"),
         "alpha_ratio_db": metrics_raw.get("alpha_ratio_db"),
         "harmonics": harmonics,
         "formants": formants,
         "ltas": resultado.get("ltas", {}),
         "spectral": resultado.get("spectral", {}),
+        "classifications": resultado.get("classifications", {}),
         "parselmouth_version": resultado.get("parselmouth_version"),
         "praat_script": f"VoiceLab/{resultado.get('voicelab_version', '2.0.0')}",
         "pitch_floor": metrics_raw.get("pitch_floor"),
@@ -204,6 +233,11 @@ async def analizar(
         "avqiComponents": avqi,
         "tools": tools,
         "fileHash": audio_info.get("file_hash_sha256", ""),
+        "waveform": resultado.get("waveform", {}),
+        "spectrogram": resultado.get("spectrogram", {}),
+        "f0Contour": resultado.get("f0_contour", {}),
+        "intensityContour": resultado.get("intensity_contour", {}),
+        "classifications": resultado.get("classifications", {}),
         "jsonExport": json_export,
         "csvExport": json.dumps(csv_export),
     }

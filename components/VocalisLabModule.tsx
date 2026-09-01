@@ -22,6 +22,11 @@ interface AnalysisResult {
   formants: any;
   ltas: any;
   spectral: any;
+  waveform: any;
+  spectrogram: any;
+  f0Contour: any;
+  intensityContour: any;
+  classifications: any;
   timestamp: string;
   engineVersion: string;
   scriptVersion: string;
@@ -580,6 +585,11 @@ export default function VocalisLabModule() {
             formants={r.formants || r.metrics?.formants || {}}
             ltas={r.ltas || r.metrics?.ltas || {}}
             spectral={r.spectral || r.metrics?.spectral || {}}
+            waveform={r.waveform || {}}
+            spectrogram={r.spectrogram || {}}
+            f0Contour={r.f0Contour || {}}
+            intensityContour={r.intensityContour || {}}
+            classifications={r.classifications || {}}
             modo={r.modo || 'clinico'}
             onViewJson={() => setShowJson(true)}
             onViewCsv={() => {
@@ -589,7 +599,7 @@ export default function VocalisLabModule() {
                 const a = document.createElement('a'); a.href = url; a.download = 'VocalisLab_Datos.csv'; a.click();
               }
             }}
-            onViewGraphs={() => {}}
+            onViewGraphs={() => setFlowStep('review')}
             onRecalculate={() => { setFlowStep('capture'); ejecutarAnalisis(); }}
             onDownloadPreliminar={descargarPdf}
             onApprove={() => { setApproved(true); setFlowStep('editor'); }}
