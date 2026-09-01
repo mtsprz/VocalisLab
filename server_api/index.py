@@ -27,7 +27,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "engine": "Praat/Parselmouth + VoiceLab", "version": "1.0.0"}
+    return {"status": "ok", "engine": "Praat/Parselmouth + VoiceLab", "version": "1.0.0", "commit": "f1e58a2"}
 
 
 def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:
