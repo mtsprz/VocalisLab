@@ -9,10 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY api/requirements.txt .
+COPY server_api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY api/ .
+COPY server_api/ .
 
 EXPOSE 8000
 
