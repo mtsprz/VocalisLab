@@ -1,0 +1,39 @@
+VocalisLab - Notice of Third Party Software
+=============================================
+
+This project uses the following third-party software:
+
+VoiceLab
+--------
+Copyright (c) 2022 David Feinberg, McMaster University
+License: GNU General Public License v3.0 (GPLv3)
+Repository: https://github.com/Voice-Lab/VoiceLab
+Citation: Feinberg, D. (2022). VoiceLab: Software for Fully Reproducible
+          Automated Voice Analysis. Proc. Interspeech 2022, 351-355.
+
+The acoustic analysis algorithms in this project are based on VoiceLab v2.0.0.
+VoiceLab wraps Praat's C/C++ algorithms via parselmouth-praat in a modular
+node-based pipeline. The measurement implementations follow VoiceLab's approach
+for pitch, jitter, shimmer, HNR, CPP, formants, LTAS, spectral tilt, and
+spectral shape analysis.
+
+Parselmouth (praat-parselmouth)
+-------------------------------
+Copyright (c) 2018-2024 Yannick Jadoul
+License: GNU General Public License v3.0 (GPLv3)
+Repository: https://github.com/YannickJadoul/Parselmouth
+
+Praat
+-----
+Copyright (c) 1992-2024 Paul Boersma and David Weenink
+License: GNU General Public License v3.0 (GPLv3)
+Repository: https://www.praat.org/
+
+This project uses Praat through Parselmouth for all acoustic measurements.
+The Praat scripts and algorithms are the intellectual property of Paul Boersma
+and David Weenink at the University of Amsterdam.
+
+Groq API
+--------
+Used for AI-assisted clinical synthesis of acoustic analysis results.
+Model: llama-3.3-70b-versatile
