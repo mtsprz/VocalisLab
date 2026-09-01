@@ -37,7 +37,7 @@ def _safe_call(*args, default=None):
 def _pitch_bounds(sound):
     try:
         pitch_test = call(sound, "To Pitch (ac)", 0.0, 50, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 500)
-        mean_f0 = call(pitch_test, "Get mean", 0, 0, "Hz")
+        mean_f0 = call(pitch_test, "Get mean", 0, 0, "Hertz")
         if mean_f0 and mean_f0 > 170:
             return 100, 500
         else:
@@ -121,11 +121,11 @@ def measure_pitch(sound, pitch_floor=None, pitch_ceiling=None):
             "voiced_fraction": 0.0, "algorithm": "autocorrelation"
         }
 
-    f0_mean = float(call(pitch, "Get mean", 0, 0, "Hz"))
-    f0_median = float(call(pitch, "Get quantile", 0, 0, 0.5, "Hz"))
-    f0_sd = float(call(pitch, "Get standard deviation", 0, 0, "Hz"))
-    f0_min = float(call(pitch, "Get minimum", 0, 0, "Hz"))
-    f0_max = float(call(pitch, "Get maximum", 0, 0, "Hz"))
+    f0_mean = float(call(pitch, "Get mean", 0, 0, "Hertz"))
+    f0_median = float(call(pitch, "Get quantile", 0, 0, 0.5, "Hertz"))
+    f0_sd = float(call(pitch, "Get standard deviation", 0, 0, "Hertz"))
+    f0_min = float(call(pitch, "Get minimum", 0, 0, "Hertz"))
+    f0_max = float(call(pitch, "Get maximum", 0, 0, "Hertz"))
 
     return {
         "pitch_object": pitch, "pitch_floor": pitch_floor, "pitch_ceiling": pitch_ceiling,
@@ -220,7 +220,7 @@ def measure_formants(sound, pitch_floor=None, pitch_ceiling=None):
     if pitch_floor is None or pitch_ceiling is None:
         try:
             pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
-            mean_f0 = call(pitch, "Get mean", 0, 0, "Hz")
+            mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
         except Exception:
             pass
 
