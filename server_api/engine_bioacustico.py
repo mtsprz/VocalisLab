@@ -67,7 +67,7 @@ def _calcular_avqi_componentes(sound: parselmouth.Sound) -> dict:
     sr = sound.sampling_frequency
     duration = sound.get_total_duration()
 
-    pitch = sound.to_pitch(ac_pitch_floor=60, pitch_ceiling=600)
+    pitch = sound.to_pitch(pitch_floor=60, pitch_ceiling=600)
     f0_values = pitch.selected_array['frequency']
     voiced = f0_values[f0_values > 0]
 
@@ -85,10 +85,10 @@ def _calcular_avqi_componentes(sound: parselmouth.Sound) -> dict:
     jitter_local = call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
     jitter_local_pct = jitter_local * 100
 
-    shimmer_local = call(point_process, "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    shimmer_local = call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
     shimmer_local_pct = shimmer_local * 100
 
-    shimmer_local_db = call(point_process, "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    shimmer_local_db = call([sound, point_process], "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
 
     harmonicity = call(sound, "To Harmonicity (cc)", 0.01, 75, 0.1, 1.0)
     hnr_db = call(harmonicity, "Get mean", 0, 0)
@@ -172,7 +172,7 @@ def _calcular_avqi_componentes(sound: parselmouth.Sound) -> dict:
 
 
 def _extraer_harmonicos_y_formantes(sound: parselmouth.Sound) -> dict:
-    pitch = sound.to_pitch(ac_pitch_floor=60, pitch_ceiling=600)
+    pitch = sound.to_pitch(pitch_floor=60, pitch_ceiling=600)
     f0_values = pitch.selected_array['frequency']
     voiced = f0_values[f0_values > 0]
     f0_mean = float(np.mean(voiced)) if len(voiced) > 0 else None
@@ -231,13 +231,13 @@ def procesar_muestras_acusticas(file_path: str) -> dict:
 
     point_process = call(sound, "To PointProcess (periodic, cc)", 75, 600)
     jitter_local = call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3) * 100
-    shimmer_local = call(point_process, "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6) * 100
-    shimmer_local_db = float(call(point_process, "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6))
+    shimmer_local = call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6) * 100
+    shimmer_local_db = float(call([sound, point_process], "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6))
 
     harmonicity = call(sound, "To Harmonicity (cc)", 0.01, 75, 0.1, 1.0)
     hnr_db = call(harmonicity, "Get mean", 0, 0)
 
-    pitch = sound.to_pitch(ac_pitch_floor=60, pitch_ceiling=600)
+    pitch = sound.to_pitch(pitch_floor=60, pitch_ceiling=600)
     f0_values = pitch.selected_array['frequency']
     f0_values = f0_values[f0_values > 0]
     f0_mean = float(np.mean(f0_values)) if len(f0_values) > 0 else 0.0
