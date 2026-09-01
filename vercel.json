@@ -1,23 +1,20 @@
 {
   "version": 3,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build"
-    },
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "functions": {
+    "api/index.py": {
+      "runtime": "@vercel/python@4.1.0",
+      "maxDuration": 30
     }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
