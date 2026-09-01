@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Activity, Mic, Square, FileText, CheckCircle2, 
-  Sparkles, Layers, Sliders, Volume2, User, Stethoscope, Save
+  Sparkles, Layers, Sliders, Volume2, User, Stethoscope, Save, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 export default function VocalisLabModule() {
   const [dispositivos, setDispositivos] = useState<MediaDeviceInfo[]>([]);
@@ -24,6 +26,8 @@ export default function VocalisLabModule() {
   const [blobVocal, setBlobVocal] = useState<Blob | null>(null);
   const [blobHabla, setBlobHabla] = useState<Blob | null>(null);
   const [procesando, setProcesando] = useState(false);
+  const [mensajeExito, setMensajeExito] = useState('');
+  const [errorBackend, setErrorBackend] = useState('');
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -139,7 +143,7 @@ export default function VocalisLabModule() {
         setGrabandoHabla(true);
       }
     } catch (err) {
-      alert('Error al acceder al micrófono o placa de audio.');
+      alert('Error al acceder al micrafono o placa de audio.');
     }
   };
 
@@ -155,7 +159,15 @@ export default function VocalisLabModule() {
       alert('Debes grabar la muestra de la vocal /a/ sostenida.');
       return;
     }
+    if (!BACKEND_URL) {
+      alert('ERROR CRITICO: No se configuro la URL del backend bioacustico. Configure VITE_BACKEND_URL en Vercel.');
+      return;
+    }
+
     setProcesando(true);
+    setErrorBackend('');
+    setMensajeExito('');
+
     try {
       const formData = new FormData();
       formData.append('audio_vocal', blobVocal, 'vocal_a.wav');
@@ -169,18 +181,21 @@ export default function VocalisLabModule() {
       formData.append('tmf', tmf);
       formData.append('rasati', JSON.stringify(rasati));
 
-      const res = await fetch('/api/analizar-y-reportar', {
+      const res = await fetch(`${BACKEND_URL}/api/analizar-y-reportar`, {
         method: 'POST',
         body: formData,
       });
 
-      if (!res.ok) throw new Error('Error procesando el analisis en el servidor.');
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText}`);
+      }
 
       const blobPdf = await res.blob();
       const url = window.URL.createObjectURL(blobPdf);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Informe_Vocal_${dni || 'Clinico'}.pdf`;
+      a.download = `VocalisLab_Informe_${dni || 'Clinico'}.pdf`;
       a.click();
 
       // Guardar evaluacion en Supabase
@@ -201,8 +216,11 @@ export default function VocalisLabModule() {
       } catch (e) {
         console.warn('Error guardando en Supabase (no critico):', e);
       }
-    } catch (err) {
-      alert('Ocurrio un error al generar el reporte.');
+
+      setMensajeExito('Informe generado y descargado exitosamente.');
+      setTimeout(() => setMensajeExito(''), 5000);
+    } catch (err: any) {
+      setErrorBackend(err.message || 'Error al generar el reporte.');
     } finally {
       setProcesando(false);
     }
@@ -243,6 +261,29 @@ export default function VocalisLabModule() {
         </div>
       </div>
 
+      {!BACKEND_URL && (
+        <div className="max-w-6xl mx-auto mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          <p className="text-sm text-red-300">
+            <strong>Backend no configurado.</strong> Agregue la variable de entorno <code className="bg-red-500/20 px-1 rounded">VITE_BACKEND_URL</code> en Vercel con la URL de su servidor FastAPI (ej: https://tu-backend.onrender.com).
+          </p>
+        </div>
+      )}
+
+      {errorBackend && (
+        <div className="max-w-6xl mx-auto mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          <p className="text-sm text-red-300">{errorBackend}</p>
+        </div>
+      )}
+
+      {mensajeExito && (
+        <div className="max-w-6xl mx-auto mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <p className="text-sm text-emerald-300">{mensajeExito}</p>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl">
@@ -253,42 +294,20 @@ export default function VocalisLabModule() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               <div>
                 <label className="text-xs text-slate-400 font-medium">Nombre Completo</label>
-                <input
-                  type="text"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Ej. Martin Garcia"
-                  className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
-                />
+                <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Martin Garcia" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors" />
               </div>
               <div>
                 <label className="text-xs text-slate-400 font-medium">DNI / Documento</label>
-                <input
-                  type="text"
-                  value={dni}
-                  onChange={(e) => setDni(e.target.value)}
-                  placeholder="Numero de identificacion"
-                  className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
-                />
+                <input type="text" value={dni} onChange={(e) => setDni(e.target.value)} placeholder="Numero de identificacion" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-slate-400 font-medium">Edad</label>
-                  <input
-                    type="number"
-                    value={edad}
-                    onChange={(e) => setEdad(e.target.value)}
-                    placeholder="Anos"
-                    className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                  />
+                  <input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} placeholder="Anos" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-sky-500" />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 font-medium">Sexo</label>
-                  <select
-                    value={sexo}
-                    onChange={(e) => setSexo(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                  >
+                  <select value={sexo} onChange={(e) => setSexo(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-sky-500">
                     <option>Femenino</option>
                     <option>Masculino</option>
                     <option>Otro</option>
@@ -297,23 +316,11 @@ export default function VocalisLabModule() {
               </div>
               <div>
                 <label className="text-xs text-slate-400 font-medium">TMF (segundos)</label>
-                <input
-                  type="number"
-                  value={tmf}
-                  onChange={(e) => setTmf(e.target.value)}
-                  placeholder="Tiempo Max. Fonacion"
-                  className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                />
+                <input type="number" value={tmf} onChange={(e) => setTmf(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-sky-500" />
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs text-slate-400 font-medium">Motivo / Medico Derivador</label>
-                <input
-                  type="text"
-                  value={motivo}
-                  onChange={(e) => setMotivo(e.target.value)}
-                  placeholder="Ej. Disfonia funcional - Deriva Dr. Lopez (ORL)"
-                  className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
-                />
+                <input type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej. Disfonia funcional - Deriva Dr. Lopez (ORL)" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors" />
               </div>
             </div>
           </div>
@@ -332,16 +339,8 @@ export default function VocalisLabModule() {
                     <span className="text-[11px] font-bold text-slate-400 block mb-1">{param}</span>
                     <div className="flex justify-center gap-1">
                       {[0, 1, 2, 3].map((val) => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => setGrbas((prev) => ({ ...prev, [param]: val }))}
-                          className={`w-5 h-6 rounded text-xs font-semibold transition-all ${
-                            grbas[param] === val
-                              ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30'
-                              : 'text-slate-500 hover:text-slate-300'
-                          }`}
-                        >
+                        <button key={val} type="button" onClick={() => setGrbas((prev) => ({ ...prev, [param]: val }))}
+                          className={`w-5 h-6 rounded text-xs font-semibold transition-all ${grbas[param] === val ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-500 hover:text-slate-300'}`}>
                           {val}
                         </button>
                       ))}
@@ -356,21 +355,11 @@ export default function VocalisLabModule() {
               <div className="grid grid-cols-6 gap-2">
                 {(['R', 'A', 'S', 'A2', 'T', 'I'] as const).map((param) => (
                   <div key={param} className="bg-slate-950/80 p-2 rounded-xl border border-slate-800 text-center">
-                    <span className="text-[11px] font-bold text-slate-400 block mb-1">
-                      {param === 'A2' ? 'Aste.' : param}
-                    </span>
+                    <span className="text-[11px] font-bold text-slate-400 block mb-1">{param === 'A2' ? 'Aste.' : param}</span>
                     <div className="flex justify-center gap-1">
                       {[0, 1, 2, 3].map((val) => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => setRasati((prev) => ({ ...prev, [param]: val }))}
-                          className={`w-5 h-6 rounded text-xs font-semibold transition-all ${
-                            rasati[param] === val
-                              ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30'
-                              : 'text-slate-500 hover:text-slate-300'
-                          }`}
-                        >
+                        <button key={val} type="button" onClick={() => setRasati((prev) => ({ ...prev, [param]: val }))}
+                          className={`w-5 h-6 rounded text-xs font-semibold transition-all ${rasati[param] === val ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-500 hover:text-slate-300'}`}>
                           {val}
                         </button>
                       ))}
@@ -416,25 +405,9 @@ export default function VocalisLabModule() {
                 <p className="text-sm font-semibold text-slate-200">1. Vocal /a/ sostenida</p>
                 <p className="text-xs text-slate-400">Emision a tono comodo (4 segundos)</p>
               </div>
-              <button
-                type="button"
-                onClick={() => grabarMuestra('vocal')}
-                disabled={grabandoVocal || grabandoHabla}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  grabandoVocal
-                    ? 'bg-red-500 text-white animate-pulse'
-                    : blobVocal
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                    : 'bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/25'
-                }`}
-              >
-                {grabandoVocal ? (
-                  <><Square className="w-3.5 h-3.5 fill-current" /> Grabando...</>
-                ) : blobVocal ? (
-                  <><CheckCircle2 className="w-3.5 h-3.5" /> Lista</>
-                ) : (
-                  <><Mic className="w-3.5 h-3.5" /> Grabar</>
-                )}
+              <button type="button" onClick={() => grabarMuestra('vocal')} disabled={grabandoVocal || grabandoHabla}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${grabandoVocal ? 'bg-red-500 text-white animate-pulse' : blobVocal ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/25'}`}>
+                {grabandoVocal ? <><Square className="w-3.5 h-3.5 fill-current" /> Grabando...</> : blobVocal ? <><CheckCircle2 className="w-3.5 h-3.5" /> Lista</> : <><Mic className="w-3.5 h-3.5" /> Grabar</>}
               </button>
             </div>
 
@@ -444,53 +417,23 @@ export default function VocalisLabModule() {
                 <p className="text-xs text-slate-400">Lectura del texto estandar</p>
               </div>
               {grabandoHabla ? (
-                <button
-                  type="button"
-                  onClick={detenerHabla}
-                  className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 animate-pulse"
-                >
+                <button type="button" onClick={detenerHabla} className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 animate-pulse">
                   <Square className="w-3.5 h-3.5 fill-current" /> Detener
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => grabarMuestra('habla')}
-                  disabled={grabandoVocal}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                    blobHabla
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                >
-                  {blobHabla ? (
-                    <><CheckCircle2 className="w-3.5 h-3.5" /> Lista</>
-                  ) : (
-                    <><Mic className="w-3.5 h-3.5" /> Grabar</>
-                  )}
+                <button type="button" onClick={() => grabarMuestra('habla')} disabled={grabandoVocal}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${blobHabla ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}>
+                  {blobHabla ? <><CheckCircle2 className="w-3.5 h-3.5" /> Lista</> : <><Mic className="w-3.5 h-3.5" /> Grabar</>}
                 </button>
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={ejecutarAnalisisYDescarga}
-              disabled={procesando || !blobVocal}
-              className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-xl transition-all ${
-                procesando || !blobVocal
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-sky-500/20 active:scale-[0.98]'
-              }`}
-            >
+            <button type="button" onClick={ejecutarAnalisisYDescarga} disabled={procesando || !blobVocal}
+              className={`w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-xl transition-all ${procesando || !blobVocal ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-sky-500/20 active:scale-[0.98]'}`}>
               {procesando ? (
-                <>
-                  <Sparkles className="w-4 h-4 animate-spin text-sky-200" />
-                  Procesando Praat & Generando PDF...
-                </>
+                <><Sparkles className="w-4 h-4 animate-spin text-sky-200" /> Procesando Praat & Generando PDF...</>
               ) : (
-                <>
-                  <FileText className="w-4 h-4" />
-                  Analizar y Generar Informe Clinico
-                </>
+                <><FileText className="w-4 h-4" /> Analizar y Generar Informe Clinico</>
               )}
             </button>
           </div>
