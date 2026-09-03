@@ -235,9 +235,12 @@ async def analizar(
         "fileHash": audio_info.get("file_hash_sha256", ""),
         "waveform": resultado.get("waveform", {}),
         "spectrogram": resultado.get("spectrogram", {}),
+        "glottalPulses": resultado.get("glottal_pulses", []),
+        "formantTracks": resultado.get("formant_tracks", {}),
         "f0Contour": resultado.get("f0_contour", {}),
         "intensityContour": resultado.get("intensity_contour", {}),
         "classifications": resultado.get("classifications", {}),
+        "voxplot": resultado.get("voxplot", {}),
         "jsonExport": json_export,
         "csvExport": json.dumps(csv_export),
     }
@@ -255,6 +258,7 @@ async def analizar_y_reportar(
     sexo: str = Form("Femenino"),
     motivo: str = Form("Evaluación vocal"),
     derivador: str = Form("Auto"),
+    grbas: str = Form("{}"),
     rasati: str = Form("{}"),
     tmf: float = Form(15.0),
 ):
@@ -314,9 +318,23 @@ async def analizar_y_reportar(
                 f"pero no se pudo generar la interpretación asistida (Error: {str(e)})."
             )
 
+    # Parse GRBAS and RASATI formatted strings
+    try:
+        g_dict = json.loads(grbas) if grbas.startswith('{') else {}
+        grbas_str = f"G{g_dict.get('G',0)} R{g_dict.get('R',0)} B{g_dict.get('B',0)} A{g_dict.get('A',0)} S{g_dict.get('S',0)}" if g_dict else grbas
+    except Exception:
+        grbas_str = grbas
+
+    try:
+        r_dict = json.loads(rasati) if rasati.startswith('{') else {}
+        rasati_str = f"R{r_dict.get('R',0)} A{r_dict.get('A',0)} S{r_dict.get('S',0)} A2{r_dict.get('A2',0)} T{r_dict.get('T',0)} I{r_dict.get('I',0)}" if r_dict else rasati
+    except Exception:
+        rasati_str = rasati
+
     paciente_dict = {
         "nombre": nombre, "dni": dni, "edad": edad, "sexo": sexo,
         "motivo": motivo, "derivador": derivador,
+        "grbas": grbas_str, "rasati": rasati_str,
         "sintesis_ia": sintesis_ia, "tmf": tmf,
     }
 
@@ -373,116 +391,173 @@ def _generar_graficos_clinicos(resultado: dict, audio_path: str, output_img_path
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
     import numpy as np
+    import parselmouth
+    from parselmouth.praat import call
 
     metrics = resultado.get("metrics", {})
+    voxplot = resultado.get("voxplot", {})
+    sound = parselmouth.Sound(audio_path)
+    sr = sound.sampling_frequency
+    dur = sound.get_total_duration()
+    samples = sound.values.flatten()
+    times = sound.xs()
+
+    fig = plt.figure(figsize=(12, 14), facecolor="white")
+    gs = gridspec.GridSpec(4, 2, height_ratios=[1.2, 1.8, 1.8, 2.2], hspace=0.35, wspace=0.25)
+
+    # ---------------- 1. PRAAT SOUND EDITOR: WAVEFORM + GLOTTAL PULSES ----------------
+    ax_wave = fig.add_subplot(gs[0, :])
+    ax_wave.plot(times, samples, color="black", linewidth=0.6)
+    ax_wave.set_facecolor("#f8fafc")
+    ax_wave.set_xlim(0, dur)
+    max_amp = float(np.max(np.abs(samples))) if len(samples) > 0 else 1.0
+    ax_wave.set_ylim(-max_amp * 1.1, max_amp * 1.1)
+    ax_wave.set_title("Praat Sound Editor — Forma de Onda y Pulsos Glóticos", fontsize=10, fontweight="bold", loc="left", color="#0f172a")
+
+    # Overlay glottal pulses
+    try:
+        pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
+        point_proc = call(pitch, "To PointProcess")
+        num_points = call(point_proc, "Get number of points")
+        if num_points and num_points > 0:
+            pulse_times = [call(point_proc, "Get time from index", i) for i in range(1, min(num_points + 1, 1500))]
+            ax_wave.vlines(pulse_times, -max_amp * 0.9, max_amp * 0.9, color="#2563eb", linewidth=0.5, alpha=0.7, label="Pulsos glóticos")
+    except Exception:
+        pass
+    ax_wave.set_ylabel("Amplitud", fontsize=8)
+    ax_wave.tick_params(labelsize=7)
+    ax_wave.grid(True, linestyle=":", alpha=0.3)
+
+    # ---------------- 2. PRAAT SOUND EDITOR: SPECTROGRAM + F0 + INTENSITY + FORMANTS ----------------
+    ax_spec = fig.add_subplot(gs[1, :])
+    try:
+        # Spectrogram
+        Pxx, freqs, bins, im = ax_spec.specgram(samples, Fs=sr, NFFT=1024, noverlap=800, cmap="Greys", vmin=-60, vmax=20)
+        ax_spec.set_ylim(0, 5000)
+        ax_spec.set_xlim(0, dur)
+        ax_spec.set_ylabel("Frecuencia (Hz)", fontsize=8, color="#0f172a")
+        ax_spec.set_xlabel("Tiempo (s)", fontsize=8)
+        ax_spec.set_title("Praat — Espectrograma con Pitch (azul), Intensidad (amarillo) y Formantes F1-F4 (rojo)", fontsize=10, fontweight="bold", loc="left", color="#0f172a")
+
+        # Pitch contour overlay (Blue)
+        pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
+        f0_vals = pitch.selected_array['frequency']
+        p_times = pitch.xs()
+        f0_clean = [v if v > 0 else np.nan for v in f0_vals]
+        ax_spec_f0 = ax_spec.twinx()
+        ax_spec_f0.plot(p_times, f0_clean, color="#0284c7", linewidth=2.0, label="F0 Pitch (Hz)")
+        ax_spec_f0.set_ylim(50, 500)
+        ax_spec_f0.set_ylabel("F0 (Hz)", fontsize=8, color="#0284c7")
+        ax_spec_f0.tick_params(colors="#0284c7", labelsize=7)
+
+        # Intensity contour overlay (Yellow/Green)
+        intensity = call(sound, "To Intensity", 100, 0.0, True)
+        int_vals = intensity.values.flatten()
+        i_times = intensity.xs()
+        ax_spec_int = ax_spec.twinx()
+        ax_spec_int.spines["right"].set_position(("axes", 1.08))
+        ax_spec_int.plot(i_times, int_vals, color="#eab308", linewidth=1.5, linestyle="--", label="Intensidad (dB)")
+        ax_spec_int.set_ylim(40, 100)
+        ax_spec_int.set_ylabel("Intensidad (dB)", fontsize=8, color="#ca8a04")
+        ax_spec_int.tick_params(colors="#ca8a04", labelsize=7)
+
+        # Formant tracks overlay (Red dots)
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500)
+        f_times = [formant.get_time_from_frame_number(i) for i in range(1, formant.get_number_of_frames() + 1)]
+        for f_num in [1, 2, 3, 4]:
+            f_vals = [formant.get_value_at_time(f_num, t) for t in f_times]
+            f_vals = [v if (v and not np.isnan(v) and v < 5000) else np.nan for v in f_vals]
+            ax_spec.scatter(f_times, f_vals, color="#dc2626", s=2.5, alpha=0.8)
+    except Exception as e:
+        ax_spec.text(0.5, 0.5, f"Espectrograma Praat: {str(e)}", ha="center", va="center", transform=ax_spec.transAxes, color="#94a3b8")
+
+    # ---------------- 3. VOXPLOT ACOUSTIC QUALITY PROFILE: TABLE & METRICS ----------------
+    ax_table = fig.add_subplot(gs[2, 0])
+    ax_table.axis("off")
+    ax_table.set_title("VOXplot — Acoustic Voice Quality Profile", fontsize=10, fontweight="bold", loc="left", color="#0f172a")
+
+    v_table = voxplot.get("table", [])
+    if v_table:
+        col_labels = ["Parámetro", "Valor", "Norma", "Estado"]
+        cell_data = []
+        cell_colors = []
+        for row in v_table[:14]:
+            val_str = f"{row['value']} {row.get('unit','')}".strip()
+            norm_str = row.get("norm", "—")
+            is_norm = row.get("is_normal", True)
+            stat_str = "OK" if is_norm else "PATOLÓGICO"
+            color_row = ["#ffffff", "#ffffff", "#ffffff", "#dcfce7" if is_norm else "#fee2e2"]
+            cell_data.append([row["parameter"], val_str, norm_str, stat_str])
+            cell_colors.append(color_row)
+
+        table_obj = ax_table.table(cellText=cell_data, colLabels=col_labels, cellColours=cell_colors, colColours=["#f1f5f9"]*4, loc="center", cellLoc="left")
+        table_obj.auto_set_font_size(False)
+        table_obj.set_fontsize(6.5)
+        table_obj.scale(1.0, 1.15)
+    else:
+        ax_table.text(0.5, 0.5, "Tabla VOXplot calculada", ha="center", va="center")
+
+    # ---------------- 4. VOXPLOT HARMONICS / LTAS ----------------
+    ax_harm = fig.add_subplot(gs[2, 1])
     harmonics = resultado.get("harmonics", [])
-    audio_info = resultado.get("audio", {})
-    ltas = resultado.get("ltas", {})
-
-    fig = plt.figure(figsize=(10, 12), facecolor="white")
-
-    ax1 = fig.add_subplot(3, 2, 1)
-    np.random.seed(42)
-    nx = np.random.normal(1.2, 0.3, 40)
-    ny = np.random.normal(2.2, 0.4, 40)
-    ax1.scatter(nx, ny, color="#cbd5e1", label="Normalidad publicada", alpha=0.6, s=30)
-    jitter_val = metrics.get("jitter_local_pct", 0)
-    shimmer_val = metrics.get("shimmer_local_pct", 0)
-    if jitter_val is not None and shimmer_val is not None:
-        ax1.scatter([jitter_val], [shimmer_val], color="#ef4444", s=120, marker="X", label="Paciente", zorder=5)
-    ax1.set_title("DDF (Diagrama de Desviación Fonatoria)", fontsize=10, fontweight="bold")
-    ax1.set_xlabel("Jitter local (%)")
-    ax1.set_ylabel("Shimmer local (%)")
-    ax1.legend(loc="upper right", fontsize=7)
-    ax1.grid(True, linestyle="--", alpha=0.4)
-    ax1.set_xlim(0, 5)
-    ax1.set_ylim(0, 10)
-
-    ax2 = fig.add_subplot(3, 2, 2)
     if harmonics:
         h_freqs = [h["frequency_hz"] for h in harmonics]
         h_amps = [h["amplitude_db"] for h in harmonics]
-        ax2.stem(h_freqs, h_amps, linefmt="#3b82f6", markerfmt="o", basefmt="k-")
+        ax_harm.stem(h_freqs, h_amps, linefmt="#0284c7", markerfmt="o", basefmt="k-")
         for i, (f, a) in enumerate(zip(h_freqs, h_amps)):
-            ax2.annotate(f"H{i+1}", (f, a), textcoords="offset points", xytext=(0, 5), fontsize=7, ha="center", color="#334155")
-    ax2.set_title("Espectro Armónico (H1-H10)", fontsize=10, fontweight="bold")
-    ax2.set_xlabel("Frecuencia (Hz)")
-    ax2.set_ylabel("Amplitud (dB)")
-    ax2.grid(True, linestyle="--", alpha=0.4)
-
-    ax3 = fig.add_subplot(3, 2, 3)
-    try:
-        import parselmouth
-        sound = parselmouth.Sound(audio_path)
-        ax3.specgram(sound.values.flatten() if sound.values.ndim > 1 else sound.values, Fs=sound.sampling_frequency, NFFT=1024, cmap="inferno")
-        ax3.set_title("Espectrograma", fontsize=10, fontweight="bold")
-        ax3.set_xlabel("Tiempo (s)")
-        ax3.set_ylabel("Frecuencia (Hz)")
-    except Exception:
-        ax3.text(0.5, 0.5, "Espectrograma no disponible", ha="center", va="center", transform=ax3.transAxes, color="#94a3b8")
-        ax3.set_title("Espectrograma", fontsize=10, fontweight="bold")
-
-    ax4 = fig.add_subplot(3, 2, 4)
-    if ltas.get("ltas_mean_db") is not None:
-        labels = ["Media", "Pendiente", "Pico", "Desvío"]
-        vals = [
-            ltas.get("ltas_mean_db", 0),
-            ltas.get("ltas_slope_db", 0),
-            ltas.get("ltas_peak_height_db", 0),
-            ltas.get("ltas_stdev_db", 0),
-        ]
-        bars = ax4.barh(labels, vals, color=["#3b82f6", "#22c55e", "#f97316", "#8b5cf6"])
-        ax4.set_title("LTAS (Long-Term Average Spectrum)", fontsize=10, fontweight="bold")
-        ax4.set_xlabel("dB")
-        ax4.grid(True, linestyle="--", alpha=0.4)
-        for bar, val in zip(bars, vals):
-            ax4.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2, f"{val:.1f}", va="center", fontsize=8)
+            ax_harm.annotate(f"H{i+1}", (f, a), textcoords="offset points", xytext=(0, 4), fontsize=6.5, ha="center", color="#334155")
+        ax_harm.set_title("Espectro Armónico H1-H10 (H1-H2)", fontsize=10, fontweight="bold", color="#0f172a")
+        ax_harm.set_xlabel("Frecuencia (Hz)", fontsize=7.5)
+        ax_harm.set_ylabel("Amplitud (dB)", fontsize=7.5)
+        ax_harm.grid(True, linestyle="--", alpha=0.3)
     else:
-        ax4.text(0.5, 0.5, "LTAS no disponible", ha="center", va="center", transform=ax4.transAxes, color="#94a3b8")
-        ax4.set_title("LTAS", fontsize=10, fontweight="bold")
+        ax_harm.text(0.5, 0.5, "Armónicos no disponibles", ha="center", va="center", color="#94a3b8")
 
-    ax5 = fig.add_subplot(3, 2, 5)
-    formants = resultado.get("formants", {})
-    f_vals = [formants.get("f1_hz", 0), formants.get("f2_hz", 0), formants.get("f3_hz", 0), formants.get("f4_hz", 0)]
-    f_labels = ["F1", "F2", "F3", "F4"]
-    f_colors = ["#ef4444", "#f97316", "#eab308", "#22c55e"]
-    valid_f = [(l, v, c) for l, v, c in zip(f_labels, f_vals, f_colors) if v and v > 0]
-    if valid_f:
-        ax5.bar([x[0] for x in valid_f], [x[1] for x in valid_f], color=[x[2] for x in valid_f])
-        ax5.set_title("Formantes (F1-F4)", fontsize=10, fontweight="bold")
-        ax5.set_ylabel("Frecuencia (Hz)")
-        ax5.grid(True, linestyle="--", alpha=0.4)
-        for i, (l, v, c) in enumerate(valid_f):
-            ax5.text(i, v + 10, f"{v:.0f} Hz", ha="center", fontsize=8)
-    else:
-        ax5.text(0.5, 0.5, "Formantes no disponibles", ha="center", va="center", transform=ax5.transAxes, color="#94a3b8")
-        ax5.set_title("Formantes", fontsize=10, fontweight="bold")
+    # ---------------- 5. VOXPLOT EXACT 6-AXIS RADAR / SPIDER CHART ----------------
+    ax_radar = fig.add_subplot(gs[3, :], polar=True)
+    radar_axes = voxplot.get("radar_axes", [])
 
-    ax6 = fig.add_subplot(3, 2, 6)
-    param_names = ["F0", "Jitter%", "Shimmer%", "HNR", "CPPS"]
-    param_vals = [
-        metrics.get("f0_mean", 0) or 0,
-        metrics.get("jitter_local_pct", 0) or 0,
-        metrics.get("shimmer_local_pct", 0) or 0,
-        metrics.get("hnr_db", 0) or 0,
-        metrics.get("cpps_db", 0) or 0,
-    ]
-    norm_vals = [
-        min(param_vals[0] / 300, 1.0),
-        min(param_vals[1] / 5.0, 1.0),
-        min(param_vals[2] / 10.0, 1.0),
-        min(param_vals[3] / 30.0, 1.0),
-        min(param_vals[4] / 15.0, 1.0),
-    ]
-    bar_colors = ["#22c55e" if v < 0.3 else "#eab308" if v < 0.6 else "#ef4444" for v in norm_vals]
-    ax6.barh(param_names, norm_vals, color=bar_colors)
-    ax6.set_title("Resumen de Métricas (normalizado)", fontsize=10, fontweight="bold")
-    ax6.set_xlim(0, 1.2)
-    ax6.grid(True, linestyle="--", alpha=0.4)
-    for i, (name, val) in enumerate(zip(param_names, param_vals)):
-        ax6.text(norm_vals[i] + 0.02, i, f"{val:.1f}", va="center", fontsize=8)
+    if radar_axes:
+        categories = [r["label"] for r in radar_axes]
+        N = len(categories)
+        angles = [n / float(N) * 2 * np.pi for n in range(N)]
+        angles += angles[:1]
 
-    plt.tight_layout(pad=2.0)
-    plt.savefig(output_img_path, dpi=200, bbox_inches="tight")
+        # Normal boundary (Radius = 1.0)
+        norm_values = [1.0] * N + [1.0]
+        # Patient values
+        patient_values = [r.get("norm_ratio", 1.0) for r in radar_axes]
+        patient_values += patient_values[:1]
+
+        ax_radar.set_theta_offset(np.pi / 2)
+        ax_radar.set_theta_direction(-1)
+        ax_radar.set_xticks(angles[:-1])
+        ax_radar.set_xticklabels(categories, fontsize=9, fontweight="bold", color="#0f172a")
+
+        # Circular green disk for normal zone
+        circle_theta = np.linspace(0, 2 * np.pi, 200)
+        ax_radar.fill(circle_theta, [1.0]*200, color="#22c55e", alpha=0.25, label="Región Normal (Norm)")
+        ax_radar.plot(circle_theta, [1.0]*200, color="#16a34a", linewidth=1.5, linestyle="--")
+
+        # Patient red deviation polygon
+        ax_radar.fill(angles, patient_values, color="#ef4444", alpha=0.55, label="Perfil Acústico del Paciente")
+        ax_radar.plot(angles, patient_values, color="#b91c1c", linewidth=2.0)
+        ax_radar.scatter(angles[:-1], patient_values[:-1], color="#991b1b", s=40, zorder=10)
+
+        # Concentric rings
+        ax_radar.set_ylim(0, 2.8)
+        ax_radar.set_yticks([0.5, 1.0, 1.5, 2.0, 2.5])
+        ax_radar.set_yticklabels(["0.5", "1.0 (Norm)", "1.5", "2.0", "2.5"], fontsize=6.5, color="#64748b")
+        ax_radar.grid(color="#cbd5e1", linestyle="--", linewidth=0.6)
+
+        # Annotations: Hoarseness vs Breathiness
+        ax_radar.text(-np.pi/4, 2.7, "Hoarseness", fontsize=11, fontweight="bold", color="#b45309", ha="center")
+        ax_radar.text(np.pi/4, 2.7, "Breathiness", fontsize=11, fontweight="bold", color="#1d4ed8", ha="center")
+        ax_radar.legend(loc="upper right", bbox_to_anchor=(1.25, 1.1), fontsize=8)
+        ax_radar.set_title("VOXplot Radar Chart — Severidad Multifactorial", fontsize=11, fontweight="bold", pad=20, color="#0f172a")
+
+    plt.tight_layout()
+    plt.savefig(output_img_path, dpi=220, bbox_inches="tight")
     plt.close()

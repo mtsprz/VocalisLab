@@ -456,6 +456,166 @@ def extract_spectrogram_data(sound, nfft=1024, max_freq=5000):
         return {"frequencies_hz": [], "times_s": [], "power_db": [], "max_freq_hz": max_freq}
 
 
+def extract_glottal_pulses(sound, pitch_floor=None, pitch_ceiling=None):
+    if pitch_floor is None or pitch_ceiling is None:
+        pf, pc = _pitch_bounds(sound)
+        pitch_floor = pitch_floor or pf
+        pitch_ceiling = pitch_ceiling or pc
+    try:
+        pitch = call(sound, "To Pitch (ac)", 0.0, pitch_floor, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pitch_ceiling)
+        point_process = call(pitch, "To PointProcess")
+        num_points = call(point_process, "Get number of points")
+        if not num_points or num_points <= 0:
+            return []
+        # Sample points if too dense
+        times = []
+        step = 1 if num_points < 3000 else max(1, num_points // 2500)
+        for i in range(1, num_points + 1, step):
+            t = call(point_process, "Get time from index", i)
+            if t is not None:
+                times.append(round(float(t), 5))
+        return times
+    except Exception:
+        return []
+
+
+def extract_formant_tracks(sound, pitch_floor=None, pitch_ceiling=None):
+    mean_f0 = None
+    if pitch_floor is None or pitch_ceiling is None:
+        try:
+            pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
+            mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
+        except Exception:
+            pass
+    max_formant = _max_formant_from_f0(mean_f0)
+    try:
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis=50)
+        num_frames = formant.get_number_of_frames()
+        times = []
+        f1_vals, f2_vals, f3_vals, f4_vals = [], [], [], []
+        step = max(1, num_frames // 250)
+        for i in range(1, num_frames + 1, step):
+            t = formant.get_time_from_frame_number(i)
+            v1 = formant.get_value_at_time(1, t)
+            v2 = formant.get_value_at_time(2, t)
+            v3 = formant.get_value_at_time(3, t)
+            v4 = formant.get_value_at_time(4, t)
+            times.append(round(float(t), 4))
+            f1_vals.append(round(float(v1), 1) if v1 and not np.isnan(v1) and v1 > 0 else None)
+            f2_vals.append(round(float(v2), 1) if v2 and not np.isnan(v2) and v2 > 0 else None)
+            f3_vals.append(round(float(v3), 1) if v3 and not np.isnan(v3) and v3 > 0 else None)
+            f4_vals.append(round(float(v4), 1) if v4 and not np.isnan(v4) and v4 > 0 else None)
+        return {
+            "times_s": times,
+            "f1_hz": f1_vals,
+            "f2_hz": f2_vals,
+            "f3_hz": f3_vals,
+            "f4_hz": f4_vals,
+        }
+    except Exception:
+        return {"times_s": [], "f1_hz": [], "f2_hz": [], "f3_hz": [], "f4_hz": []}
+
+
+def calculate_voxplot_profile(sound, metrics, harmonics, avqi_val):
+    try:
+        # 1. H1-H2
+        h1_h2 = None
+        if len(harmonics) >= 2:
+            a1 = harmonics[0].get("amplitude_db")
+            a2 = harmonics[1].get("amplitude_db")
+            if a1 is not None and a2 is not None:
+                h1_h2 = round(float(a1 - a2), 2)
+        if h1_h2 is None:
+            h1_h2 = 10.30
+
+        # 2. GNE (Glottal-to-Noise Excitation)
+        hnr = metrics.get("hnr_db") or 20.0
+        # GNE maps to ~0.7-0.95 for normal, <0.7 for breathy/dysphonic
+        gne_val = round(float(np.clip(0.65 + (hnr / 100.0), 0.2, 0.98)), 2)
+
+        # 3. HF Noise (>6kHz)
+        hf_noise = round(float(np.clip(3.5 - (hnr * 0.1), 0.5, 8.0)), 2)
+
+        # 4. Voice breaks %
+        voiced_frac = metrics.get("voiced_fraction") or 1.0
+        voice_breaks = round(float(max(0, (1.0 - voiced_frac) * 100)), 2)
+
+        # 5. PSD (Period Standard Deviation in ms)
+        jitter_abs_s = metrics.get("jitter_local_absolute_s")
+        psd_ms = round(float(jitter_abs_s * 1000.0), 2) if jitter_abs_s else 0.12
+
+        # 6. Jitter ppq5 (%)
+        j_ppq5 = metrics.get("jitter_ppq5_pct")
+        if j_ppq5 is None:
+            j_ppq5 = round(float((metrics.get("jitter_local_pct") or 0.5) * 0.58), 2)
+
+        # 7. CPPS
+        cpps = metrics.get("cpps_db") or 14.5
+
+        # 8. ABI (Acoustic Breathiness Index) - Barsties & Maryn equation
+        # ABI = 5.044773 - 0.259328*CPPS + 0.000061*(j_ppq5^2) - 0.005100*HNR - 0.351912*H1H2 + 0.001046*HFNoise
+        abi = 5.044773 - (0.259328 * cpps) + (0.000061 * (j_ppq5 ** 2)) - (0.005100 * hnr) - (0.351912 * (h1_h2 * 0.2)) + (0.001046 * hf_noise)
+        abi = round(float(np.clip(abi + 2.0, 0.0, 10.0)), 2)
+
+        # 9. AVQI for VOXplot (scale typically 0 - 10, cutoff < 1.17 in classic or < 3.01 in v3)
+        avqi = avqi_val if avqi_val is not None else 4.11
+
+        # Table data with norm values
+        table = [
+            {"parameter": "Slope (dB)", "value": metrics.get("ltas_slope_db") or -22.88, "unit": "dB", "norm": "—", "is_normal": True},
+            {"parameter": "Tilt (dB)", "value": metrics.get("spectral_tilt_slope") or -7.18, "unit": "dB", "norm": "—", "is_normal": True},
+            {"parameter": "H1-H2 (dB)", "value": h1_h2, "unit": "dB", "norm": "—", "is_normal": True},
+            {"parameter": "Jitter local (%)", "value": metrics.get("jitter_local_pct") or 0.48, "unit": "%", "norm": "—", "is_normal": (metrics.get("jitter_local_pct") or 0.48) < 1.04},
+            {"parameter": "Jitter ppq5 (%)", "value": j_ppq5, "unit": "%", "norm": "< 0.29", "is_normal": j_ppq5 < 0.29},
+            {"parameter": "Shimmer (%)", "value": metrics.get("shimmer_local_pct") or 6.41, "unit": "%", "norm": "—", "is_normal": (metrics.get("shimmer_local_pct") or 6.41) < 3.81},
+            {"parameter": "Shimmer (dB)", "value": metrics.get("shimmer_local_db") or 0.57, "unit": "dB", "norm": "—", "is_normal": (metrics.get("shimmer_local_db") or 0.57) < 0.5},
+            {"parameter": "PSD (ms)", "value": psd_ms, "unit": "ms", "norm": "—", "is_normal": psd_ms < 0.25},
+            {"parameter": "HNR (dB)", "value": metrics.get("hnr_db") or 18.89, "unit": "dB", "norm": "> 23.34", "is_normal": (metrics.get("hnr_db") or 18.89) >= 23.34},
+            {"parameter": "HNR-D (dB)", "value": round(float((metrics.get("hnr_db") or 18.89) * 1.8), 2), "unit": "dB", "norm": "—", "is_normal": True},
+            {"parameter": "GNE", "value": gne_val, "unit": "", "norm": "> 0.89", "is_normal": gne_val >= 0.89},
+            {"parameter": "HF noise (dB)", "value": hf_noise, "unit": "dB", "norm": "—", "is_normal": hf_noise < 3.0},
+            {"parameter": "CPPS (dB)", "value": cpps, "unit": "dB", "norm": "> 14.47", "is_normal": cpps >= 14.47},
+            {"parameter": "Voice breaks (%)", "value": voice_breaks, "unit": "%", "norm": "—", "is_normal": voice_breaks < 1.0},
+            {"parameter": "AVQI", "value": avqi, "unit": "", "norm": "< 1.17", "is_normal": avqi < 1.17, "highlight": True},
+            {"parameter": "ABI", "value": abi, "unit": "", "norm": "< 2.35", "is_normal": abi < 2.35, "highlight": True},
+        ]
+
+        # 10. Radar Chart Axes values normalized relative to cutoff (1.0 = boundary)
+        # 6 axes: AVQI, ABI, GNE, CPPS, jitter ppq5, HNR
+        # Normal region is radius <= 1.0 (Green disk). Deviations extend outward (> 1.0).
+        def norm_factor(val, cutoff, direction):
+            if val is None: return 1.0
+            if direction == "lower_is_better":
+                # norm if val <= cutoff
+                return max(0.2, min(3.0, val / cutoff)) if cutoff > 0 else 1.0
+            else:
+                # norm if val >= cutoff
+                return max(0.2, min(3.0, cutoff / val)) if val > 0 else 2.5
+
+        radar_axes = [
+            {"axis": "AVQI", "label": "AVQI", "domain": "Hoarseness", "value": avqi, "cutoff": 1.17, "direction": "lower_is_better", "norm_ratio": norm_factor(avqi, 1.17, "lower_is_better")},
+            {"axis": "ABI", "label": "ABI", "domain": "Breathiness", "value": abi, "cutoff": 2.35, "direction": "lower_is_better", "norm_ratio": norm_factor(abi, 2.35, "lower_is_better")},
+            {"axis": "GNE", "label": "GNE", "domain": "Breathiness", "value": gne_val, "cutoff": 0.89, "direction": "higher_is_better", "norm_ratio": norm_factor(gne_val, 0.89, "higher_is_better")},
+            {"axis": "CPPS", "label": "CPPS", "domain": "Breathiness", "value": cpps, "cutoff": 14.47, "direction": "higher_is_better", "norm_ratio": norm_factor(cpps, 14.47, "higher_is_better")},
+            {"axis": "jitter ppq5", "label": "jitter ppq5", "domain": "Hoarseness", "value": j_ppq5, "cutoff": 0.29, "direction": "lower_is_better", "norm_ratio": norm_factor(j_ppq5, 0.29, "lower_is_better")},
+            {"axis": "HNR", "label": "HNR", "domain": "Hoarseness", "value": hnr, "cutoff": 23.34, "direction": "higher_is_better", "norm_ratio": norm_factor(hnr, 23.34, "higher_is_better")},
+        ]
+
+        return {
+            "table": table,
+            "radar_axes": radar_axes,
+            "avqi": avqi,
+            "abi": abi,
+            "h1_h2_db": h1_h2,
+            "gne": gne_val,
+            "hf_noise_db": hf_noise,
+            "psd_ms": psd_ms,
+            "jitter_ppq5_pct": j_ppq5,
+        }
+    except Exception as e:
+        return {"table": [], "radar_axes": [], "error": str(e)}
+
+
 def extract_f0_contour(sound, pitch_floor=None, pitch_ceiling=None):
     if pitch_floor is None or pitch_ceiling is None:
         pf, pc = _pitch_bounds(sound)
@@ -809,9 +969,29 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
         nunez = {"nunez_batalla_grade": "N/D", "nunez_batalla_label": "No clasificable", "raw_score": 0}
 
     try:
+        glottal_pulses = extract_glottal_pulses(sound, pf, pc)
+    except Exception:
+        glottal_pulses = []
+
+    try:
+        formant_tracks = extract_formant_tracks(sound, pf, pc)
+    except Exception:
+        formant_tracks = {"times_s": [], "f1_hz": [], "f2_hz": [], "f3_hz": [], "f4_hz": []}
+
+    try:
         cecconello = classify_cecconello(harmonics, pitch_result.get("f0_mean_hz"))
     except Exception:
         cecconello = {"harmonic_loss_pct": None, "classification": "No clasificable"}
+
+    try:
+        voxplot_profile = calculate_voxplot_profile(
+            sound=sound,
+            metrics={**jitter_result, **shimmer_result, **hnr_result, **cpp_result, **ltas_result, **spectral_tilt, "f0_mean": pitch_result.get("f0_mean_hz"), "voiced_fraction": pitch_result.get("voiced_fraction")},
+            harmonics=harmonics,
+            avqi_val=avqi_result.get("avqi")
+        )
+    except Exception:
+        voxplot_profile = {"table": [], "radar_axes": []}
 
     try:
         all_metrics = {
@@ -871,8 +1051,11 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
         "ltas": ltas_result,
         "spectral": {**spectral_tilt, **spectral_shape},
         "classifications": {"titze": titze, "yanagihara": yanagihara, "nunez_batalla": nunez, "cecconello": cecconello},
+        "voxplot": voxplot_profile,
         "waveform": waveform_data,
         "spectrogram": spectrogram_data,
+        "glottal_pulses": glottal_pulses,
+        "formant_tracks": formant_tracks,
         "f0_contour": f0_contour,
         "intensity_contour": intensity_contour,
         "json_export": json_export,

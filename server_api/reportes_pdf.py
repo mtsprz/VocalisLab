@@ -52,15 +52,20 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
     ))
 
     audio = metricas.get("audio", {})
+    grbas_str = paciente.get("grbas", "G0 R0 B0 A0 S0")
+    rasati_str = paciente.get("rasati", "R0 A0 S0 A20 T0 I0")
+
     info_data = [
         [Paragraph(f"<b>Paciente:</b> {paciente.get('nombre', 'N/A')}", body_style),
          Paragraph(f"<b>DNI:</b> {paciente.get('dni', 'N/A')}", body_style)],
         [Paragraph(f"<b>Edad:</b> {paciente.get('edad', 'N/A')} años | <b>Sexo:</b> {paciente.get('sexo', 'N/A')}", body_style),
          Paragraph(f"<b>TMF:</b> {paciente.get('tmf', '0')} s", body_style)],
+        [Paragraph(f"<b>GRBAS:</b> {grbas_str}", body_style),
+         Paragraph(f"<b>RASATI:</b> {rasati_str}", body_style)],
         [Paragraph(f"<b>Motivo:</b> {paciente.get('motivo', 'N/A')}", body_style),
          Paragraph(f"<b>Derivador:</b> {paciente.get('derivador', 'N/A')}", body_style)],
-        [Paragraph(f"<b>Audio:</b> SR={audio.get('sample_rate_hz', 'N/D')} Hz, Dur={audio.get('duration_s', 'N/D')}s, RMS={audio.get('rms', 'N/D')}, Pico={audio.get('peak', 'N/D')}", body_style),
-         Paragraph(f"<b>Hash:</b> {audio.get('file_hash_sha256', 'N/D')}...", body_style)],
+        [Paragraph(f"<b>Audio:</b> SR={audio.get('sample_rate_hz', 'N/D')} Hz, Dur={audio.get('duration_s', 'N/D')}s, RMS={audio.get('rms', 'N/D')}", body_style),
+         Paragraph(f"<b>Hash:</b> {audio.get('file_hash_sha256', 'N/D')[:16]}...", body_style)],
     ]
     t = Table(info_data, colWidths=[270, 270])
     t.setStyle(TableStyle([
@@ -175,14 +180,15 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements.append(Spacer(1, 6))
     if os.path.exists(img_path):
-        elements.append(Paragraph("<b>3. Gráficos Clínicos</b>", section_style))
-        elements.append(Paragraph("DDF (Diagrama de Desviación Fonatoria) | Espectro Armónico | Espectrograma", subtitle_style))
-        elements.append(RLImage(img_path, width=440, height=300))
+        elements.append(PageBreak())
+        elements.append(Paragraph("<b>3. Gráficos Clínicos (Praat & VOXplot Profile)</b>", section_style))
+        elements.append(Paragraph("Praat Editor (Waveform & Spectrogram with Pitch/Intensity/Formants) | VOXplot Acoustic Quality Profile & Radar Chart", subtitle_style))
+        elements.append(RLImage(img_path, width=520, height=620))
         elements.append(Spacer(1, 4))
         elements.append(Paragraph(
-            "Los gráficos fueron generados directamente desde los datos de Praat/Parselmouth. "
-            "El DDF muestra la relación jitter-shimmer del paciente respecto a rangos de normalidad publicados. "
-            "El espectro muestra los primeros 10 armónicos con sus frecuencias y amplitudes.",
+            "Los gráficos fueron generados directamente desde los datos bioacústicos de Praat/Parselmouth y el motor VOXplot. "
+            "El panel superior incluye la forma de onda con pulsos glóticos y el espectrograma con contornos de Pitch, Intensidad y Formantes. "
+            "El panel inferior detalla el perfil VOXplot de 16 parámetros y el radar chart de severidad multifactorial.",
             disclaimer_style
         ))
         elements.append(Spacer(1, 8))

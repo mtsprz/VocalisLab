@@ -24,9 +24,12 @@ interface AnalysisResult {
   spectral: any;
   waveform: any;
   spectrogram: any;
+  glottalPulses: number[];
+  formantTracks: any;
   f0Contour: any;
   intensityContour: any;
   classifications: any;
+  voxplot: any;
   timestamp: string;
   engineVersion: string;
   scriptVersion: string;
@@ -278,6 +281,7 @@ export default function VocalisLabModule() {
       formData.append('motivo', motivo || 'Evaluación de control');
       formData.append('derivador', derivador || 'Consulta directa');
       formData.append('tmf', tmf);
+      formData.append('grbas', JSON.stringify(grbas));
       formData.append('rasati', JSON.stringify(rasati));
       const res = await fetch(`${BACKEND_URL}/api/analizar-y-reportar`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Error ${res.status}`);
@@ -587,9 +591,12 @@ export default function VocalisLabModule() {
             spectral={r.spectral || r.metrics?.spectral || {}}
             waveform={r.waveform || {}}
             spectrogram={r.spectrogram || {}}
+            glottalPulses={r.glottalPulses || []}
+            formantTracks={r.formantTracks || {}}
             f0Contour={r.f0Contour || {}}
             intensityContour={r.intensityContour || {}}
             classifications={r.classifications || {}}
+            voxplot={r.voxplot || {}}
             modo={r.modo || 'clinico'}
             onViewJson={() => setShowJson(true)}
             onViewCsv={() => {

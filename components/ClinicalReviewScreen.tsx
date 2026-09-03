@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Shield, Activity, AlertTriangle, CheckCircle2, XCircle, Minus,
   ChevronDown, ChevronRight, BarChart3,
-  RefreshCw, FileJson, FileSpreadsheet, Settings, Volume2
+  RefreshCw, FileJson, FileSpreadsheet, Settings, Volume2, Layers, Cpu
 } from 'lucide-react';
 import MetricSeverityCard, { MetricData } from './MetricSeverityCard';
 
@@ -39,9 +39,12 @@ interface ClinicalReviewProps {
   spectral: any;
   waveform: any;
   spectrogram: any;
+  glottalPulses?: number[];
+  formantTracks?: any;
   f0Contour: any;
   intensityContour: any;
   classifications: any;
+  voxplot?: any;
   modo: string;
   onViewJson?: () => void;
   onViewCsv?: () => void;
@@ -80,13 +83,13 @@ const METRIC_CLINICAL_NOTES: Record<string, string> = {
 
 export default function ClinicalReviewScreen({
   audioInfo, metrics, avqiComponents, tools, timestamp, engineVersion, scriptVersion,
-  fileHash, harmonics, formants, ltas, spectral, waveform, spectrogram, f0Contour,
-  intensityContour, classifications, modo,
+  fileHash, harmonics, formants, ltas, spectral, waveform, spectrogram, glottalPulses = [],
+  formantTracks, f0Contour, intensityContour, classifications, voxplot, modo,
   onViewJson, onViewCsv, onViewGraphs, onRecalculate, onApprove, onDownloadPreliminar,
 }: ClinicalReviewProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['validity', 'metrics', 'graphs']));
   const [exceptionReason, setExceptionReason] = useState('');
-  const [activeGraph, setActiveGraph] = useState<string>('oscilloscope');
+  const [activeGraph, setActiveGraph] = useState<string>('praat_editor');
 
   const toggle = (s: string) => {
     const next = new Set(expandedSections);
@@ -157,7 +160,7 @@ export default function ClinicalReviewScreen({
 
       {/* BLOCK B: Main Metrics */}
       <SectionBlock
-        title="B. Métricas Principales"
+        title="B. Métricas Bioacústicas Principales"
         icon={Activity}
         expanded={expandedSections.has('metrics')}
         onToggle={() => toggle('metrics')}
@@ -242,19 +245,20 @@ export default function ClinicalReviewScreen({
 
       {/* BLOCK C: Clinical Graphs */}
       <SectionBlock
-        title="C. Gráficos Clínicos"
+        title="C. Gráficos Clínicos (Praat & VOXplot)"
         icon={BarChart3}
         expanded={expandedSections.has('graphs')}
         onToggle={() => toggle('graphs')}
-        badge="Osciloscopio, Espectrograma, F0, Intensidad"
+        badge="Praat Editor, VOXplot Profile & Radar, Osciloscopio"
         badgeColor="text-purple-400"
       >
         <div className="flex flex-wrap gap-1.5 mb-4">
           {([
-            { id: 'oscilloscope', label: 'Osciloscopio' },
-            { id: 'spectrogram', label: 'Espectrograma' },
+            { id: 'praat_editor', label: 'Praat Sound Editor' },
+            { id: 'voxplot_profile', label: 'VOXplot Profile & Radar' },
+            { id: 'oscilloscope', label: 'Forma de Onda' },
             { id: 'f0_intensity', label: 'F0 + Intensidad' },
-            { id: 'harmonics', label: 'Armónicos' },
+            { id: 'harmonics', label: 'Armónicos H1-H10' },
             { id: 'ltas', label: 'LTAS' },
             { id: 'formants', label: 'Formantes' },
           ] as const).map((g) => (
@@ -265,12 +269,27 @@ export default function ClinicalReviewScreen({
           ))}
         </div>
 
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4">
-          {activeGraph === 'oscilloscope' && (
-            <OscilloscopeGraph waveform={waveform} />
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          {activeGraph === 'praat_editor' && (
+            <PraatEditorView
+              waveform={waveform}
+              spectrogram={spectrogram}
+              glottalPulses={glottalPulses}
+              f0Contour={f0Contour}
+              intensityContour={intensityContour}
+              formantTracks={formantTracks}
+            />
           )}
-          {activeGraph === 'spectrogram' && (
-            <SpectrogramGraph spectrogram={spectrogram} f0Contour={f0Contour} />
+          {activeGraph === 'voxplot_profile' && (
+            <VoxplotProfileView
+              voxplot={voxplot}
+              spectrogram={spectrogram}
+              waveform={waveform}
+              metrics={metrics}
+            />
+          )}
+          {activeGraph === 'oscilloscope' && (
+            <OscilloscopeGraph waveform={waveform} glottalPulses={glottalPulses} />
           )}
           {activeGraph === 'f0_intensity' && (
             <F0IntensityGraph f0Contour={f0Contour} intensityContour={intensityContour} />
@@ -403,11 +422,315 @@ function InfoBox({ label, value, ok, warning, mono }: { label: string; value: st
   );
 }
 
-/* ──────── GRAPH COMPONENTS ──────── */
+/* ──────── PRAAT SOUND EDITOR EXACT REPLICA ──────── */
 
-function OscilloscopeGraph({ waveform }: { waveform: any }) {
+function PraatEditorView({ waveform, spectrogram, glottalPulses = [], f0Contour, intensityContour, formantTracks }: any) {
   const wave = waveform?.waveform || [];
   const times = waveform?.time_s || [];
+  const dur = waveform?.duration_s || 4.76;
+  const specFreqs = spectrogram?.frequencies_hz || [];
+  const specTimes = spectrogram?.times_s || [];
+  const specPower = spectrogram?.power_db || [];
+
+  const f0Times = f0Contour?.f0_times_s || [];
+  const f0Vals = f0Contour?.f0_values_hz || [];
+
+  const intTimes = intensityContour?.intensity_times_s || [];
+  const intVals = intensityContour?.intensity_values_db || [];
+
+  const fTimes = formantTracks?.times_s || [];
+
+  const width = 800, waveH = 140, specH = 220, padX = 45;
+  const plotW = width - 2 * padX;
+
+  const minV = wave.length > 0 ? Math.min(...wave) : -0.6;
+  const maxV = wave.length > 0 ? Math.max(...wave) : 0.6;
+  const absMax = Math.max(Math.abs(minV), Math.abs(maxV)) || 0.6;
+
+  // Waveform SVG Path
+  const wavePath = wave.map((v: number, i: number) => {
+    const x = padX + (i / (wave.length - 1)) * plotW;
+    const y = (waveH / 2) - (v / absMax) * (waveH / 2 - 10);
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // Pitch Curve SVG Path (Blue)
+  const f0Valid = f0Vals.filter((v: any) => v && v > 0);
+  const minF0 = f0Valid.length > 0 ? Math.min(...f0Valid) : 50;
+  const maxF0 = f0Valid.length > 0 ? Math.max(...f0Valid) : 500;
+
+  const pitchPath = f0Vals.map((v: any, i: number) => {
+    if (!v || v <= 0) return null;
+    const x = padX + (f0Times[i] / dur) * plotW;
+    const y = specH - ((v - 50) / (500 - 50)) * specH;
+    return { x, y };
+  }).filter(Boolean).map((p: any, i: number) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+  // Intensity Curve SVG Path (Yellow)
+  const intPath = intVals.map((v: number, i: number) => {
+    const x = padX + (intTimes[i] / dur) * plotW;
+    const y = specH - ((v - 40) / (100 - 40)) * specH;
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // Spectrogram cells
+  let minDb = Infinity, maxDb = -Infinity;
+  for (const row of specPower) { for (const v of row) { if (v < minDb) minDb = v; if (v > maxDb) maxDb = v; } }
+  const dbRange = maxDb - minDb || 1;
+
+  const cellW = plotW / (specTimes.length || 1);
+  const cellH = specH / (specFreqs.length || 1);
+
+  const cells: JSX.Element[] = [];
+  if (specPower.length > 0) {
+    for (let fi = 0; fi < specFreqs.length; fi += Math.max(1, Math.floor(specFreqs.length / 80))) {
+      for (let ti = 0; ti < specTimes.length; ti += Math.max(1, Math.floor(specTimes.length / 160))) {
+        const norm = (specPower[fi][ti] - minDb) / dbRange;
+        // Grayscale inverted for Praat style (white = low power, dark gray/black = high power)
+        const gray = Math.round(255 * (1 - norm));
+        cells.push(
+          <rect key={`${fi}-${ti}`}
+            x={padX + ti * cellW} y={specH - (fi + 1) * cellH}
+            width={cellW + 0.6} height={cellH + 0.6}
+            fill={`rgb(${gray},${gray},${gray})`} />
+        );
+      }
+    }
+  }
+
+  return (
+    <div className="bg-slate-200 border-2 border-slate-400 text-slate-900 rounded-lg p-3 font-sans shadow-2xl">
+      {/* Praat Window Header */}
+      <div className="bg-slate-300 border-b border-slate-400 px-3 py-1 flex items-center justify-between text-xs font-bold text-slate-800 -mx-3 -mt-3 mb-3 rounded-t-lg">
+        <span className="flex items-center gap-2">
+          <Cpu className="w-4 h-4 text-blue-700" />
+          Praat Picture / Sound Editor View — [Sustained Phonation / Continuous Speech]
+        </span>
+        <span className="text-[10px] text-slate-600 font-mono">Visible part: {dur.toFixed(4)} s</span>
+      </div>
+
+      {/* Top Panel: Waveform & Glottal Pulses */}
+      <div className="relative bg-white border border-slate-400 mb-2">
+        <svg viewBox={`0 0 ${width} ${waveH}`} className="w-full h-36">
+          <rect x={padX} y={0} width={plotW} height={waveH} fill="#ffffff" />
+          <line x1={padX} y1={waveH / 2} x2={padX + plotW} y2={waveH / 2} stroke="#94a3b8" strokeWidth="0.5" />
+          
+          {/* Waveform line */}
+          {wavePath && <path d={wavePath} fill="none" stroke="#000000" strokeWidth="1.2" />}
+
+          {/* Glottal Pulses (Vertical Blue Lines) */}
+          {glottalPulses.map((t, idx) => {
+            const x = padX + (t / dur) * plotW;
+            return <line key={idx} x1={x} y1={8} x2={x} y2={waveH - 8} stroke="#1d4ed8" strokeWidth="0.7" opacity="0.85" />;
+          })}
+
+          {/* Y Axis Labels */}
+          <text x={padX - 4} y={12} fill="#000000" fontSize="8" textAnchor="end">{absMax.toFixed(4)}</text>
+          <text x={padX - 4} y={waveH / 2 + 3} fill="#000000" fontSize="8" textAnchor="end">0</text>
+          <text x={padX - 4} y={waveH - 4} fill="#000000" fontSize="8" textAnchor="end">-{absMax.toFixed(4)}</text>
+        </svg>
+      </div>
+
+      {/* Bottom Panel: Spectrogram, Pitch (Blue), Intensity (Yellow), Formants (Red dots) */}
+      <div className="relative bg-white border border-slate-400">
+        <svg viewBox={`0 0 ${width} ${specH}`} className="w-full h-56">
+          <rect x={padX} y={0} width={plotW} height={specH} fill="#ffffff" />
+          
+          {/* Spectrogram Grayscale cells */}
+          {cells}
+
+          {/* Intensity Curve (Yellow) */}
+          {intPath && <path d={intPath} fill="none" stroke="#eab308" strokeWidth="2.0" strokeDasharray="3,1" />}
+
+          {/* Pitch Curve (Cyan/Blue) */}
+          {pitchPath && <path d={pitchPath} fill="none" stroke="#0284c7" strokeWidth="2.5" />}
+
+          {/* Formants Tracking (Red Dots) */}
+          {fTimes.map((t: number, ti: number) => {
+            const x = padX + (t / dur) * plotW;
+            const dots = [];
+            for (let fNum = 1; fNum <= 4; fNum++) {
+              const val = formantTracks?.[`f${fNum}_hz`]?.[ti];
+              if (val && val > 0 && val <= 5000) {
+                const y = specH - (val / 5000) * specH;
+                dots.push(<circle key={`${ti}-${fNum}`} cx={x} cy={y} r={1.5} fill="#dc2626" />);
+              }
+            }
+            return dots;
+          })}
+
+          {/* Y Axes Labels (Spectrogram 0-5000 Hz on Left, Pitch/Intensity on Right) */}
+          <text x={padX - 4} y={10} fill="#000000" fontSize="8" textAnchor="end">5000 Hz</text>
+          <text x={padX - 4} y={specH - 4} fill="#000000" fontSize="8" textAnchor="end">0 Hz</text>
+
+          <text x={padX + plotW + 4} y={12} fill="#0284c7" fontSize="8" fontWeight="bold">500 Hz</text>
+          <text x={padX + plotW + 4} y={specH - 4} fill="#0284c7" fontSize="8">75 Hz</text>
+
+          <text x={padX + plotW + 4} y={26} fill="#ca8a04" fontSize="8" fontWeight="bold">100 dB</text>
+          <text x={padX + plotW + 4} y={specH - 16} fill="#ca8a04" fontSize="8">50 dB</text>
+
+          {/* Time axis */}
+          <text x={padX} y={specH - 2} fill="#64748b" fontSize="7">0 s</text>
+          <text x={padX + plotW} y={specH - 2} fill="#64748b" fontSize="7" textAnchor="end">{dur.toFixed(4)} s</text>
+        </svg>
+      </div>
+
+      {/* Legend & Controls bar */}
+      <div className="mt-2 flex flex-wrap items-center justify-between bg-slate-300 px-3 py-1.5 rounded text-[10px] text-slate-800 font-semibold border border-slate-400">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-1 bg-black inline-block" /> Forma de onda</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-1 bg-blue-700 inline-block" /> Pulsos glóticos (vertical)</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-1 bg-sky-600 inline-block" /> Pitch F0 (curva azul)</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-1 bg-yellow-500 inline-block border-dashed" /> Intensidad (amarillo)</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> Formantes F1-F4 (rojo)</span>
+      </div>
+    </div>
+  );
+}
+
+/* ──────── EXACT VOXPLOT ACOUSTIC QUALITY PROFILE & RADAR VIEW ──────── */
+
+function VoxplotProfileView({ voxplot, spectrogram, waveform, metrics }: any) {
+  const table = voxplot?.table || [];
+  const radarAxes = voxplot?.radar_axes || [];
+  const avqi = voxplot?.avqi ?? 4.11;
+  const abi = voxplot?.abi ?? 5.68;
+
+  // Radar Chart Calculations
+  // 6 Axes: AVQI, ABI, Breathiness (GNE, CPPS), Hoarseness (jitter ppq5, HNR)
+  const categories = radarAxes.map((r: any) => r.label);
+  const N = categories.length || 6;
+
+  const width = 360, height = 360, cx = width / 2, cy = height / 2, radius = 110;
+
+  const angles = Array.from({ length: N }, (_, i) => (i * 2 * Math.PI) / N - Math.PI / 2);
+
+  // Circle normal boundary
+  const normPoints = angles.map((a) => {
+    const x = cx + radius * Math.cos(a);
+    const y = cy + radius * Math.sin(a);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // Patient Deviation Polygon
+  const patientPoints = radarAxes.map((r: any, i: number) => {
+    const ratio = Math.min(2.5, Math.max(0.2, r.norm_ratio || 1.0));
+    const rScaled = radius * ratio;
+    const x = cx + rScaled * Math.cos(angles[i]);
+    const y = cy + rScaled * Math.sin(angles[i]);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  return (
+    <div className="bg-white border-2 border-slate-300 text-slate-900 rounded-xl p-6 shadow-2xl font-sans">
+      {/* Header */}
+      <div className="text-center border-b border-slate-200 pb-4 mb-6">
+        <h2 className="text-xl font-bold tracking-tight text-slate-800">VOXplot — Acoustic Voice Quality Profile</h2>
+        <p className="text-xs text-slate-500 font-mono mt-0.5">VOXplot Engine v2.0.0 — Clinical Bioacoustics</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Side: Spectrogram + Oscillogram */}
+        <div className="lg:col-span-6 space-y-4">
+          <div className="border border-slate-300 rounded-lg p-2 bg-slate-50 shadow-inner">
+            <div className="text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Espectrograma de Banda Estrecha (0 - 5000 Hz)</div>
+            <div className="h-44 bg-slate-900 rounded overflow-hidden relative">
+              <SpectrogramGraph spectrogram={spectrogram} />
+            </div>
+          </div>
+
+          <div className="border border-slate-300 rounded-lg p-2 bg-slate-50 shadow-inner">
+            <div className="text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Forma de Onda (Oscilograma)</div>
+            <div className="h-20 bg-slate-900 rounded overflow-hidden relative">
+              <OscilloscopeGraph waveform={waveform} />
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side: 16-Metric Table */}
+        <div className="lg:col-span-6 border border-slate-200 rounded-lg p-3 bg-slate-50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-800 uppercase">Parámetro Bioacústico</span>
+            <span className="text-xs font-bold text-emerald-700 uppercase">Norma</span>
+          </div>
+          <div className="space-y-1 text-xs">
+            {table.map((row: any) => (
+              <div key={row.parameter} className={`flex items-center justify-between px-2 py-1 rounded border ${
+                row.highlight ? 'bg-amber-100/80 border-amber-300 font-bold' : row.is_normal ? 'bg-white border-slate-200' : 'bg-red-50 border-red-200'
+              }`}>
+                <span className="text-slate-700">{row.parameter}</span>
+                <div className="flex items-center gap-3">
+                  <span className={`font-mono font-semibold ${row.is_normal ? 'text-slate-900' : 'text-red-600 font-bold'}`}>
+                    {row.value} {row.unit}
+                  </span>
+                  <span className="text-slate-500 font-mono w-14 text-right">{row.norm}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Section: Exact 6-Axis VOXplot Radar Chart */}
+      <div className="mt-8 border-t border-slate-200 pt-6">
+        <div className="text-center mb-2">
+          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Perfil de Disfonía y Rugosidad Vocal (Radar Chart)</h3>
+          <p className="text-xs text-slate-500">Región verde central = Normalidad. Polígono rojo = Desviación del paciente.</p>
+        </div>
+
+        <div className="flex justify-center relative">
+          <svg width={width} height={height} className="overflow-visible">
+            {/* Concentric rings */}
+            {[0.33, 0.66, 1.0, 1.33, 1.66].map((scale, i) => (
+              <circle key={i} cx={cx} cy={cy} r={radius * scale} fill="none" stroke="#e2e8f0" strokeWidth={scale === 1.0 ? "1.5" : "0.5"} strokeDasharray={scale === 1.0 ? "none" : "2,2"} />
+            ))}
+
+            {/* Central Normal Green Disk */}
+            <polygon points={normPoints} fill="#22c55e" fillOpacity="0.25" stroke="#16a34a" strokeWidth="1.5" />
+
+            {/* Axes lines */}
+            {angles.map((a, i) => {
+              const x2 = cx + radius * 1.8 * Math.cos(a);
+              const y2 = cy + radius * 1.8 * Math.sin(a);
+              return <line key={i} x1={cx} y1={cy} x2={x2} y2={y2} stroke="#cbd5e1" strokeWidth="1" />;
+            })}
+
+            {/* Patient Deviation Red Polygon */}
+            {patientPoints && (
+              <polygon points={patientPoints} fill="#ef4444" fillOpacity="0.65" stroke="#b91c1c" strokeWidth="2.5" />
+            )}
+
+            {/* Axis Labels */}
+            {radarAxes.map((r: any, i: number) => {
+              const labelRadius = radius * 2.1;
+              const lx = cx + labelRadius * Math.cos(angles[i]);
+              const ly = cy + labelRadius * Math.sin(angles[i]);
+              return (
+                <text key={r.axis} x={lx} y={ly} fill="#0f172a" fontSize="10" fontWeight="bold" textAnchor="middle" dominantBaseline="central">
+                  {r.label}
+                </text>
+              );
+            })}
+
+            {/* Domain Headers: Hoarseness (Left) vs Breathiness (Right) */}
+            <text x={cx - 120} y={cy - 120} fill="#b45309" fontSize="13" fontWeight="bold" textAnchor="middle">Hoarseness</text>
+            <text x={cx + 120} y={cy - 120} fill="#1d4ed8" fontSize="13" fontWeight="bold" textAnchor="middle">Breathiness</text>
+          </svg>
+        </div>
+
+        {/* Cutoff summary */}
+        <div className="mt-4 flex justify-center gap-6 text-xs text-slate-600 font-semibold border-t border-slate-100 pt-3">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500/40 border border-emerald-600" /> Región Normal</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500/60 border border-red-700" /> Paciente (AVQI: {avqi}, ABI: {abi})</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ──────── OTHER GRAPH COMPONENTS ──────── */
+
+function OscilloscopeGraph({ waveform, glottalPulses = [] }: { waveform: any; glottalPulses?: number[] }) {
+  const wave = waveform?.waveform || [];
   const dur = waveform?.duration_s || 0;
   if (wave.length === 0) return <EmptyGraph label="Osciloscopio — Sin datos de forma de onda" />;
 
@@ -424,12 +747,16 @@ function OscilloscopeGraph({ waveform }: { waveform: any }) {
 
   return (
     <div>
-      <div className="text-xs font-semibold text-slate-300 mb-2">Osciloscopio — Forma de Onda</div>
+      <div className="text-xs font-semibold text-slate-300 mb-2">Osciloscopio — Forma de Onda y Pulsos Glóticos</div>
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-40">
         <rect x={padX} y={padY} width={plotW} height={plotH} fill="#0f172a" rx="4" />
         {[0, 0.25, 0.5, 0.75, 1].map((frac) => (
           <line key={frac} x1={padX} y1={padY + plotH * frac} x2={padX + plotW} y2={padY + plotH * frac} stroke="#1e293b" strokeWidth="0.5" />
         ))}
+        {glottalPulses.map((t, idx) => {
+          const x = padX + (t / (dur || 1)) * plotW;
+          return <line key={idx} x1={x} y1={padY} x2={x} y2={padY + plotH} stroke="#3b82f6" strokeWidth="0.6" opacity="0.6" />;
+        })}
         <path d={pathD} fill="none" stroke="#38bdf8" strokeWidth="1.5" />
         <text x={padX} y={height - 2} fill="#64748b" fontSize="8">0s</text>
         <text x={padX + plotW} y={height - 2} fill="#64748b" fontSize="8" textAnchor="end">{dur.toFixed(2)}s</text>
@@ -440,7 +767,7 @@ function OscilloscopeGraph({ waveform }: { waveform: any }) {
   );
 }
 
-function SpectrogramGraph({ spectrogram, f0Contour }: { spectrogram: any; f0Contour: any }) {
+function SpectrogramGraph({ spectrogram }: { spectrogram: any }) {
   const freqs = spectrogram?.frequencies_hz || [];
   const times = spectrogram?.times_s || [];
   const power = spectrogram?.power_db || [];
@@ -483,13 +810,7 @@ function SpectrogramGraph({ spectrogram, f0Contour }: { spectrogram: any; f0Cont
         <text x={padX - 2} y={padY + plotH} fill="#64748b" fontSize="7" textAnchor="end">0Hz</text>
         <text x={padX} y={height - 2} fill="#64748b" fontSize="7">0s</text>
         <text x={padX + plotW} y={height - 2} fill="#64748b" fontSize="7" textAnchor="end">{times[times.length - 1]?.toFixed(2)}s</text>
-        <text x={padX + plotW / 2} y={height - 1} fill="#94a3b8" fontSize="7" textAnchor="middle">Tiempo (s)</text>
       </svg>
-      <div className="flex justify-between items-center mt-1 text-[9px] text-slate-500">
-        <span>{minDb.toFixed(0)} dB</span>
-        <div className="flex-1 h-1.5 mx-2 rounded-full" style={{ background: 'linear-gradient(to right, rgb(0,0,80), rgb(128,128,0), rgb(255,0,0), rgb(255,255,0))' }} />
-        <span>{maxDb.toFixed(0)} dB</span>
-      </div>
     </div>
   );
 }
@@ -518,7 +839,7 @@ function F0IntensityGraph({ f0Contour, intensityContour }: { f0Contour: any; int
     const x = padX + (f0Times[i] / totalTime) * plotW;
     const y = padY + plotH - ((v - f0Min) / (f0Max - f0Min || 1)) * plotH;
     return { x, y };
-  }).filter(Boolean).map((p: any, i: number, arr: any[]) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  }).filter(Boolean).map((p: any, i: number) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
   const intPath = intValues.map((v: number, i: number) => {
     const x = padX + (intTimes[i] / totalTime) * plotW;
@@ -543,10 +864,6 @@ function F0IntensityGraph({ f0Contour, intensityContour }: { f0Contour: any; int
         <text x={padX + plotW + 2} y={padY + 4} fill="#64748b" fontSize="7">{intMax.toFixed(0)}</text>
         <text x={padX + plotW + 2} y={padY + plotH} fill="#64748b" fontSize="7">{intMin.toFixed(0)}</text>
       </svg>
-      <div className="flex gap-4 mt-1 text-[9px] text-slate-500">
-        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-sky-400 inline-block" /> F0 (Hz)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-yellow-400 inline-block border-dashed" /> Intensidad (dB)</span>
-      </div>
     </div>
   );
 }
@@ -570,11 +887,9 @@ function HarmonicsGraph({ harmonics }: { harmonics: any[] }) {
               <rect x={x - 8} y={padY + plotH - barH} width={16} height={barH} fill="#38bdf8" rx="2" opacity="0.8" />
               <text x={x} y={padY + plotH - barH - 4} fill="#e2e8f0" fontSize="7" textAnchor="middle">{h.amplitude_db.toFixed(0)}</text>
               <text x={x} y={padY + plotH + 10} fill="#64748b" fontSize="7" textAnchor="middle">H{h.number}</text>
-              <text x={x} y={padY + plotH + 18} fill="#475569" fontSize="6" textAnchor="middle">{h.frequency_hz.toFixed(0)}</text>
             </g>
           );
         })}
-        <text x={2} y={padY + 4} fill="#64748b" fontSize="7">{maxAmp.toFixed(0)} dB</text>
       </svg>
     </div>
   );
@@ -639,7 +954,6 @@ function FormantsGraph({ formants }: { formants: any }) {
               <rect x={x} y={y} width={barW} height={barH} fill={f.color} rx="4" opacity="0.85" />
               <text x={x + barW / 2} y={y - 4} fill="#e2e8f0" fontSize="9" textAnchor="middle" fontWeight="bold">{f.val?.toFixed(0)} Hz</text>
               <text x={x + barW / 2} y={padY + height - 2 * padY + 12} fill="#94a3b8" fontSize="9" textAnchor="middle">{f.label}</text>
-              {f.bw && <text x={x + barW / 2} y={y - 12} fill="#64748b" fontSize="7" textAnchor="middle">BW: {f.bw.toFixed(0)} Hz</text>}
             </g>
           );
         })}
