@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Shield, Activity, AlertTriangle, CheckCircle2, XCircle, Minus,
   ChevronDown, ChevronRight, BarChart3,
-  RefreshCw, FileJson, FileSpreadsheet, Settings, Volume2, Layers, Cpu
+  RefreshCw, FileJson, FileSpreadsheet, Settings, Volume2, Cpu
 } from 'lucide-react';
 import MetricSeverityCard, { MetricData } from './MetricSeverityCard';
 
