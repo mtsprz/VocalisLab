@@ -251,6 +251,7 @@ export default function VocalisLabModule() {
       formData.append('motivo', motivo || 'Evaluación de control');
       formData.append('derivador', derivador || 'Consulta directa');
       formData.append('tmf', tmf);
+      formData.append('grbas', JSON.stringify(grbas));
       formData.append('rasati', JSON.stringify(rasati));
 
       const resJson = await fetch(`${BACKEND_URL}/api/analizar`, { method: 'POST', body: formData });
