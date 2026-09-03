@@ -229,7 +229,7 @@ def measure_formants(sound, pitch_floor=None, pitch_ceiling=None):
     max_formant = _max_formant_from_f0(mean_f0)
 
     try:
-        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis=50)
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis_from=50)
         f1_values = formant.selected_array['frequency'][0]
         f2_values = formant.selected_array['frequency'][1]
         f3_values = formant.selected_array['frequency'][2]
@@ -401,7 +401,7 @@ def measure_formant_bandwidths(sound, pitch_floor=None, pitch_ceiling=None):
             pass
     max_formant = _max_formant_from_f0(mean_f0)
     try:
-        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis=50)
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis_from=50)
         bw = formant.selected_array['bandwidth']
         bw1 = bw[0]
         bw2 = bw[1]
@@ -489,7 +489,7 @@ def extract_formant_tracks(sound, pitch_floor=None, pitch_ceiling=None):
             pass
     max_formant = _max_formant_from_f0(mean_f0)
     try:
-        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis=50)
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis_from=50)
         num_frames = formant.get_number_of_frames()
         times = []
         f1_vals, f2_vals, f3_vals, f4_vals = [], [], [], []
