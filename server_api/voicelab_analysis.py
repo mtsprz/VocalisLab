@@ -785,7 +785,113 @@ def calcular_avqi_v0301(cpps_db, hnr_db, shimmer_local_pct, shimmer_local_db, sp
         return {"avqi": None, "calculable": False, "error": str(e), "components": components}
 
 
-def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
+def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Polygon
+    import io, base64
+
+    sr = sound.sampling_frequency
+    dur = sound.get_total_duration()
+    samples = sound.values.flatten()
+
+    charts = {}
+
+    # 1. Narrowband Spectrogram
+    try:
+        fig1, ax1 = plt.subplots(figsize=(8, 3.2), dpi=140, facecolor="white")
+        nfft = int(0.030 * sr)
+        noverlap = int(nfft * 0.85)
+        ax1.specgram(samples, Fs=sr, NFFT=nfft, noverlap=noverlap, cmap="Blues_r", vmin=-65, vmax=15)
+        ax1.set_ylim(0, 5000)
+        ax1.set_xlim(0, dur)
+        ax1.set_xlabel("Tiempo (s)", fontsize=8)
+        ax1.set_ylabel("Frecuencia (Hz)", fontsize=8)
+        ax1.set_title("Espectrograma de Banda Estrecha con F0 y Formantes", fontsize=9, fontweight="bold", loc="left")
+
+        # F0 overlay
+        pitch = call(sound, "To Pitch (ac)", 0.0, pf, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pc)
+        p_times = pitch.xs()
+        f0_vals = pitch.selected_array["frequency"]
+        f0_clean = [v if v > 0 else np.nan for v in f0_vals]
+        ax1.plot(p_times, f0_clean, color="#0284c7", linewidth=1.8, label="F0")
+
+        # Formants
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500, pre_emphasis_from=50)
+        f_times = [formant.get_time_from_frame_number(i) for i in range(1, formant.get_number_of_frames() + 1)]
+        for fn in [1, 2, 3, 4]:
+            fvals = [formant.get_value_at_time(fn, t) for t in f_times]
+            fvals = [v if (v and not np.isnan(v) and v < 5000) else np.nan for v in fvals]
+            ax1.scatter(f_times, fvals, color="#dc2626", s=2.5, alpha=0.7)
+
+        ax1.legend(loc="upper right", fontsize=7)
+        plt.tight_layout()
+        buf = io.BytesIO()
+        fig1.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig1)
+        charts["spectrogram_img"] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        charts["spectrogram_img"] = ""
+
+    # 2. FFT Power Spectrum & Tilt
+    try:
+        fig2, ax2 = plt.subplots(figsize=(8, 3.2), dpi=140, facecolor="white")
+        part = sound.extract_part(from_time=0.1, to_time=max(0.3, dur - 0.1), preserve_times=True)
+        spec = part.to_spectrum()
+        s_freqs = np.array(spec.xs())
+        s_amps = 20 * np.log10(np.maximum(np.array(spec.values[0]), 1e-10))
+        mask = (s_freqs >= 50) & (s_freqs <= 5000)
+        ax2.plot(s_freqs[mask], s_amps[mask], color="#334155", linewidth=0.8, label="Espectro FFT")
+        
+        slope, intercept = np.polyfit(s_freqs[mask], s_amps[mask], 1)
+        ax2.plot(s_freqs[mask], slope * s_freqs[mask] + intercept, color="#ea580c", linestyle="--", linewidth=1.5, label=f"Tilt ({slope*1000:.1f} dB/kHz)")
+        
+        ax2.set_xlim(0, 5000)
+        ax2.set_xlabel("Frecuencia (Hz)", fontsize=8)
+        ax2.set_ylabel("Amplitud (dB)", fontsize=8)
+        ax2.set_title("Espectro de Potencia FFT y Pendiente Espectral (Tilt)", fontsize=9, fontweight="bold", loc="left")
+        ax2.grid(True, linestyle=":", alpha=0.5)
+        ax2.legend(loc="upper right", fontsize=7)
+        plt.tight_layout()
+        buf = io.BytesIO()
+        fig2.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig2)
+        charts["spectrum_img"] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        charts["spectrum_img"] = ""
+
+    # 3. DDF (CPPS vs HNR)
+    try:
+        fig3, ax3 = plt.subplots(figsize=(7, 3.5), dpi=140, facecolor="white")
+        norm_poly = Polygon([[14.5, 20], [30, 20], [30, 40], [14.5, 40]], closed=True, color="#22c55e", alpha=0.18, label="Normal")
+        ax3.add_patch(norm_poly)
+        
+        pat_cpps = metrics.get("cpps_db") or 15.0
+        pat_hnr = metrics.get("hnr_db") or 22.0
+        ax3.scatter([pat_cpps], [pat_hnr], color="#dc2626", s=100, zorder=10, edgecolor="black", marker="*", label="Paciente")
+        
+        ax3.axvline(14.5, color="#16a34a", linestyle=":", linewidth=1.0)
+        ax3.axhline(20.0, color="#16a34a", linestyle=":", linewidth=1.0)
+        ax3.set_xlim(5, 30)
+        ax3.set_ylim(5, 35)
+        ax3.set_xlabel("CPPS (dB)", fontsize=8)
+        ax3.set_ylabel("HNR (dB)", fontsize=8)
+        ax3.set_title("Diagrama de Dispersión Fonatoria (DDF — CPPS vs HNR)", fontsize=9, fontweight="bold", loc="left")
+        ax3.grid(True, linestyle="--", alpha=0.4)
+        ax3.legend(loc="lower right", fontsize=7)
+        plt.tight_layout()
+        buf = io.BytesIO()
+        fig3.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig3)
+        charts["ddf_img"] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        charts["ddf_img"] = ""
+
+    return charts
+
+
+def analisis_completo(file_path: str, file_path_habla: Optional[str] = None, modo: str = "clinico", sexo: Optional[str] = None, pitch_floor: Optional[float] = None, pitch_ceiling: Optional[float] = None) -> dict:
     timestamp = datetime.now(timezone.utc).isoformat()
 
     try:
@@ -823,10 +929,24 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
             "modo": modo, "status": "error", "error": f"Error leyendo archivo WAV con Praat: {str(e)}",
         }
 
+    # Determine pitch bounds based on sexo or custom params
+    if pitch_floor is None or pitch_ceiling is None:
+        if sexo and ("masc" in sexo.lower() or "hombre" in sexo.lower() or "male" in sexo.lower()):
+            pf_def, pc_def = 75, 300
+        elif sexo and ("fem" in sexo.lower() or "mujer" in sexo.lower() or "female" in sexo.lower() or "inf" in sexo.lower() or "niñ" in sexo.lower() or "child" in sexo.lower()):
+            pf_def, pc_def = 100, 500
+        else:
+            try:
+                pf_def, pc_def = _pitch_bounds(sound)
+            except Exception:
+                pf_def, pc_def = 75, 600
+        pf = pitch_floor if pitch_floor is not None else pf_def
+        pc = pitch_ceiling if pitch_ceiling is not None else pc_def
+    else:
+        pf, pc = pitch_floor, pitch_ceiling
+
     try:
-        pitch_result = measure_pitch(sound)
-        pf = pitch_result["pitch_floor"]
-        pc = pitch_result["pitch_ceiling"]
+        pitch_result = measure_pitch(sound, pf, pc)
     except Exception as e:
         return {
             "audio": audio_info, "metrics": None, "avqi_components": None,
@@ -932,14 +1052,33 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
         if shimmer_db is None and shimmer_pct is not None:
             shimmer_db = round(shimmer_pct * 0.1, 4)
 
-        avqi_result = calcular_avqi_v0301(
-            cpps_db=cpp_result.get("cpps_db"),
-            hnr_db=hnr_result.get("hnr_db"),
-            shimmer_local_pct=shimmer_pct,
-            shimmer_local_db=shimmer_db,
-            spectral_slope=spectral_tilt.get("spectral_tilt_slope"),
-            spectral_tilt=spectral_shape.get("spectral_cog_hz"),
-        )
+        if file_path_habla:
+            sound_habla = parselmouth.Sound(file_path_habla)
+            vocal_dur = sound.get_total_duration()
+            slice_vocal = sound.extract_part(from_time=max(0, vocal_dur/2 - 1.5), to_time=min(vocal_dur, vocal_dur/2 + 1.5), preserve_times=False) if vocal_dur > 3.0 else sound
+            sound_concat = call([slice_vocal, sound_habla], "Concatenate")
+            c_cpp = measure_cpp(sound_concat, pf, pc)
+            c_hnr = measure_harmonicity(sound_concat, pf)
+            c_shimmer = measure_shimmer(sound_concat, pf, pc)
+            c_s_db = c_shimmer.get("shimmer_local_db") or (c_shimmer.get("shimmer_local_pct", 0) * 0.1)
+            c_tilt = measure_spectral_tilt(sound_concat)
+            c_shape = measure_spectral_shape(sound_concat)
+            avqi_result = calcular_avqi_v0301(
+                cpps_db=c_cpp.get("cpps_db"),
+                hnr_db=c_hnr.get("hnr_db"),
+                shimmer_local_pct=c_shimmer.get("shimmer_local_pct"),
+                shimmer_local_db=c_s_db,
+                spectral_slope=c_tilt.get("spectral_tilt_slope"),
+                spectral_tilt=c_shape.get("spectral_cog_hz"),
+            )
+        else:
+            avqi_result = {
+                "avqi": None,
+                "calculable": False,
+                "status": "untestable_requires_continuous_speech",
+                "error": "No evaluable (requiere habla continua)",
+                "components": {}
+            }
     except Exception as e:
         avqi_result = {"avqi": None, "calculable": False, "error": f"Error calculando AVQI: {str(e)}", "components": {}}
 
@@ -1042,6 +1181,11 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
     except Exception as e:
         csv_lines = [["error", str(e)]]
 
+    try:
+        base64_charts = generar_base64_charts(sound, pf, pc, all_metrics, harmonics, avqi_result.get("avqi"))
+    except Exception:
+        base64_charts = {"spectrogram_img": "", "spectrum_img": "", "ddf_img": "", "radar_img": ""}
+
     return {
         "audio": audio_info,
         "metrics": all_metrics,
@@ -1058,6 +1202,7 @@ def analisis_completo(file_path: str, modo: str = "clinico") -> dict:
         "formant_tracks": formant_tracks,
         "f0_contour": f0_contour,
         "intensity_contour": intensity_contour,
+        "charts": base64_charts,
         "json_export": json_export,
         "csv_export": csv_lines,
         "timestamp": timestamp,

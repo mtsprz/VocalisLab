@@ -133,27 +133,34 @@ def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:
 @app.post("/api/analizar")
 async def analizar(
     audio_vocal: UploadFile = File(...),
+    audio_habla: UploadFile = File(None),
+    sexo: str = Form(None),
     modo: str = Form("clinico"),
 ):
     tmp_dir = "/tmp"
     os.makedirs(tmp_dir, exist_ok=True)
 
     tmp_vocal = os.path.join(tmp_dir, f"vocal_{audio_vocal.filename or 'a.wav'}")
+    tmp_habla = os.path.join(tmp_dir, f"habla_{audio_habla.filename}") if audio_habla and audio_habla.filename else None
+
     try:
         with open(tmp_vocal, "wb") as buffer:
             shutil.copyfileobj(audio_vocal.file, buffer)
+        if tmp_habla and audio_habla:
+            with open(tmp_habla, "wb") as buffer:
+                shutil.copyfileobj(audio_habla.file, buffer)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error al recibir archivo de audio: {str(e)}")
 
     try:
-        resultado = analisis_completo(tmp_vocal, modo=modo)
+        resultado = analisis_completo(tmp_vocal, file_path_habla=tmp_habla, modo=modo, sexo=sexo)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en el análisis bioacústico: {str(e)}")
     finally:
         try:
-            if os.path.exists(tmp_vocal):
-                os.remove(tmp_vocal)
+            if os.path.exists(tmp_vocal): os.remove(tmp_vocal)
+            if tmp_habla and os.path.exists(tmp_habla): os.remove(tmp_habla)
         except Exception:
             pass
 
@@ -241,6 +248,7 @@ async def analizar(
         "intensityContour": resultado.get("intensity_contour", {}),
         "classifications": resultado.get("classifications", {}),
         "voxplot": resultado.get("voxplot", {}),
+        "charts": resultado.get("charts", {}),
         "jsonExport": json_export,
         "csvExport": json.dumps(csv_export),
     }
@@ -258,6 +266,8 @@ async def analizar_y_reportar(
     sexo: str = Form("Femenino"),
     motivo: str = Form("Evaluación vocal"),
     derivador: str = Form("Auto"),
+    matricula: str = Form(""),
+    centro: str = Form(""),
     grbas: str = Form("{}"),
     rasati: str = Form("{}"),
     tmf: float = Form(15.0),
@@ -266,17 +276,28 @@ async def analizar_y_reportar(
     os.makedirs(tmp_dir, exist_ok=True)
 
     tmp_vocal = os.path.join(tmp_dir, f"vocal_{audio_vocal.filename or 'a.wav'}")
+    tmp_habla = os.path.join(tmp_dir, f"habla_{audio_habla.filename}") if audio_habla and audio_habla.filename else None
+
     try:
         with open(tmp_vocal, "wb") as buffer:
             shutil.copyfileobj(audio_vocal.file, buffer)
+        if tmp_habla and audio_habla:
+            with open(tmp_habla, "wb") as buffer:
+                shutil.copyfileobj(audio_habla.file, buffer)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error al recibir archivo de audio: {str(e)}")
 
     try:
-        resultado = analisis_completo(tmp_vocal, modo="clinico")
+        resultado = analisis_completo(tmp_vocal, file_path_habla=tmp_habla, modo="clinico", sexo=sexo)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en el análisis bioacústico: {str(e)}")
+    finally:
+        try:
+            if os.path.exists(tmp_vocal): os.remove(tmp_vocal)
+            if tmp_habla and os.path.exists(tmp_habla): os.remove(tmp_habla)
+        except Exception:
+            pass
 
     if resultado["status"] == "error":
         return JSONResponse(status_code=422, content=resultado)
@@ -333,7 +354,7 @@ async def analizar_y_reportar(
 
     paciente_dict = {
         "nombre": nombre, "dni": dni, "edad": edad, "sexo": sexo,
-        "motivo": motivo, "derivador": derivador,
+        "motivo": motivo, "derivador": derivador, "matricula": matricula, "centro": centro,
         "grbas": grbas_str, "rasati": rasati_str,
         "sintesis_ia": sintesis_ia, "tmf": tmf,
     }

@@ -43,11 +43,11 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements = []
 
-    elements.append(Paragraph("VocalisLab — Reporte Bioacústico Vocal", title_style))
+    elements.append(Paragraph("PROTOCOLO DE EVALUACIÓN BIOACÚSTICA DE LA VOZ", title_style))
     elements.append(Paragraph(
-        f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | "
-        f"Motor: Praat/Parselmouth {metricas.get('parselmouth_version', 'N/D')} | "
-        f"Script: {metricas.get('praat_script', 'N/D')}",
+        f"Centro: {paciente.get('centro', 'Consultorio Fonoaudiológico')} | "
+        f"Profesional: {paciente.get('derivador', 'Lic. Fonoaudiólogo/a')} (Matrícula: {paciente.get('matricula', 'S/D')})<br/>"
+        f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Motor: Praat/Parselmouth {metricas.get('parselmouth_version', 'N/D')}",
         subtitle_style
     ))
 
@@ -57,15 +57,15 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     info_data = [
         [Paragraph(f"<b>Paciente:</b> {paciente.get('nombre', 'N/A')}", body_style),
-         Paragraph(f"<b>DNI:</b> {paciente.get('dni', 'N/A')}", body_style)],
+         Paragraph(f"<b>DNI / ID:</b> {paciente.get('dni', 'N/A')}", body_style)],
         [Paragraph(f"<b>Edad:</b> {paciente.get('edad', 'N/A')} años | <b>Sexo:</b> {paciente.get('sexo', 'N/A')}", body_style),
          Paragraph(f"<b>TMF:</b> {paciente.get('tmf', '0')} s", body_style)],
         [Paragraph(f"<b>GRBAS:</b> {grbas_str}", body_style),
          Paragraph(f"<b>RASATI:</b> {rasati_str}", body_style)],
         [Paragraph(f"<b>Motivo:</b> {paciente.get('motivo', 'N/A')}", body_style),
-         Paragraph(f"<b>Derivador:</b> {paciente.get('derivador', 'N/A')}", body_style)],
+         Paragraph(f"<b>Profesional Solicitante:</b> {paciente.get('derivador', 'N/A')}", body_style)],
         [Paragraph(f"<b>Audio:</b> SR={audio.get('sample_rate_hz', 'N/D')} Hz, Dur={audio.get('duration_s', 'N/D')}s, RMS={audio.get('rms', 'N/D')}", body_style),
-         Paragraph(f"<b>Hash:</b> {audio.get('file_hash_sha256', 'N/D')[:16]}...", body_style)],
+         Paragraph(f"<b>Hash SHA-256:</b> {audio.get('file_hash_sha256', 'N/D')[:16]}...", body_style)],
     ]
     t = Table(info_data, colWidths=[270, 270])
     t.setStyle(TableStyle([
@@ -207,24 +207,30 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
         ))
 
     elements.append(Spacer(1, 10))
-    elements.append(Paragraph("<b>5. Aviso Clínico Obligatorio</b>", section_style))
+    elements.append(Paragraph("<b>5. Firma y Sello Profesional</b>", section_style))
+    elements.append(Spacer(1, 15))
+    firma_data = [
+        [Paragraph(f"____________________________________________<br/><b>{paciente.get('derivador', 'Lic. Fonoaudiólogo/a')}</b><br/>Matrícula: {paciente.get('matricula', 'S/D')}<br/>{paciente.get('centro', 'Consultorio Fonoaudiológico')}", body_style),
+         Paragraph(f"<b>Fecha y Hora:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Hash Integridad:</b> {audio.get('file_hash_sha256', 'N/D')[:32]}...", body_style)]
+    ]
+    t_firma = Table(firma_data, colWidths=[270, 270])
+    t_firma.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 2),
+    ]))
+    elements.append(t_firma)
+
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph("<b>6. Aviso Clínico Obligatorio</b>", section_style))
     disclaimers = [
         "Este informe es una herramienta de apoyo y no sustituye la evaluación clínica del profesional fonoaudiólogo.",
         "Los valores bioacústicos son mediciones objetivas. La interpretación diagnóstica es responsabilidad exclusiva del clínico.",
         "Los rangos de referencia son orientativos y dependen de edad, sexo, tarea vocal, contexto y población normativa utilizada.",
-        "El AVQI v03.01 fue validado para clasificación de disfonía en adultos. Su applicabilidad a niños o poblaciones específicas debe considerarse con cautela.",
+        "El AVQI v03.01 fue validado para clasificación de disfonía en adultos. Su aplicabilidad a niños o poblaciones específicas debe considerarse con cautela.",
         "Los puntos de corte del AVQI varían según versión, idioma y población. Los valores mostrados son referenciales y no universales.",
         "Este sistema no almacena diagnósticos. Todos los resultados son mediciones instrumentales que requieren correlación clínica.",
     ]
     for d in disclaimers:
         elements.append(Paragraph(f"• {d}", disclaimer_style))
-
-    elements.append(Spacer(1, 6))
-    elements.append(Paragraph(
-        f"<b>Responsable:</b> {paciente.get('derivador', 'N/D')} | "
-        f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')} | "
-        f"<b>Hash:</b> {audio.get('file_hash_sha256', 'N/D')}",
-        disclaimer_style
-    ))
 
     doc.build(elements)
