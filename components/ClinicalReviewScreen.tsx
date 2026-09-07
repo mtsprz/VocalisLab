@@ -16,6 +16,7 @@ interface AudioInfo {
   clipping_pct: number;
   file_hash_sha256: string;
   issues: string[];
+  warnings?: string[];
 }
 
 interface ToolStatus {
@@ -101,11 +102,12 @@ export default function ClinicalReviewScreen({
 
   const audioValid = audioInfo.valid;
   const hasIssues = audioInfo.issues.length > 0;
+  const hasWarnings = (audioInfo as any).warnings?.length > 0 || false;
   const hasBlocking = !audioValid || tools.some(t => t.status === 'error');
   const canApprove = !hasBlocking || exceptionReason.trim().length > 0;
 
   const audioStatus = audioValid
-    ? (hasIssues ? { label: 'Apto con advertencias', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30', icon: AlertTriangle }
+    ? ((hasIssues || hasWarnings) ? { label: 'Apto con advertencias', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30', icon: AlertTriangle }
                   : { label: 'Apto para análisis', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30', icon: CheckCircle2 })
     : { label: 'No apto', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30', icon: XCircle };
 

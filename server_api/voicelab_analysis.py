@@ -73,6 +73,7 @@ def validar_audio_completo(file_path: str) -> dict:
     clipping_pct = float(np.sum(np.abs(samples) >= 0.99) / len(samples) * 100)
 
     issues = []
+    warnings = []
     if file_size > MAX_FILE_SIZE_MB:
         issues.append(f"Archivo demasiado grande: {file_size:.1f} MB > {MAX_FILE_SIZE_MB} MB")
     if sr < SAMPLE_RATE_MIN:
@@ -86,7 +87,7 @@ def validar_audio_completo(file_path: str) -> dict:
     if rms < 0.001:
         issues.append("Audio prácticamente en silencio (RMS < 0.001)")
     if clipping_pct > 1.0:
-        issues.append(f"Clipping detectado en {clipping_pct:.2f}% de muestras")
+        warnings.append(f"Clipping detectado en {clipping_pct:.2f}% de muestras")
     if peak < 0.005:
         issues.append("Nivel de señal extremadamente bajo (pico < 0.005)")
 
@@ -104,6 +105,7 @@ def validar_audio_completo(file_path: str) -> dict:
         "clipping_pct": round(clipping_pct, 3),
         "valid": len(issues) == 0,
         "issues": issues,
+        "warnings": warnings,
     }
 
 
