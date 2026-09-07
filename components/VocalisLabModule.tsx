@@ -30,6 +30,8 @@ interface AnalysisResult {
   intensityContour: any;
   classifications: any;
   voxplot: any;
+  charts: any;
+  avqiStatus: string;
   timestamp: string;
   engineVersion: string;
   scriptVersion: string;
@@ -66,6 +68,12 @@ export default function VocalisLabModule() {
   const [tmf, setTmf] = useState('15');
   const [grbas, setGrbas] = useState({ G: 0, R: 0, B: 0, A: 0, S: 0 });
   const [rasati, setRasati] = useState({ R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 });
+
+  const [profNombre, setProfNombre] = useState('');
+  const [profTitulo, setProfTitulo] = useState('Lic. en Fonoaudiología');
+  const [profMatricula, setProfMatricula] = useState('');
+  const [profCentro, setProfCentro] = useState('');
+  const [profEmail, setProfEmail] = useState('');
 
   const [grabandoVocal, setGrabandoVocal] = useState(false);
   const [grabandoHabla, setGrabandoHabla] = useState(false);
@@ -284,6 +292,11 @@ export default function VocalisLabModule() {
       formData.append('tmf', tmf);
       formData.append('grbas', JSON.stringify(grbas));
       formData.append('rasati', JSON.stringify(rasati));
+      formData.append('profesional_nombre', profNombre);
+      formData.append('profesional_titulo', profTitulo);
+      formData.append('profesional_matricula', profMatricula);
+      formData.append('profesional_centro', profCentro);
+      formData.append('profesional_email', profEmail);
       const res = await fetch(`${BACKEND_URL}/api/analizar-y-reportar`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const blobPdf = await res.blob();
@@ -437,6 +450,35 @@ export default function VocalisLabModule() {
                   <div className="md:col-span-2">
                     <label className="text-xs text-slate-400 font-medium">Motivo / Médico Derivador</label>
                     <input type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej. Disfonía funcional — Deriva Dr. López (ORL)" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-5 rounded-2xl shadow-xl">
+                <div className="flex items-center gap-2 mb-4 text-violet-400 font-semibold text-sm">
+                  <User className="w-4 h-4" />
+                  <span>Datos del Profesional</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-xs text-slate-400 font-medium">Nombre del Profesional</label>
+                    <input type="text" value={profNombre} onChange={(e) => setProfNombre(e.target.value)} placeholder="Lic. María López" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 font-medium">Título / Especialidad</label>
+                    <input type="text" value={profTitulo} onChange={(e) => setProfTitulo(e.target.value)} className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 font-medium">Matrícula (MN / MP)</label>
+                    <input type="text" value={profMatricula} onChange={(e) => setProfMatricula(e.target.value)} placeholder="MN 12345" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 font-medium">Centro de Atención</label>
+                    <input type="text" value={profCentro} onChange={(e) => setProfCentro(e.target.value)} placeholder="Hospital / Clínica" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs text-slate-400 font-medium">Email</label>
+                    <input type="email" value={profEmail} onChange={(e) => setProfEmail(e.target.value)} placeholder="contacto@clinica.com" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors" />
                   </div>
                 </div>
               </div>
@@ -598,6 +640,8 @@ export default function VocalisLabModule() {
             intensityContour={r.intensityContour || {}}
             classifications={r.classifications || {}}
             voxplot={r.voxplot || {}}
+            charts={r.charts || {}}
+            avqiStatus={r.avqiStatus || 'ok'}
             modo={r.modo || 'clinico'}
             onViewJson={() => setShowJson(true)}
             onViewCsv={() => {

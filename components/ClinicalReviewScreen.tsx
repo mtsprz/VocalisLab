@@ -45,6 +45,8 @@ interface ClinicalReviewProps {
   intensityContour: any;
   classifications: any;
   voxplot?: any;
+  charts?: any;
+  avqiStatus?: string;
   modo: string;
   onViewJson?: () => void;
   onViewCsv?: () => void;
@@ -84,7 +86,7 @@ const METRIC_CLINICAL_NOTES: Record<string, string> = {
 export default function ClinicalReviewScreen({
   audioInfo, metrics, avqiComponents, tools, timestamp, engineVersion, scriptVersion,
   fileHash, harmonics, formants, ltas, spectral, waveform, spectrogram, glottalPulses = [],
-  formantTracks, f0Contour, intensityContour, classifications, voxplot, modo,
+  formantTracks, f0Contour, intensityContour, classifications, voxplot, charts = {}, avqiStatus = 'ok', modo,
   onViewJson, onViewCsv, onViewGraphs, onRecalculate, onApprove, onDownloadPreliminar,
 }: ClinicalReviewProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['validity', 'metrics', 'graphs']));
@@ -174,40 +176,52 @@ export default function ClinicalReviewScreen({
         </div>
         {avqiComponents && (
           <div className="mt-4 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">AVQI v03.01 — Componentes</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-              {[
-                { label: 'CPPs', val: avqiComponents.cpps_db, unit: 'dB' },
-                { label: 'HNR', val: avqiComponents.hnr_db, unit: 'dB' },
-                { label: 'Shimmer local', val: avqiComponents.shimmer_local_pct, unit: '%' },
-                { label: 'Shimmer dB', val: avqiComponents.shimmer_local_db, unit: 'dB' },
-                { label: 'Spectral Slope', val: avqiComponents.spectral_slope, unit: 'dB/oct' },
-                { label: 'Spectral Tilt', val: avqiComponents.spectral_tilt, unit: 'dB' },
-              ].map((c) => (
-                <div key={c.label} className="flex justify-between px-2 py-1.5 bg-slate-900/50 rounded-lg">
-                  <span className="text-slate-400">{c.label}</span>
-                  <span className={`font-mono font-bold ${c.val === null ? 'text-red-400' : 'text-slate-200'}`}>
-                    {c.val === null ? 'N/D' : `${c.val} ${c.unit}`}
-                  </span>
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">AVQI v03.01 — Acoustic Voice Quality Index</div>
+            {avqiComponents.status === 'untestable_requires_continuous_speech' ? (
+              <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-300">No evaluable (requiere habla continua)</p>
+                  <p className="text-xs text-amber-400/80 mt-0.5">El AVQI v03.01 requiere vocal sostenida /a/ concatenada con habla continua fonéticamente balanceada.</p>
                 </div>
-              ))}
-            </div>
-            <div className="mt-2 flex items-center gap-2 text-xs">
-              {avqiComponents.calculable ? (
-                <span className="text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  AVQI = {avqiComponents.avqi}
-                </span>
-              ) : (
-                <span className="text-red-400 flex items-center gap-1">
-                  <XCircle className="w-3.5 h-3.5" />
-                  AVQI no calculable
-                </span>
-              )}
-              {avqiComponents.error && (
-                <span className="text-amber-400 text-[10px]">— {avqiComponents.error}</span>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                  {[
+                    { label: 'CPPs', val: avqiComponents.cpps_db, unit: 'dB' },
+                    { label: 'HNR', val: avqiComponents.hnr_db, unit: 'dB' },
+                    { label: 'Shimmer local', val: avqiComponents.shimmer_local_pct, unit: '%' },
+                    { label: 'Shimmer dB', val: avqiComponents.shimmer_local_db, unit: 'dB' },
+                    { label: 'Spectral Slope', val: avqiComponents.spectral_slope, unit: 'dB/oct' },
+                    { label: 'Spectral Tilt', val: avqiComponents.spectral_tilt, unit: 'dB' },
+                  ].map((c) => (
+                    <div key={c.label} className="flex justify-between px-2 py-1.5 bg-slate-900/50 rounded-lg">
+                      <span className="text-slate-400">{c.label}</span>
+                      <span className={`font-mono font-bold ${c.val === null ? 'text-red-400' : 'text-slate-200'}`}>
+                        {c.val === null ? 'N/D' : `${c.val} ${c.unit}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-xs">
+                  {avqiComponents.calculable ? (
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      AVQI = {avqiComponents.avqi}
+                    </span>
+                  ) : (
+                    <span className="text-red-400 flex items-center gap-1">
+                      <XCircle className="w-3.5 h-3.5" />
+                      AVQI no calculable
+                    </span>
+                  )}
+                  {avqiComponents.error && (
+                    <span className="text-amber-400 text-[10px]">— {avqiComponents.error}</span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
         {/* Classifications */}
@@ -256,10 +270,13 @@ export default function ClinicalReviewScreen({
           {([
             { id: 'praat_editor', label: 'Praat Sound Editor' },
             { id: 'voxplot_profile', label: 'VOXplot Profile & Radar' },
+            { id: 'spectrogram_chart', label: 'Espectrograma Banda Estrecha' },
+            { id: 'spectrum_chart', label: 'Espectro FFT / LTAS' },
+            { id: 'ddf_chart', label: 'DDF Dispersión Fonatoria' },
+            { id: 'radar_chart', label: 'VOXplot Radar' },
             { id: 'oscilloscope', label: 'Forma de Onda' },
             { id: 'f0_intensity', label: 'F0 + Intensidad' },
             { id: 'harmonics', label: 'Armónicos H1-H10' },
-            { id: 'ltas', label: 'LTAS' },
             { id: 'formants', label: 'Formantes' },
           ] as const).map((g) => (
             <button key={g.id} onClick={() => setActiveGraph(g.id)}
@@ -302,6 +319,30 @@ export default function ClinicalReviewScreen({
           )}
           {activeGraph === 'formants' && (
             <FormantsGraph formants={formants} />
+          )}
+          {activeGraph === 'spectrogram_chart' && charts.spectrogram_img && (
+            <div className="flex flex-col items-center gap-3">
+              <h3 className="text-sm font-bold text-slate-200">Espectrograma de Banda Estrecha con F0 y Formantes</h3>
+              <img src={charts.spectrogram_img} alt="Espectrograma de Banda Estrecha" className="max-w-full rounded-lg border border-slate-700" />
+            </div>
+          )}
+          {activeGraph === 'spectrum_chart' && charts.spectrum_img && (
+            <div className="flex flex-col items-center gap-3">
+              <h3 className="text-sm font-bold text-slate-200">Espectro de Potencia FFT y Pendiente Espectral</h3>
+              <img src={charts.spectrum_img} alt="Espectro FFT / LTAS" className="max-w-full rounded-lg border border-slate-700" />
+            </div>
+          )}
+          {activeGraph === 'ddf_chart' && charts.ddf_img && (
+            <div className="flex flex-col items-center gap-3">
+              <h3 className="text-sm font-bold text-slate-200">Diagrama de Dispersión Fonatoria (DDF)</h3>
+              <img src={charts.ddf_img} alt="DDF Dispersión Fonatoria" className="max-w-full rounded-lg border border-slate-700" />
+            </div>
+          )}
+          {activeGraph === 'radar_chart' && charts.radar_img && (
+            <div className="flex flex-col items-center gap-3">
+              <h3 className="text-sm font-bold text-slate-200">VOXplot Radar — Severidad Multifactorial</h3>
+              <img src={charts.radar_img} alt="VOXplot Radar" className="max-w-full rounded-lg border border-slate-700" />
+            </div>
           )}
         </div>
       </SectionBlock>

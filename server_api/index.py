@@ -134,8 +134,10 @@ def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:
 async def analizar(
     audio_vocal: UploadFile = File(...),
     audio_habla: UploadFile = File(None),
-    sexo: str = Form(None),
     modo: str = Form("clinico"),
+    sexo: str = Form(""),
+    pitch_floor: float = Form(0),
+    pitch_ceiling: float = Form(0),
 ):
     tmp_dir = "/tmp"
     os.makedirs(tmp_dir, exist_ok=True)
@@ -153,7 +155,14 @@ async def analizar(
         raise HTTPException(status_code=400, detail=f"Error al recibir archivo de audio: {str(e)}")
 
     try:
-        resultado = analisis_completo(tmp_vocal, file_path_habla=tmp_habla, modo=modo, sexo=sexo)
+        resultado = analisis_completo(
+            tmp_vocal,
+            file_path_habla=tmp_habla,
+            modo=modo,
+            sexo=sexo,
+            pitch_floor=pitch_floor,
+            pitch_ceiling=pitch_ceiling,
+        )
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en el análisis bioacústico: {str(e)}")
@@ -238,6 +247,7 @@ async def analizar(
         "audio": audio_info,
         "metrics": metrics,
         "avqiComponents": avqi,
+        "avqi_status": avqi.get("status", "ok"),
         "tools": tools,
         "fileHash": audio_info.get("file_hash_sha256", ""),
         "waveform": resultado.get("waveform", {}),
@@ -266,11 +276,16 @@ async def analizar_y_reportar(
     sexo: str = Form("Femenino"),
     motivo: str = Form("Evaluación vocal"),
     derivador: str = Form("Auto"),
-    matricula: str = Form(""),
-    centro: str = Form(""),
     grbas: str = Form("{}"),
     rasati: str = Form("{}"),
     tmf: float = Form(15.0),
+    profesional_nombre: str = Form(""),
+    profesional_titulo: str = Form("Lic. en Fonoaudiología"),
+    profesional_matricula: str = Form(""),
+    profesional_centro: str = Form(""),
+    profesional_email: str = Form(""),
+    pitch_floor: float = Form(0),
+    pitch_ceiling: float = Form(0),
 ):
     tmp_dir = "/tmp"
     os.makedirs(tmp_dir, exist_ok=True)
@@ -288,7 +303,14 @@ async def analizar_y_reportar(
         raise HTTPException(status_code=400, detail=f"Error al recibir archivo de audio: {str(e)}")
 
     try:
-        resultado = analisis_completo(tmp_vocal, file_path_habla=tmp_habla, modo="clinico", sexo=sexo)
+        resultado = analisis_completo(
+            tmp_vocal,
+            file_path_habla=tmp_habla,
+            modo="clinico",
+            sexo=sexo,
+            pitch_floor=pitch_floor,
+            pitch_ceiling=pitch_ceiling,
+        )
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en el análisis bioacústico: {str(e)}")
@@ -313,17 +335,29 @@ async def analizar_y_reportar(
             client = Groq(api_key=groq_key)
             avqi_str = str(resultado.get("avqi_components", {}).get("avqi", "N/D"))
             prompt = (
-                f"Actúa como Fonoaudiólogo especialista en voz en Argentina. Redacta una síntesis interpretativa de los siguientes "
-                f"resultados bioacústicos del paciente {nombre} ({edad} años, {sexo}). "
-                f"NO emitas diagnóstico. Solo interpreta los valores objetivos:\n"
-                f"- F0 media: {metrics.get('f0_mean', 'N/D')} Hz (mín: {metrics.get('f0_min', 'N/D')}, máx: {metrics.get('f0_max', 'N/D')})\n"
+                f"Actúa como Fonoaudiólogo especialista en voz. NO emitas diagnóstico etiológico médicos "
+                f"(ej. 'el paciente tiene pólipo'). Solo describe el patrón acústico fonoaudiológico.\n\n"
+                f"Paciente: {nombre} ({edad} años, {sexo}). Motivo: {motivo}.\n\n"
+                f"Resultados bioacústicos:\n"
+                f"- F0 media: {metrics.get('f0_mean', 'N/D')} Hz (mín: {metrics.get('f0_min', 'N/D')}, máx: {metrics.get('f0_max', 'N/D')}, DE: {metrics.get('f0_sd', 'N/D')})\n"
                 f"- Jitter local: {metrics.get('jitter_local_pct', 'N/D')}%\n"
+                f"- Jitter RAP: {metrics.get('jitter_rap_pct', 'N/D')}%\n"
+                f"- Jitter PPQ5: {metrics.get('jitter_ppq5_pct', 'N/D')}%\n"
+                f"- Jitter DDP: {metrics.get('jitter_ddp_pct', 'N/D')}%\n"
                 f"- Shimmer local: {metrics.get('shimmer_local_pct', 'N/D')}% ({metrics.get('shimmer_local_db', 'N/D')} dB)\n"
+                f"- Shimmer APQ3: {metrics.get('shimmer_apq3_pct', 'N/D')}%\n"
+                f"- Shimmer APQ5: {metrics.get('shimmer_apq5_pct', 'N/D')}%\n"
+                f"- Shimmer APQ11: {metrics.get('shimmer_apq11_pct', 'N/D')}%\n"
+                f"- Shimmer DDA: {metrics.get('shimmer_dda_pct', 'N/D')}%\n"
                 f"- HNR: {metrics.get('hnr_db', 'N/D')} dB\n"
                 f"- CPPS: {metrics.get('cpps_db', 'N/D')} dB\n"
-                f"- AVQI v03.01: {avqi_str}\n"
-                f"Indica claramente que se trata de mediciones instrumentales que requieren correlación clínica. "
-                f"Usa terminología formal en español rioplatense."
+                f"- NNE: {metrics.get('nne_db', 'N/D')} dB\n"
+                f"- NHR: {metrics.get('nhr', 'N/D')}\n"
+                f"- Formantes: F1={metrics.get('f1_hz', 'N/D')}, F2={metrics.get('f2_hz', 'N/D')}, F3={metrics.get('f3_hz', 'N/D')}, F4={metrics.get('f4_hz', 'N/D')}\n"
+                f"- Pendiente espectral: {resultado.get('spectral', {}).get('spectral_tilt_slope', 'N/D')}\n"
+                f"- AVQI v03.01: {avqi_str}\n\n"
+                f"Tono técnico formal en español latinoamericano.\n"
+                f"Indica que se trata de mediciones instrumentales que requieren correlación clínica."
             )
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
@@ -333,11 +367,8 @@ async def analizar_y_reportar(
             )
             sintesis_ia = chat_completion.choices[0].message.content
         except Exception as e:
-            sintesis_ia = (
-                f"Síntesis automática no disponible. "
-                f"Los resultados bioacústicos fueron calculados correctamente, "
-                f"pero no se pudo generar la interpretación asistida (Error: {str(e)})."
-            )
+            traceback.print_exc()
+            sintesis_ia = "Síntesis descriptiva no disponible temporalmente. Los resultados bioacústicos fueron calculados correctamente."
 
     # Parse GRBAS and RASATI formatted strings
     try:
@@ -354,16 +385,23 @@ async def analizar_y_reportar(
 
     paciente_dict = {
         "nombre": nombre, "dni": dni, "edad": edad, "sexo": sexo,
-        "motivo": motivo, "derivador": derivador, "matricula": matricula, "centro": centro,
+        "motivo": motivo, "derivador": derivador,
         "grbas": grbas_str, "rasati": rasati_str,
         "sintesis_ia": sintesis_ia, "tmf": tmf,
+        "profesional_nombre": profesional_nombre,
+        "profesional_titulo": profesional_titulo,
+        "profesional_matricula": profesional_matricula,
+        "profesional_centro": profesional_centro,
+        "profesional_email": profesional_email,
     }
 
     img_path = os.path.join(tmp_dir, "graficos_clinicos.png")
     pdf_path = os.path.join(tmp_dir, "informe_clinico.pdf")
 
+    charts = resultado.get("charts", {})
+
     try:
-        _generar_graficos_clinicos(resultado, tmp_vocal, img_path)
+        _generar_graficos_clinicos(resultado, tmp_vocal, img_path, charts=charts)
     except Exception as e:
         traceback.print_exc()
         img_path = ""
@@ -387,7 +425,7 @@ async def analizar_y_reportar(
             "parselmouth_version": resultado.get("parselmouth_version", "0.4.3"),
             "praat_script": f"VoiceLab/{resultado.get('voicelab_version', '2.0.0')}",
         }
-        generar_pdf_clinico(paciente_dict, metricas_pdf, img_path, pdf_path)
+        generar_pdf_clinico(paciente_dict, metricas_pdf, img_path, pdf_path, charts=charts)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error al generar el PDF: {str(e)}")
@@ -398,17 +436,18 @@ async def analizar_y_reportar(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al leer el PDF generado: {str(e)}")
 
-    for p in [tmp_vocal, img_path, pdf_path]:
-        try:
-            if os.path.exists(p):
-                os.remove(p)
-        except Exception:
-            pass
+    try:
+        if os.path.exists(tmp_vocal): os.remove(tmp_vocal)
+        if tmp_habla and os.path.exists(tmp_habla): os.remove(tmp_habla)
+        if img_path and os.path.exists(img_path): os.remove(img_path)
+        if os.path.exists(pdf_path): os.remove(pdf_path)
+    except Exception:
+        pass
 
     return Response(content=pdf_bytes, media_type="application/pdf")
 
 
-def _generar_graficos_clinicos(resultado: dict, audio_path: str, output_img_path: str):
+def _generar_graficos_clinicos(resultado: dict, audio_path: str, output_img_path: str, charts: dict = None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -454,8 +493,9 @@ def _generar_graficos_clinicos(resultado: dict, audio_path: str, output_img_path
     # ---------------- 2. PRAAT SOUND EDITOR: SPECTROGRAM + F0 + INTENSITY + FORMANTS ----------------
     ax_spec = fig.add_subplot(gs[1, :])
     try:
-        # Spectrogram
-        Pxx, freqs, bins, im = ax_spec.specgram(samples, Fs=sr, NFFT=1024, noverlap=800, cmap="Greys", vmin=-60, vmax=20)
+        # Narrow-band spectrogram with proper NFFT
+        nfft = int(0.030 * sr)
+        Pxx, freqs, bins, im = ax_spec.specgram(samples, Fs=sr, NFFT=nfft, noverlap=int(nfft * 0.8), cmap="Greys", vmin=-60, vmax=20)
         ax_spec.set_ylim(0, 5000)
         ax_spec.set_xlim(0, dur)
         ax_spec.set_ylabel("Frecuencia (Hz)", fontsize=8, color="#0f172a")
@@ -484,8 +524,8 @@ def _generar_graficos_clinicos(resultado: dict, audio_path: str, output_img_path
         ax_spec_int.set_ylabel("Intensidad (dB)", fontsize=8, color="#ca8a04")
         ax_spec_int.tick_params(colors="#ca8a04", labelsize=7)
 
-        # Formant tracks overlay (Red dots)
-        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500)
+        # Formant tracks overlay (Red dots, pre_emphasis_from=50)
+        formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500, pre_emphasis_from=50)
         f_times = [formant.get_time_from_frame_number(i) for i in range(1, formant.get_number_of_frames() + 1)]
         for f_num in [1, 2, 3, 4]:
             f_vals = [formant.get_value_at_time(f_num, t) for t in f_times]

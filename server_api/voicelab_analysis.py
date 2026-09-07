@@ -11,11 +11,17 @@ import os
 import csv
 import json
 import hashlib
+import io
+import base64
 import numpy as np
 import parselmouth
 from parselmouth.praat import call
 from datetime import datetime, timezone
 from typing import Optional
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 VOICELAB_VERSION = "2.0.0"
 PARSELMOUTH_VERSION = "0.4.3"
@@ -143,8 +149,13 @@ def measure_jitter(sound, pitch_floor=None, pitch_ceiling=None):
         pitch_floor = pitch_floor or pf
         pitch_ceiling = pitch_ceiling or pc
 
-    pitch = call(sound, "To Pitch (ac)", 0.0, pitch_floor, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pitch_ceiling)
-    point_process = call(pitch, "To PointProcess")
+    point_process = _safe_call(sound, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    if point_process is None:
+        return {
+            "point_process": None,
+            "jitter_local_pct": None, "jitter_local_absolute_s": None,
+            "jitter_rap_pct": None, "jitter_ppq5_pct": None, "jitter_ddp_pct": None,
+        }
 
     jitter_local = _safe_call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
     jitter_local_abs = _safe_call(point_process, "Get jitter (local, absolute)", 0, 0, 0.0001, 0.02, 1.3)
@@ -168,8 +179,13 @@ def measure_shimmer(sound, pitch_floor=None, pitch_ceiling=None):
         pitch_floor = pitch_floor or pf
         pitch_ceiling = pitch_ceiling or pc
 
-    pitch = call(sound, "To Pitch (ac)", 0.0, pitch_floor, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pitch_ceiling)
-    point_process = call(pitch, "To PointProcess")
+    point_process = _safe_call(sound, "To PointProcess (periodic, cc)", pitch_floor, pitch_ceiling)
+    if point_process is None:
+        return {
+            "shimmer_local_pct": None, "shimmer_local_db": None,
+            "shimmer_apq3_pct": None, "shimmer_apq5_pct": None,
+            "shimmer_apq11_pct": None, "shimmer_dda_pct": None,
+        }
 
     shimmer_local = _safe_call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
     shimmer_local_db = _safe_call([sound, point_process], "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
@@ -203,18 +219,12 @@ def measure_cpp(sound, pitch_floor=None, pitch_ceiling=None):
         pitch_ceiling = pitch_ceiling or pc
 
     try:
-        spectrum = sound.to_spectrum()
-        cepstrum = call(spectrum, "To PowerCepstrum")
-        cpp = call(cepstrum, "Get peak prominence", pitch_floor, pitch_ceiling, "Parabolic", 0.0, 0.0, "Straight", "Robust")
-        return {"cpps_db": round(float(cpp), 2)}
+        spec = sound.to_spectrum()
+        pcep = call(spec, "To PowerCepstrum")
+        cpp = call(pcep, "Get peak prominence", pitch_floor, pitch_ceiling, "Parabolic", 0.001, 0.05, "Straight", "Robust")
+        return {"cpps_db": round(float(cpp), 2), "method": "power_cepstrum_straight_robust"}
     except Exception:
-        try:
-            harmonicity = call(sound, "To Harmonicity (cc)", 0.01, pitch_floor, 0.1, 1.0)
-            hnr = call(harmonicity, "Get mean", 0, 0)
-            cpp_approx = float(hnr) * 0.4 + 5.0 if hnr else None
-            return {"cpps_db": round(cpp_approx, 2) if cpp_approx else None, "method": "estimated_from_hnr"}
-        except Exception:
-            return {"cpps_db": None, "method": "failed"}
+        return {"cpps_db": None, "method": "failed"}
 
 
 def measure_formants(sound, pitch_floor=None, pitch_ceiling=None):
@@ -786,12 +796,6 @@ def calcular_avqi_v0301(cpps_db, hnr_db, shimmer_local_pct, shimmer_local_db, sp
 
 
 def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Polygon
-    import io, base64
-
     sr = sound.sampling_frequency
     dur = sound.get_total_duration()
     samples = sound.values.flatten()
@@ -800,7 +804,7 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
 
     # 1. Narrowband Spectrogram
     try:
-        fig1, ax1 = plt.subplots(figsize=(8, 3.2), dpi=140, facecolor="white")
+        fig1, ax1 = plt.subplots(figsize=(8, 3.2), dpi=150, facecolor="white")
         nfft = int(0.030 * sr)
         noverlap = int(nfft * 0.85)
         ax1.specgram(samples, Fs=sr, NFFT=nfft, noverlap=noverlap, cmap="Blues_r", vmin=-65, vmax=15)
@@ -808,16 +812,14 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
         ax1.set_xlim(0, dur)
         ax1.set_xlabel("Tiempo (s)", fontsize=8)
         ax1.set_ylabel("Frecuencia (Hz)", fontsize=8)
-        ax1.set_title("Espectrograma de Banda Estrecha con F0 y Formantes", fontsize=9, fontweight="bold", loc="left")
+        ax1.set_title("Espectrograma de Banda Estrecha", fontsize=9, fontweight="bold", loc="left")
 
-        # F0 overlay
         pitch = call(sound, "To Pitch (ac)", 0.0, pf, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pc)
         p_times = pitch.xs()
         f0_vals = pitch.selected_array["frequency"]
         f0_clean = [v if v > 0 else np.nan for v in f0_vals]
         ax1.plot(p_times, f0_clean, color="#0284c7", linewidth=1.8, label="F0")
 
-        # Formants
         formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500, pre_emphasis_from=50)
         f_times = [formant.get_time_from_frame_number(i) for i in range(1, formant.get_number_of_frames() + 1)]
         for fn in [1, 2, 3, 4]:
@@ -836,21 +838,33 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
 
     # 2. FFT Power Spectrum & Tilt
     try:
-        fig2, ax2 = plt.subplots(figsize=(8, 3.2), dpi=140, facecolor="white")
+        fig2, ax2 = plt.subplots(figsize=(8, 3.2), dpi=150, facecolor="white")
         part = sound.extract_part(from_time=0.1, to_time=max(0.3, dur - 0.1), preserve_times=True)
         spec = part.to_spectrum()
         s_freqs = np.array(spec.xs())
         s_amps = 20 * np.log10(np.maximum(np.array(spec.values[0]), 1e-10))
         mask = (s_freqs >= 50) & (s_freqs <= 5000)
         ax2.plot(s_freqs[mask], s_amps[mask], color="#334155", linewidth=0.8, label="Espectro FFT")
-        
+
         slope, intercept = np.polyfit(s_freqs[mask], s_amps[mask], 1)
         ax2.plot(s_freqs[mask], slope * s_freqs[mask] + intercept, color="#ea580c", linestyle="--", linewidth=1.5, label=f"Tilt ({slope*1000:.1f} dB/kHz)")
-        
+
+        f0_mean = metrics.get("f0_mean") or metrics.get("f0_mean_hz")
+        if f0_mean and 50 <= f0_mean <= 5000:
+            f0_idx = np.argmin(np.abs(s_freqs[mask] - f0_mean))
+            f0_amp = s_amps[mask][f0_idx]
+            ax2.plot(f0_mean, f0_amp, "o", color="#2563eb", markersize=8, zorder=10, label=f"F0 ({f0_mean:.0f} Hz)")
+            h2_freq = f0_mean * 2
+            if h2_freq <= 5000:
+                h2_idx = np.argmin(np.abs(s_freqs[mask] - h2_freq))
+                h2_amp = s_amps[mask][h2_idx]
+                ax2.plot(h2_freq, h2_amp, "o", color="#16a34a", markersize=7, zorder=10, label=f"H2 ({h2_freq:.0f} Hz)")
+            ax2.plot(f0_mean, f0_amp + 3, "^", color="#dc2626", markersize=7, zorder=10, label=f"H1 ({f0_mean:.0f} Hz)")
+
         ax2.set_xlim(0, 5000)
         ax2.set_xlabel("Frecuencia (Hz)", fontsize=8)
         ax2.set_ylabel("Amplitud (dB)", fontsize=8)
-        ax2.set_title("Espectro de Potencia FFT y Pendiente Espectral (Tilt)", fontsize=9, fontweight="bold", loc="left")
+        ax2.set_title("Espectro de Potencia FFT y Pendiente Espectral", fontsize=9, fontweight="bold", loc="left")
         ax2.grid(True, linestyle=":", alpha=0.5)
         ax2.legend(loc="upper right", fontsize=7)
         plt.tight_layout()
@@ -863,21 +877,27 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
 
     # 3. DDF (CPPS vs HNR)
     try:
-        fig3, ax3 = plt.subplots(figsize=(7, 3.5), dpi=140, facecolor="white")
+        from matplotlib.patches import Polygon
+        fig3, ax3 = plt.subplots(figsize=(7, 3.5), dpi=150, facecolor="white")
+
         norm_poly = Polygon([[14.5, 20], [30, 20], [30, 40], [14.5, 40]], closed=True, color="#22c55e", alpha=0.18, label="Normal")
         ax3.add_patch(norm_poly)
-        
+        mild_poly = Polygon([[12.0, 17], [14.5, 20], [14.5, 40], [12.0, 40]], closed=True, color="#eab308", alpha=0.15, label="Leve")
+        ax3.add_patch(mild_poly)
+
         pat_cpps = metrics.get("cpps_db") or 15.0
         pat_hnr = metrics.get("hnr_db") or 22.0
         ax3.scatter([pat_cpps], [pat_hnr], color="#dc2626", s=100, zorder=10, edgecolor="black", marker="*", label="Paciente")
-        
+
         ax3.axvline(14.5, color="#16a34a", linestyle=":", linewidth=1.0)
         ax3.axhline(20.0, color="#16a34a", linestyle=":", linewidth=1.0)
+        ax3.axvline(12.0, color="#eab308", linestyle=":", linewidth=0.8, alpha=0.7)
+        ax3.axhline(17.0, color="#eab308", linestyle=":", linewidth=0.8, alpha=0.7)
         ax3.set_xlim(5, 30)
         ax3.set_ylim(5, 35)
         ax3.set_xlabel("CPPS (dB)", fontsize=8)
         ax3.set_ylabel("HNR (dB)", fontsize=8)
-        ax3.set_title("Diagrama de Dispersión Fonatoria (DDF — CPPS vs HNR)", fontsize=9, fontweight="bold", loc="left")
+        ax3.set_title("Diagrama de Dispersión Fonatoria", fontsize=9, fontweight="bold", loc="left")
         ax3.grid(True, linestyle="--", alpha=0.4)
         ax3.legend(loc="lower right", fontsize=7)
         plt.tight_layout()
@@ -887,6 +907,61 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
         charts["ddf_img"] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     except Exception:
         charts["ddf_img"] = ""
+
+    # 4. VOXplot Radar (6-axis polar)
+    try:
+        fig4, ax4 = plt.subplots(figsize=(5.5, 5.5), dpi=150, facecolor="white", subplot_kw={"projection": "polar"})
+        categories = ["AVQI", "ABI", "GNE", "CPPS", "Jitter\nppq5", "HNR"]
+        N = len(categories)
+        angles = [n / float(N) * 2 * np.pi for n in range(N)]
+        angles += angles[:1]
+
+        def _norm_r(val, cutoff, direction):
+            if val is None:
+                return 1.0
+            if direction == "lower_is_better":
+                return max(0.2, min(3.0, val / cutoff)) if cutoff > 0 else 1.0
+            else:
+                return max(0.2, min(3.0, cutoff / val)) if val > 0 else 2.5
+
+        patient_vals = [
+            _norm_r(avqi_val, 1.17, "lower_is_better"),
+            _norm_r(metrics.get("alpha_ratio_db"), 2.35, "higher_is_better"),
+            _norm_r(metrics.get("hnr_linear") or (10 ** (metrics.get("hnr_db", 0) / 10) if metrics.get("hnr_db") else 0.5), 0.89, "higher_is_better"),
+            _norm_r(metrics.get("cpps_db"), 14.47, "higher_is_better"),
+            _norm_r(metrics.get("jitter_ppq5_pct"), 0.29, "lower_is_better"),
+            _norm_r(metrics.get("hnr_db"), 23.34, "higher_is_better"),
+        ]
+        patient_vals += patient_vals[:1]
+
+        ax4.set_theta_offset(np.pi / 2)
+        ax4.set_theta_direction(-1)
+        ax4.set_xticks(angles[:-1])
+        ax4.set_xticklabels(categories, fontsize=8, fontweight="bold", color="#0f172a")
+
+        circle_theta = np.linspace(0, 2 * np.pi, 200)
+        ax4.fill(circle_theta, [1.0] * 200, color="#22c55e", alpha=0.20, label="Normal (Norm)")
+        ax4.plot(circle_theta, [1.0] * 200, color="#16a34a", linewidth=1.2, linestyle="--")
+
+        ax4.fill(angles, patient_vals, color="#ef4444", alpha=0.50, label="Paciente")
+        ax4.plot(angles, patient_vals, color="#b91c1c", linewidth=2.0)
+        ax4.scatter(angles[:-1], patient_vals[:-1], color="#991b1b", s=35, zorder=10)
+
+        ax4.set_ylim(0, 2.5)
+        ax4.set_yticks([0.5, 1.0, 1.5, 2.0])
+        ax4.set_yticklabels(["0.5", "1.0", "1.5", "2.0"], fontsize=6, color="#64748b")
+        ax4.grid(color="#cbd5e1", linestyle="--", linewidth=0.5)
+        ax4.text(-np.pi / 4, 2.3, "Hoarseness", fontsize=9, fontweight="bold", color="#b45309", ha="center")
+        ax4.text(np.pi / 4, 2.3, "Breathiness", fontsize=9, fontweight="bold", color="#1d4ed8", ha="center")
+        ax4.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=7)
+        ax4.set_title("VOXplot Radar — Severidad Multifactorial", fontsize=9, fontweight="bold", pad=18, color="#0f172a")
+        plt.tight_layout()
+        buf = io.BytesIO()
+        fig4.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig4)
+        charts["radar_img"] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        charts["radar_img"] = ""
 
     return charts
 
