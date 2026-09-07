@@ -1005,7 +1005,9 @@ def analisis_completo(file_path: str, file_path_habla: Optional[str] = None, mod
         }
 
     # Determine pitch bounds based on sexo or custom params
-    if pitch_floor is None or pitch_ceiling is None:
+    if not pitch_floor or not pitch_ceiling:
+        if pitch_floor and pitch_floor <= 0: pitch_floor = None
+        if pitch_ceiling and pitch_ceiling <= 0: pitch_ceiling = None
         if sexo and ("masc" in sexo.lower() or "hombre" in sexo.lower() or "male" in sexo.lower()):
             pf_def, pc_def = 75, 300
         elif sexo and ("fem" in sexo.lower() or "mujer" in sexo.lower() or "female" in sexo.lower() or "inf" in sexo.lower() or "niñ" in sexo.lower() or "child" in sexo.lower()):

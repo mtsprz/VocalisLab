@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 import shutil
 import os
 import sys
@@ -136,8 +137,8 @@ async def analizar(
     audio_habla: UploadFile = File(None),
     modo: str = Form("clinico"),
     sexo: str = Form(""),
-    pitch_floor: float = Form(0),
-    pitch_ceiling: float = Form(0),
+    pitch_floor: Optional[float] = Form(None),
+    pitch_ceiling: Optional[float] = Form(None),
 ):
     tmp_dir = "/tmp"
     os.makedirs(tmp_dir, exist_ok=True)
@@ -160,8 +161,8 @@ async def analizar(
             file_path_habla=tmp_habla,
             modo=modo,
             sexo=sexo,
-            pitch_floor=pitch_floor,
-            pitch_ceiling=pitch_ceiling,
+            pitch_floor=pitch_floor if pitch_floor and pitch_floor > 0 else None,
+            pitch_ceiling=pitch_ceiling if pitch_ceiling and pitch_ceiling > 0 else None,
         )
     except Exception as e:
         traceback.print_exc()
@@ -284,8 +285,8 @@ async def analizar_y_reportar(
     profesional_matricula: str = Form(""),
     profesional_centro: str = Form(""),
     profesional_email: str = Form(""),
-    pitch_floor: float = Form(0),
-    pitch_ceiling: float = Form(0),
+    pitch_floor: Optional[float] = Form(None),
+    pitch_ceiling: Optional[float] = Form(None),
 ):
     tmp_dir = "/tmp"
     os.makedirs(tmp_dir, exist_ok=True)
@@ -308,8 +309,8 @@ async def analizar_y_reportar(
             file_path_habla=tmp_habla,
             modo="clinico",
             sexo=sexo,
-            pitch_floor=pitch_floor,
-            pitch_ceiling=pitch_ceiling,
+            pitch_floor=pitch_floor if pitch_floor and pitch_floor > 0 else None,
+            pitch_ceiling=pitch_ceiling if pitch_ceiling and pitch_ceiling > 0 else None,
         )
     except Exception as e:
         traceback.print_exc()
