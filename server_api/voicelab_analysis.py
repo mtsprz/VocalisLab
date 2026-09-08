@@ -243,26 +243,31 @@ def measure_formants(sound, pitch_floor=None, pitch_ceiling=None):
 
     try:
         formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis_from=50)
+        n_frames = formant.get_number_of_frames()
+        if n_frames < 3:
+            return {"f1_hz": None, "f2_hz": None, "f3_hz": None, "f4_hz": None, "max_formant_hz": max_formant, "method": "insufficient_frames"}
+
         f1_values = formant.selected_array['frequency'][0]
         f2_values = formant.selected_array['frequency'][1]
         f3_values = formant.selected_array['frequency'][2]
         f4_values = formant.selected_array['frequency'][3]
 
-        f1 = float(np.median(f1_values[(f1_values > 0) & (f1_values < max_formant)])) if np.any((f1_values > 0) & (f1_values < max_formant)) else None
-        f2 = float(np.median(f2_values[(f2_values > 0) & (f2_values < max_formant)])) if np.any((f2_values > 0) & (f2_values < max_formant)) else None
-        f3 = float(np.median(f3_values[(f3_values > 0) & (f3_values < max_formant)])) if np.any((f3_values > 0) & (f3_values < max_formant)) else None
-        f4 = float(np.median(f4_values[(f4_values > 0) & (f4_values < max_formant)])) if np.any((f4_values > 0) & (f4_values < max_formant)) else None
+        def _safe_median(arr, lo, hi):
+            valid = arr[(arr > lo) & (arr < hi) & (~np.isnan(arr))]
+            return round(float(np.median(valid)), 1) if len(valid) > 0 else None
+
+        f1 = _safe_median(f1_values, 50, max_formant)
+        f2 = _safe_median(f2_values, f1 if f1 else 200, max_formant)
+        f3 = _safe_median(f3_values, f2 if f2 else 500, max_formant)
+        f4 = _safe_median(f4_values, f3 if f3 else 1000, max_formant)
 
         return {
-            "f1_hz": round(f1, 1) if f1 else None,
-            "f2_hz": round(f2, 1) if f2 else None,
-            "f3_hz": round(f3, 1) if f3 else None,
-            "f4_hz": round(f4, 1) if f4 else None,
+            "f1_hz": f1, "f2_hz": f2, "f3_hz": f3, "f4_hz": f4,
             "max_formant_hz": max_formant,
             "method": "formant_burg"
         }
     except Exception:
-        return {"f1_hz": None, "f2_hz": None, "f3_hz": None, "f4_hz": None, "method": "failed"}
+        return {"f1_hz": None, "f2_hz": None, "f3_hz": None, "f4_hz": None, "max_formant_hz": max_formant, "method": "failed"}
 
 
 def measure_ltas(sound):
@@ -668,23 +673,34 @@ def extract_harmonics(sound, f0_mean=None, n_harmonics=10):
         freqs = np.array(spectrum.xs())
         amps_db = 20 * np.log10(np.maximum(np.array(spectrum.values[0]), 1e-10))
         harmonics = []
-        search_window_hz = f0_mean * 0.25
         for h in range(1, n_harmonics + 1):
             h_freq = f0_mean * h
             if h_freq > 5000:
                 break
+            if h == 1:
+                search_window_hz = f0_mean * 0.08
+            else:
+                search_window_hz = f0_mean * 0.15
             mask = (freqs >= h_freq - search_window_hz) & (freqs <= h_freq + search_window_hz)
             if np.any(mask):
                 peak_idx_local = np.argmax(amps_db[mask])
                 peak_idx = np.where(mask)[0][peak_idx_local]
                 peak_amp = float(amps_db[peak_idx])
+                peak_freq = float(freqs[peak_idx])
                 if peak_amp < -80:
                     continue
-                harmonics.append({
-                    "number": h,
-                    "frequency_hz": round(float(freqs[peak_idx]), 1),
-                    "amplitude_db": round(peak_amp, 1),
-                })
+                if h == 1 and abs(peak_freq - f0_mean) > f0_mean * 0.15:
+                    harmonics.append({
+                        "number": h,
+                        "frequency_hz": round(float(h_freq), 1),
+                        "amplitude_db": round(peak_amp, 1),
+                    })
+                else:
+                    harmonics.append({
+                        "number": h,
+                        "frequency_hz": round(peak_freq, 1),
+                        "amplitude_db": round(peak_amp, 1),
+                    })
             else:
                 harmonics.append({
                     "number": h,

@@ -965,7 +965,8 @@ function F0IntensityGraph({ f0Contour, intensityContour }: { f0Contour: any; int
 
 function HarmonicsGraph({ harmonics }: { harmonics: any[] }) {
   if (!harmonics || harmonics.length === 0) return <EmptyGraph label="Espectro Armónico — Sin datos" />;
-  const maxAmp = Math.max(...harmonics.map(h => h.amplitude_db), 1);
+  const absAmps = harmonics.filter(h => h.amplitude_db != null).map(h => Math.abs(h.amplitude_db));
+  const maxAbsAmp = absAmps.length > 0 ? Math.max(...absAmps) : 1;
   const width = 700, height = 180, padX = 40, padY = 20;
   const plotW = width - 2 * padX, plotH = height - 2 * padY;
 
@@ -975,8 +976,9 @@ function HarmonicsGraph({ harmonics }: { harmonics: any[] }) {
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-44">
         <rect x={padX} y={padY} width={plotW} height={plotH} fill="#0f172a" rx="4" />
         {harmonics.map((h, i) => {
+          if (h.amplitude_db == null) return null;
           const x = padX + (i / harmonics.length) * plotW + plotW / harmonics.length / 2;
-          const barH = (h.amplitude_db / maxAmp) * plotH;
+          const barH = Math.max(2, (Math.abs(h.amplitude_db) / maxAbsAmp) * plotH);
           return (
             <g key={i}>
               <rect x={x - 8} y={padY + plotH - barH} width={16} height={barH} fill="#38bdf8" rx="2" opacity="0.8" />
