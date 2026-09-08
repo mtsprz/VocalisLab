@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Mic, Square, Upload, Loader2, FileText, Sparkles, AlertCircle } from 'lucide-react';
+import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function AnamnesisModule({ pacienteId }: Props) {
+  const clinical = useClinical();
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [structuring, setStructuring] = useState(false);
@@ -72,6 +74,18 @@ export default function AnamnesisModule({ pacienteId }: Props) {
       const data = await r.json();
       if (data.error) { setError(data.error); return; }
       setEstructuracion(data);
+
+      // Sync anamnesis to clinical context
+      clinical.setAnamnesis({
+        motivo_consulta: data.motivo_consulta,
+        diagnostico_orl: data.diagnostico_orl,
+        metodo_exploracion: data.metodo_exploracion,
+        sintomas: data.sintomas,
+        factores_riesgo: data.factores_riesgo,
+        resumen_clinico: data.resumen_clinico,
+        transcripcion: transcripcion,
+      });
+      clinical.markStep('anamnesis');
 
       const r2 = await fetch(`${BACKEND_URL}/api/anamnesis/completa`, {
         method: 'POST',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, FileText, Activity, Clock, AlertCircle } from 'lucide-react';
+import { Users, Calendar, FileText, Activity, Clock, AlertCircle, Sparkles } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -31,10 +31,10 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
   };
 
   const statCards = [
-    { label: 'Pacientes Activos', value: stats.total_pacientes, icon: <Users size={22} />, color: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400', action: () => onNavigate('pacientes') },
-    { label: 'Turnos Hoy', value: stats.turnos_hoy, icon: <Calendar size={22} />, color: 'bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400', action: () => {} },
-    { label: 'Evaluaciones (Mes)', value: stats.evaluaciones_mes, icon: <FileText size={22} />, color: 'bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400', action: () => onNavigate('escalas') },
-    { label: 'Análisis (Mes)', value: stats.analisis_mes, icon: <Activity size={22} />, color: 'bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400', action: () => onNavigate('analisis') },
+    { label: 'Pacientes Activos', value: stats.total_pacientes, icon: <Users size={22} />, color: 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400', action: () => onNavigate('pacientes') },
+    { label: 'Turnos Hoy', value: stats.turnos_hoy, icon: <Calendar size={22} />, color: 'bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400', action: () => {} },
+    { label: 'Evaluaciones (Mes)', value: stats.evaluaciones_mes, icon: <FileText size={22} />, color: 'bg-purple-500/10 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400', action: () => onNavigate('escalas') },
+    { label: 'Análisis (Mes)', value: stats.analisis_mes, icon: <Activity size={22} />, color: 'bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400', action: () => onNavigate('analisis') },
   ];
 
   return (
@@ -44,18 +44,18 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
           <button
             key={card.label}
             onClick={card.action}
-            className="bg-white dark:bg-[#111827] rounded-xl border border-gray-200 dark:border-gray-800 p-5 text-left hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-indigo-500/5 transition-all duration-200"
+            className="bg-white/70 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-white/10 p-5 text-left hover:shadow-xl dark:hover:shadow-lg dark:hover:shadow-indigo-500/10 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
           >
-            <div className={`w-10 h-10 rounded-lg ${card.color} flex items-center justify-center mb-3`}>
+            <div className={`w-10 h-10 rounded-xl ${card.color} flex items-center justify-center mb-3 backdrop-blur-sm`}>
               {card.icon}
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{card.value}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{card.label}</p>
+            <p className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">{card.value}</p>
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wider">{card.label}</p>
           </button>
         ))}
       </div>
 
-      <div className="bg-white dark:bg-[#111827] rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm transition-all duration-200">
+      <div className="bg-white/70 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-white/10 p-5 shadow-sm transition-all duration-200">
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
           <Calendar size={18} className="text-indigo-600 dark:text-indigo-400" /> Agenda de Hoy
         </h3>
@@ -90,17 +90,24 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <button
           onClick={() => onNavigate('anamnesis')}
-          className="bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 rounded-xl p-5 text-white text-left hover:shadow-lg dark:hover:shadow-indigo-500/20 transition-all duration-300"
+          className="bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 rounded-2xl p-5 text-white text-left hover:shadow-xl dark:hover:shadow-indigo-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
         >
           <p className="text-lg font-bold mb-1 flex items-center gap-2">Nueva Anamnesis <Activity size={18} /></p>
           <p className="text-sm text-indigo-100/90 font-medium">Grabar entrevista, transcribir con Whisper y estructurar con IA</p>
         </button>
         <button
+          onClick={() => onNavigate('recomendacion')}
+          className="bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 rounded-2xl p-5 text-white text-left hover:shadow-xl dark:hover:shadow-amber-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <p className="text-lg font-bold mb-1 flex items-center gap-2">Motor IA Terapéutico <Sparkles size={18} /></p>
+          <p className="text-sm text-amber-100/90 font-medium">Sintetizar caso clínico y generar prescripción de ejercicios Farías</p>
+        </button>
+        <button
           onClick={() => onNavigate('cuadernillo')}
-          className="bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-xl p-5 text-white text-left hover:shadow-lg dark:hover:shadow-emerald-500/20 transition-all duration-300"
+          className="bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-2xl p-5 text-white text-left hover:shadow-xl dark:hover:shadow-emerald-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
         >
           <p className="text-lg font-bold mb-1 flex items-center gap-2">Crear Cuadernillo <FileText size={18} /></p>
           <p className="text-sm text-emerald-100/90 font-medium">Generar PDF de ejercicios terapéuticos personalizados</p>

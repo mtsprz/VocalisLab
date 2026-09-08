@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Upload, Loader2, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
 import ClinicalReviewScreen from './ClinicalReviewScreen';
 import ReportEditor from './ReportEditor';
+import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -15,6 +16,7 @@ interface AnalysisResult {
 }
 
 export default function AnalisisModule({ pacienteId }: Props) {
+  const clinical = useClinical();
   const [step, setStep] = useState<'capture' | 'analyzing' | 'review' | 'editor'>('capture');
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -81,6 +83,28 @@ export default function AnalisisModule({ pacienteId }: Props) {
       setResult(data);
       setProgress(100);
       setStep('review');
+
+      // Sync acoustic data to clinical context
+      if (data.metrics) {
+        clinical.setAcustica({
+          f0_mean: data.metrics.f0_mean,
+          f0_min: data.metrics.f0_min,
+          f0_max: data.metrics.f0_max,
+          f0_sd: data.metrics.f0_sd,
+          jitter_local_pct: data.metrics.jitter_local_pct,
+          shimmer_local_pct: data.metrics.shimmer_local_pct,
+          hnr_db: data.metrics.hnr_db,
+          cpps_db: data.metrics.cpps_db,
+          nhr: data.metrics.nhr,
+          avqi: data.avqiComponents?.avqi,
+          f1_hz: data.metrics.formants?.f1_hz,
+          f2_hz: data.metrics.formants?.f2_hz,
+          formants: data.formants,
+          spectral: data.spectral,
+        });
+        clinical.setEscalas({ ...clinical.data.escalas, grbas, rasati });
+        clinical.markStep('analisis');
+      }
     } catch (e: any) {
       setError(e.message || 'Error en análisis');
       setStep('capture');

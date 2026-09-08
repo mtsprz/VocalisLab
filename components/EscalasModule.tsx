@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, BarChart2, Shield } from 'lucide-react';
+import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -152,6 +153,7 @@ const SCALES = {
 };
 
 export default function EscalasModule({ pacienteId }: Props) {
+  const clinical = useClinical();
   const [activeScale, setActiveScale] = useState<string>('GRBAS');
   const [activeDimensionIndex, setActiveDimensionIndex] = useState<number>(0);
   
@@ -173,6 +175,38 @@ export default function EscalasModule({ pacienteId }: Props) {
   const [observaciones, setObservaciones] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Sync escalas data to global clinical context
+  useEffect(() => {
+    const riesgoTotal = getTotal('RiesgoVocal');
+    const subtotales: Record<string, number> = {};
+    RIESGO_VOCAL_FONOAR.dimensions.forEach(dim => {
+      subtotales[dim.categoria] = dim.items.reduce((acc, it) => acc + (scores.RiesgoVocal[it.key] || 0), 0);
+    });
+    const alertas3 = RIESGO_VOCAL_FONOAR.dimensions.flatMap(d => d.items)
+      .filter(it => (scores.RiesgoVocal[it.key] || 0) === 3)
+      .map(it => it.label);
+
+    clinical.setEscalas({
+      grbas: scores.GRBAS,
+      rasati: scores.RASATI,
+      vhi10_score: getTotal('VHI10'),
+      vhi10_detalle: scores.VHI10,
+      tme_o: scores.TME.TME_O,
+      tme_s: scores.TME.TME_S,
+      indice_so: scores.TME.TME_O > 0 ? (scores.TME.TME_S / scores.TME.TME_O).toFixed(2) : null,
+    });
+    clinical.setRiesgoVocal({
+      puntaje_total: riesgoTotal,
+      grupo: riesgoTotal <= 60 ? 'Grupo 1 (Mínimo)' : riesgoTotal <= 90 ? 'Grupo 2 (Elevado)' : 'Grupo 3 (Muy Elevado)',
+      subtotales_dimensiones: subtotales,
+      alertas_conductas_3: alertas3,
+      detalle: scores.RiesgoVocal,
+    });
+    if (riesgoTotal > 0) {
+      clinical.markStep('escalas');
+    }
+  }, [scores]);
 
   const updateScore = (key: string, val: number) => {
     setScores(prev => ({

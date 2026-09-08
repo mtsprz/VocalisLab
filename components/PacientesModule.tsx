@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Search, Edit2, Trash2, Phone, Mail, Save, X } from 'lucide-react';
+import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -27,6 +28,7 @@ const EMPTY_FORM = {
 };
 
 export default function PacientesModule({ onSelectPaciente }: Props) {
+  const clinical = useClinical();
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
   const [buscar, setBuscar] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -187,7 +189,19 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
               ) : pacientes.map(p => (
                 <tr key={p.id} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
                   <td className="px-4 py-3">
-                    <button onClick={() => onSelectPaciente(p.id)} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-left">
+                    <button onClick={() => {
+                      clinical.setPaciente({
+                        id: p.id,
+                        nombre_completo: p.nombre_completo,
+                        dni: p.dni,
+                        fecha_nacimiento: p.fecha_nacimiento,
+                        sexo: p.sexo,
+                        ocupacion: p.ocupacion,
+                        demanda_vocal_horas: 0,
+                      });
+                      clinical.markStep('pacientes');
+                      onSelectPaciente(p.id);
+                    }} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-left">
                       {p.nombre_completo}
                     </button>
                   </td>

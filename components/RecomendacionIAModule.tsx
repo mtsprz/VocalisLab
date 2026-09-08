@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Loader2, CheckCircle2, ArrowRight, Shield, Activity, FileText, Send, UserCheck, RefreshCw } from 'lucide-react';
+import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function RecomendacionIAModule({ pacienteId, onTransferToCuadernillo }: Props) {
+  const clinical = useClinical();
   const [loading, setLoading] = useState(false);
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>(pacienteId || '');
@@ -16,51 +18,47 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
   const [transferred, setTransferred] = useState(false);
   const [error, setError] = useState('');
 
-  // Sample data states for editing or sending
-  const [pacienteData, setPacienteData] = useState<any>({
-    nombre_completo: 'María Laura González',
-    edad: 38,
-    sexo: 'Femenino',
-    ocupacion: 'Docente de Nivel Primario',
-    demanda_vocal_horas: 6
-  });
-
-  const [anamnesisData, setAnamnesisData] = useState<any>({
-    motivo_consulta: 'Disfonía fluctuante de 6 meses de evolución, fatiga vocal al final de la jornada laboral.',
-    diagnostico_orl: 'Esbozo nodular bilateral / Lesión exofítica en tercio medio',
-    sintomas: { disfonia: true, fatiga_vocal: true, carraspeo: true, dolor: false }
-  });
-
-  const [riesgoVocalData, setRiesgoVocalData] = useState<any>({
-    puntaje_total: 82,
-    grupo: 'Grupo 2 (Tendencia elevada a desarrollar problema vocal)',
-    subtotales_dimensiones: {
-      "Hábitos Vocales": 38,
-      "Estado Emocional": 12,
-      "Condiciones Biológicas": 14,
-      "Condiciones Ambientales": 12,
-      "Hábitos de Vida": 6
-    },
-    alertas_conductas_3: ["Habla en ambientes ruidosos", "Carraspea en forma habitual", "Usa la voz estando resfriado"]
-  });
-
-  const [escalasData, setEscalasData] = useState<any>({
-    grbas: { G: 2, R: 1, B: 1, A: 0, S: 2 },
-    rasati: { R: 1, A: 1, S: 1, A2: 0, T: 2, I: 0 },
-    vhi10_score: 18,
-    tme_o: 11.5,
-    tme_s: 9.2,
-    indice_so: 0.8
-  });
-
-  const [acusticaData, setAcusticaData] = useState<any>({
-    f0_mean: 215.4,
-    jitter_local_pct: 1.42,
-    shimmer_local_pct: 4.85,
-    hnr_db: 15.8,
-    cpps_db: 11.2,
-    avqi: 3.85
-  });
+  // Data from clinical context or fallback demo data
+  const [pacienteData, setPacienteData] = useState<any>(
+    clinical.data.paciente || {
+      nombre_completo: 'María Laura González',
+      edad: 38,
+      sexo: 'Femenino',
+      ocupacion: 'Docente de Nivel Primario',
+      demanda_vocal_horas: 6
+    }
+  );
+  const [anamnesisData, setAnamnesisData] = useState<any>(
+    clinical.data.anamnesis || {
+      motivo_consulta: 'Disfonía fluctuante de 6 meses de evolución, fatiga vocal al final de la jornada laboral.',
+      diagnostico_orl: 'Esbozo nodular bilateral / Lesión exofítica en tercio medio',
+      sintomas: { disfonia: true, fatiga_vocal: true, carraspeo: true, dolor: false }
+    }
+  );
+  const [riesgoVocalData, setRiesgoVocalData] = useState<any>(
+    clinical.data.riesgoVocal || {
+      puntaje_total: 82,
+      grupo: 'Grupo 2 (Tendencia elevada a desarrollar problema vocal)',
+      subtotales_dimensiones: {
+        "Hábitos Vocales": 38, "Estado Emocional": 12, "Condiciones Biológicas": 14,
+        "Condiciones Ambientales": 12, "Hábitos de Vida": 6
+      },
+      alertas_conductas_3: ["Habla en ambientes ruidosos", "Carraspea en forma habitual", "Usa la voz estando resfriado"]
+    }
+  );
+  const [escalasData, setEscalasData] = useState<any>(
+    clinical.data.escalas || {
+      grbas: { G: 2, R: 1, B: 1, A: 0, S: 2 },
+      rasati: { R: 1, A: 1, S: 1, A2: 0, T: 2, I: 0 },
+      vhi10_score: 18, tme_o: 11.5, tme_s: 9.2, indice_so: 0.8
+    }
+  );
+  const [acusticaData, setAcusticaData] = useState<any>(
+    clinical.data.acustica || {
+      f0_mean: 215.4, jitter_local_pct: 1.42, shimmer_local_pct: 4.85,
+      hnr_db: 15.8, cpps_db: 11.2, avqi: 3.85
+    }
+  );
 
   useEffect(() => {
     loadPacientes();
@@ -72,6 +70,15 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
       fetchPacienteData(pacienteId);
     }
   }, [pacienteId]);
+
+  // Sync recomendacion back to clinical context
+  useEffect(() => {
+    if (recomendacion) {
+      clinical.setRecomendacion(recomendacion);
+      clinical.setAcustica(acusticaData);
+      clinical.markStep('recomendacion');
+    }
+  }, [recomendacion]);
 
   const loadPacientes = async () => {
     try {
