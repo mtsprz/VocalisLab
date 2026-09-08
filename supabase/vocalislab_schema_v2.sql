@@ -1,27 +1,29 @@
--- ============================================
--- VocalisLab Pro — Schema Completo v2.0
--- Plataforma Clínica Fonoaudiológica Integral
--- ============================================
+-- =========================================================
+-- VOCALISLAB PRO v2.0 — SCHEMA MAESTRO IDEMPOTENTE
+-- Diseñado para poder ejecutarse 1 o 100 veces sin errores
+-- =========================================================
 
--- 1. PACIENTES
+-- 1. TABLA PACIENTES
 CREATE TABLE IF NOT EXISTS pacientes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     nombre_completo TEXT NOT NULL,
-    dni TEXT UNIQUE NOT NULL,
-    fecha_nacimiento DATE,
-    sexo TEXT CHECK (sexo IN ('Masculino', 'Femenino', 'Otro', '')),
-    telefono TEXT,
-    email TEXT,
-    ocupacion TEXT,
-    demanda_vocal_horas INT,
-    derivador TEXT,
-    notas_iniciales TEXT,
-    activo BOOLEAN DEFAULT true
+    dni TEXT UNIQUE NOT NULL
 );
 
--- 2. ANAMNESIS
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS sexo TEXT CHECK (sexo IN ('Masculino', 'Femenino', 'Otro', ''));
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefono TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS ocupacion TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS demanda_vocal_horas INT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS derivador TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS notas_iniciales TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+
+-- 2. TABLA ANAMNESIS
 CREATE TABLE IF NOT EXISTS anamnesis (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
@@ -37,12 +39,12 @@ CREATE TABLE IF NOT EXISTS anamnesis (
     audio_url TEXT
 );
 
--- 3. EVALUACIONES CLÍNICAS (GRBAS, RASATI, VHI, TME, Riesgo)
+-- 3. TABLA EVALUACIONES CLÍNICAS
 CREATE TABLE IF NOT EXISTS evaluaciones_clinicas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
     anamnesis_id UUID REFERENCES anamnesis(id) ON DELETE SET NULL,
-    fecha TIMESTAMP WITH TIME O DEFAULT now(),
+    fecha TIMESTAMP WITH TIME ZONE DEFAULT now(),
     grbas JSONB DEFAULT '{}',
     rasati JSONB DEFAULT '{}',
     vhi10_score INT,
@@ -60,7 +62,7 @@ CREATE TABLE IF NOT EXISTS evaluaciones_clinicas (
     observaciones TEXT
 );
 
--- 4. ANÁLISIS ACÚSTICOS (Praat / Motor VocalisLab)
+-- 4. TABLA ANÁLISIS ACÚSTICOS
 CREATE TABLE IF NOT EXISTS analisis_acusticos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
@@ -98,7 +100,7 @@ CREATE TABLE IF NOT EXISTS analisis_acusticos (
     modo TEXT DEFAULT 'clinico'
 );
 
--- 5. CUADERNILLOS TERAPÉUTICOS
+-- 5. TABLA CUADERNILLOS TERAPÉUTICOS
 CREATE TABLE IF NOT EXISTS cuadernillos_paciente (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
@@ -115,7 +117,7 @@ CREATE TABLE IF NOT EXISTS cuadernillos_paciente (
     notas_profesional TEXT
 );
 
--- 6. AGENDA / TURNOS
+-- 6. TABLA AGENDA / TURNOS
 CREATE TABLE IF NOT EXISTS turnos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
@@ -127,7 +129,7 @@ CREATE TABLE IF NOT EXISTS turnos (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 7. ÍNDICES
+-- 7. ÍNDICES (con IF NOT EXISTS)
 CREATE INDEX IF NOT EXISTS idx_pacientes_dni ON pacientes(dni);
 CREATE INDEX IF NOT EXISTS idx_pacientes_activo ON pacientes(activo);
 CREATE INDEX IF NOT EXISTS idx_anamnesis_paciente ON anamnesis(paciente_id);
@@ -139,7 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_turnos_fecha ON turnos(fecha_hora);
 CREATE INDEX IF NOT EXISTS idx_turnos_paciente ON turnos(paciente_id);
 CREATE INDEX IF NOT EXISTS idx_turnos_estado ON turnos(estado);
 
--- 8. RLS (Row Level Security)
+-- 8. HABILITAR RLS
 ALTER TABLE pacientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE anamnesis ENABLE ROW LEVEL SECURITY;
 ALTER TABLE evaluaciones_clinicas ENABLE ROW LEVEL SECURITY;
@@ -147,15 +149,32 @@ ALTER TABLE analisis_acusticos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cuadernillos_paciente ENABLE ROW LEVEL SECURITY;
 ALTER TABLE turnos ENABLE ROW LEVEL SECURITY;
 
--- Políticas: acceso completo para service role (backend)
-CREATE POLICY "Service role full access" ON pacientes FOR ALL USING (true);
-CREATE POLICY "Service role full access" ON anamnesis FOR ALL USING (true);
-CREATE POLICY "Service role full access" ON evaluaciones_clinicas FOR ALL USING (true);
-CREATE POLICY "Service role full access" ON analisis_acusticos FOR ALL USING (true);
-CREATE POLICY "Service role full access" ON cuadernillos_paciente FOR ALL USING (true);
-CREATE POLICY "Service role full access" ON turnos FOR ALL USING (true);
+-- 9. POLÍTICAS RLS (Borrado preventivo antes de crear para evitar el error 42710)
+DO $$
+BEGIN
+    DROP POLICY IF EXISTS "Allow access to authenticated users" ON pacientes;
+    DROP POLICY IF EXISTS "Allow access to authenticated users" ON anamnesis;
+    DROP POLICY IF EXISTS "Allow access to authenticated users" ON evaluaciones_clinicas;
+    DROP POLICY IF EXISTS "Allow access to authenticated users" ON analisis_acusticos;
+    DROP POLICY IF EXISTS "Allow access to authenticated users" ON cuadernillos_paciente;
+    DROP POLICY IF EXISTS "Allow access to authenticated users" ON turnos;
 
--- 9. TRIGGER para updated_at
+    DROP POLICY IF EXISTS "Service role full access" ON pacientes;
+    DROP POLICY IF EXISTS "Service role full access" ON anamnesis;
+    DROP POLICY IF EXISTS "Service role full access" ON evaluaciones_clinicas;
+    DROP POLICY IF EXISTS "Service role full access" ON analisis_acusticos;
+    DROP POLICY IF EXISTS "Service role full access" ON cuadernillos_paciente;
+    DROP POLICY IF EXISTS "Service role full access" ON turnos;
+END $$;
+
+CREATE POLICY "Allow access to authenticated users" ON pacientes FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow access to authenticated users" ON anamnesis FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow access to authenticated users" ON evaluaciones_clinicas FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow access to authenticated users" ON analisis_acusticos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow access to authenticated users" ON cuadernillos_paciente FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow access to authenticated users" ON turnos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- 10. TRIGGER UPDATED_AT
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -164,6 +183,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_pacientes_updated_at ON pacientes;
 CREATE TRIGGER trigger_pacientes_updated_at
     BEFORE UPDATE ON pacientes
     FOR EACH ROW
