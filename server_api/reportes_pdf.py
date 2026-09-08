@@ -42,7 +42,7 @@ def _chart_from_b64(charts, key):
     return None
 
 
-def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path: str, charts: dict = None):
+def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path: str, charts: dict = None, cross_check: dict = None):
     doc = SimpleDocTemplate(pdf_path, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
 
@@ -250,20 +250,55 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
     elements.append(t_class)
     elements.append(Spacer(1, 8))
 
+    if cross_check and cross_check.get("perceptual_acoustic_consistency") != "N/D":
+        elements.append(Paragraph("<b>3.1 Correlación Percepción-Acústica (GRBAS vs Bioacústica)</b>", section_style))
+        consistency = cross_check.get("perceptual_acoustic_consistency", "")
+        consistency_color = "#22c55e" if consistency == "Consistente" else "#f97316"
+        elements.append(Paragraph(f'<font color="{consistency_color}"><b>Consistencia:</b></font> {consistency}', body_style))
+        elements.append(Spacer(1, 4))
+
+        if cross_check.get("acoustic_indicators"):
+            elements.append(Paragraph("<b>Indicadores acústicos relevantes:</b>", body_style))
+            for ind in cross_check["acoustic_indicators"][:5]:
+                elements.append(Paragraph(f"• {ind}", small_style))
+            elements.append(Spacer(1, 4))
+
+        if cross_check.get("pathology_matches"):
+            elements.append(Paragraph("<b>Perfiles clínicos compatibles (referencia, no diagnóstico):</b>", body_style))
+            for m in cross_check["pathology_matches"][:2]:
+                elements.append(Paragraph(
+                    f"• <b>{m['name']}</b> (coincidencia {m['match_score']}/3): {'; '.join(m['matching_indicators'])}",
+                    small_style
+                ))
+            elements.append(Spacer(1, 4))
+
+        if cross_check.get("clinical_observations"):
+            elements.append(Paragraph("<b>Observaciones clínicas:</b>", body_style))
+            for obs in cross_check["clinical_observations"][:2]:
+                elements.append(Paragraph(f"• {obs['pattern']}: {obs['suggestion']}", small_style))
+            elements.append(Spacer(1, 4))
+
+        if cross_check.get("alerts"):
+            elements.append(Paragraph('<font color="#f97316"><b>Alertas:</b></font>', body_style))
+            for alert in cross_check["alerts"][:3]:
+                elements.append(Paragraph(f'• <font color="#f97316">{alert}</font>', small_style))
+            elements.append(Spacer(1, 4))
+
     elements.append(Paragraph("<b>4. Gráficos Clínicos de Alta Resolución</b>", section_style))
     chart_embedded = False
     if charts:
-        for chart_key, chart_title in [
-            ("spectrogram_img", "Espectrograma de Banda Estrecha con F0 y Formantes"),
-            ("spectrum_img", "Espectro de Potencia FFT y Pendiente Espectral"),
-            ("ddf_img", "Diagrama de Dispersión Fonatoria (DDF)"),
-            ("radar_img", "VOXplot Radar — Severidad Multifactorial"),
+        for chart_key, chart_title, chart_h in [
+            ("spectrogram_img", "Espectrograma de Banda Estrecha con F0 y Formantes", 280),
+            ("spectrum_img", "Espectro de Potencia FFT y Pendiente Espectral", 280),
+            ("ddf_img", "Diagrama de Dispersión Fonatoria (DDF)", 280),
+            ("radar_img", "VOXplot Radar — Severidad Multifactorial", 350),
         ]:
             img_bytes = _chart_from_b64(charts, chart_key)
             if img_bytes:
                 elements.append(Spacer(1, 4))
                 elements.append(Paragraph(f"<b>{chart_title}</b>", small_style))
-                elements.append(RLImage(BytesIO(img_bytes), width=500, height=280))
+                chart_w = 400 if chart_key == "radar_img" else 500
+                elements.append(RLImage(BytesIO(img_bytes), width=chart_w, height=chart_h))
                 elements.append(Spacer(1, 6))
                 chart_embedded = True
     if not chart_embedded and os.path.exists(img_path):

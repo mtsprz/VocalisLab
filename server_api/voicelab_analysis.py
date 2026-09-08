@@ -806,7 +806,7 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
 
     # 1. Narrowband Spectrogram
     try:
-        fig1, ax1 = plt.subplots(figsize=(8, 3.2), dpi=150, facecolor="white")
+        fig1, ax1 = plt.subplots(figsize=(8, 3.5), dpi=150, facecolor="white")
         nfft = int(0.030 * sr)
         noverlap = int(nfft * 0.85)
         ax1.specgram(samples, Fs=sr, NFFT=nfft, noverlap=noverlap, cmap="Blues_r", vmin=-65, vmax=15)
@@ -840,7 +840,7 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
 
     # 2. FFT Power Spectrum & Tilt
     try:
-        fig2, ax2 = plt.subplots(figsize=(8, 3.2), dpi=150, facecolor="white")
+        fig2, ax2 = plt.subplots(figsize=(8, 3.5), dpi=150, facecolor="white")
         part = sound.extract_part(from_time=0.1, to_time=max(0.3, dur - 0.1), preserve_times=True)
         spec = part.to_spectrum()
         s_freqs = np.array(spec.xs())
@@ -880,7 +880,7 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
     # 3. DDF (CPPS vs HNR)
     try:
         from matplotlib.patches import Polygon
-        fig3, ax3 = plt.subplots(figsize=(7, 3.5), dpi=150, facecolor="white")
+        fig3, ax3 = plt.subplots(figsize=(8, 3.5), dpi=150, facecolor="white")
 
         norm_poly = Polygon([[14.5, 20], [30, 20], [30, 40], [14.5, 40]], closed=True, color="#22c55e", alpha=0.18, label="Normal")
         ax3.add_patch(norm_poly)
@@ -912,7 +912,7 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
 
     # 4. VOXplot Radar (6-axis polar)
     try:
-        fig4, ax4 = plt.subplots(figsize=(5.5, 5.5), dpi=150, facecolor="white", subplot_kw={"projection": "polar"})
+        fig4, ax4 = plt.subplots(figsize=(6, 6), dpi=150, facecolor="white", subplot_kw={"projection": "polar"})
         categories = ["AVQI", "ABI", "GNE", "CPPS", "Jitter\nppq5", "HNR"]
         N = len(categories)
         angles = [n / float(N) * 2 * np.pi for n in range(N)]

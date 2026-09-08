@@ -642,6 +642,7 @@ export default function VocalisLabModule() {
             voxplot={r.voxplot || {}}
             charts={r.charts || {}}
             avqiStatus={r.avqiStatus || 'ok'}
+            crossCheck={r.crossCheck || {}}
             modo={r.modo || 'clinico'}
             onViewJson={() => setShowJson(true)}
             onViewCsv={() => {

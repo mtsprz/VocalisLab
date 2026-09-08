@@ -48,6 +48,7 @@ interface ClinicalReviewProps {
   voxplot?: any;
   charts?: any;
   avqiStatus?: string;
+  crossCheck?: any;
   modo: string;
   onViewJson?: () => void;
   onViewCsv?: () => void;
@@ -348,6 +349,88 @@ export default function ClinicalReviewScreen({
           )}
         </div>
       </SectionBlock>
+
+      {/* BLOCK C2: Cross-check Percepción-Acústica */}
+      {crossCheck && crossCheck.perceptual_acoustic_consistency !== 'N/D' && (
+        <SectionBlock
+          title="C2. Correlación Percepción-Acústica (GRBAS vs Bioacústica)"
+          icon={Activity}
+          expanded={expandedSections.has('crosscheck')}
+          onToggle={() => toggle('crosscheck')}
+          badge={crossCheck.perceptual_acoustic_consistency === 'Consistente' ? 'Consistente' : 'Inconsistencia'}
+          badgeColor={crossCheck.perceptual_acoustic_consistency === 'Consistente' ? 'text-emerald-400' : 'text-yellow-400'}
+        >
+          <div className={`p-3 rounded-lg border mb-3 ${
+            crossCheck.perceptual_acoustic_consistency === 'Consistente'
+              ? 'bg-emerald-500/10 border-emerald-500/30'
+              : 'bg-yellow-500/10 border-yellow-500/30'
+          }`}>
+            <div className="text-xs font-bold text-slate-200 mb-1">Consistencia Percepción-Acústica</div>
+            <div className={`text-sm font-semibold ${
+              crossCheck.perceptual_acoustic_consistency === 'Consistente' ? 'text-emerald-400' : 'text-yellow-400'
+            }`}>{crossCheck.perceptual_acoustic_consistency}</div>
+          </div>
+
+          {crossCheck.acoustic_indicators && crossCheck.acoustic_indicators.length > 0 && (
+            <div className="mb-3">
+              <div className="text-xs font-bold text-slate-300 mb-1.5">Indicadores Acústicos Relevantes</div>
+              <div className="space-y-1">
+                {crossCheck.acoustic_indicators.slice(0, 5).map((ind: string, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-slate-300 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-slate-700/50">
+                    <Activity className="w-3 h-3 text-sky-400 mt-0.5 shrink-0" />
+                    <span>{ind}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {crossCheck.pathology_matches && crossCheck.pathology_matches.length > 0 && (
+            <div className="mb-3">
+              <div className="text-xs font-bold text-slate-300 mb-1.5">Perfiles Clínicos Compatibles (referencia)</div>
+              <div className="space-y-1.5">
+                {crossCheck.pathology_matches.slice(0, 2).map((m: any, i: number) => (
+                  <div key={i} className="bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-sky-300">{m.name}</span>
+                      <span className="text-[10px] text-slate-500">coincidencia {m.match_score}/3</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">{m.matching_indicators?.join('; ')}</div>
+                    {m.clinical_notes && <div className="text-[10px] text-slate-500 mt-1 italic">{m.clinical_notes}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {crossCheck.clinical_observations && crossCheck.clinical_observations.length > 0 && (
+            <div className="mb-3">
+              <div className="text-xs font-bold text-slate-300 mb-1.5">Observaciones Clínicas</div>
+              <div className="space-y-1">
+                {crossCheck.clinical_observations.slice(0, 2).map((obs: any, i: number) => (
+                  <div key={i} className="bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-700/50">
+                    <div className="text-xs text-slate-200 font-semibold">{obs.pattern}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Etiologías: {obs.etiologies?.join(', ')}</div>
+                    <div className="text-[10px] text-sky-400 mt-0.5">{obs.suggestion}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {crossCheck.alerts && crossCheck.alerts.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs font-bold text-yellow-400 mb-1">Alertas</div>
+              {crossCheck.alerts.slice(0, 3).map((alert: string, i: number) => (
+                <div key={i} className="flex items-start gap-2 text-xs text-yellow-300 bg-yellow-500/10 rounded-lg px-3 py-1.5 border border-yellow-500/30">
+                  <AlertTriangle className="w-3 h-3 text-yellow-400 mt-0.5 shrink-0" />
+                  <span>{alert}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionBlock>
+      )}
 
       {/* BLOCK D: Audit */}
       <SectionBlock

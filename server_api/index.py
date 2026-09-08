@@ -15,6 +15,199 @@ sys.path.insert(0, os.path.dirname(__file__))
 from voicelab_analysis import analisis_completo, validar_audio_completo
 from reportes_pdf import generar_pdf_clinico
 
+DB_PATH = os.path.join(os.path.dirname(__file__), "vocal_pathology_db.json")
+
+def _load_pathology_db() -> dict:
+    try:
+        with open(DB_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _cross_check_acoustics_vs_perceptual(metrics: dict, grbas: dict, rasati: dict, db: dict) -> dict:
+    """Cross-check acoustic measurements with GRBAS/RASATI perceptual scales using the pathology database."""
+    result = {
+        "acoustic_indicators": [],
+        "pathology_matches": [],
+        "perceptual_acoustic_consistency": "N/D",
+        "clinical_observations": [],
+        "alerts": [],
+    }
+
+    corr = db.get("grbas_acoustic_correlation", {})
+    rules = db.get("clinical_interpretation_rules", {})
+    paths = db.get("pathology_profiles", {})
+
+    f0 = metrics.get("f0_mean")
+    jitter = metrics.get("jitter_local_pct")
+    shimmer = metrics.get("shimmer_local_pct")
+    hnr = metrics.get("hnr_db")
+    cpps = metrics.get("cpps_db")
+    nhr = metrics.get("nhr")
+    nne = metrics.get("nne_db")
+    tilt_slope = None
+    spectral_data = metrics.get("spectral") if isinstance(metrics.get("spectral"), dict) else None
+    if spectral_data:
+        tilt_slope = spectral_data.get("spectral_tilt_slope")
+
+    g_val = grbas.get("G", 0)
+    r_val = grbas.get("R", 0)
+    b_val = grbas.get("B", 0)
+    a_val = grbas.get("A", 0)
+    s_val = grbas.get("S", 0)
+
+    if g_val == 0 and jitter is not None and shimmer is not None:
+        if jitter > 1.5 or shimmer > 5.0:
+            result["alerts"].append("GRBAS G=0 pero jitter/shimmer elevados: posible subdiagnóstico perceptual o fase temprana.")
+    if g_val >= 2 and jitter is not None and jitter < 0.5 and shimmer is not None and shimmer < 3.0:
+        result["alerts"].append("GRBAS G≥2 pero jitter/shimmer dentro de norma: considerar factores psicogénicos o fatiga intermitente.")
+
+    if r_val >= 2:
+        if cpps is not None and cpps < 10:
+            result["acoustic_indicators"].append("CPPS bajo (<10 dB): correlaciona con R≥2 (ronquedad moderada-severa).")
+        if hnr is not None and hnr < 15:
+            result["acoustic_indicators"].append("HNR bajo (<15 dB): indica componente aperiódico significativo.")
+    if r_val == 0:
+        if cpps is not None and cpps < 14.47:
+            result["alerts"].append("R=0 pero CPPS bajo: posible ronquedad subclínica no percibida.")
+        if hnr is not None and hnr < 18:
+            result["alerts"].append("R=0 pero HNR borderline: componente de ruido presente pero no percibido.")
+
+    if b_val >= 2:
+        if hnr is not None and hnr < 12:
+            result["acoustic_indicators"].append("HNR bajo (<12 dB): correlaciona con B≥2 (breathiness moderada-severa).")
+        if nhr is not None and nhr > 0.15:
+            result["acoustic_indicators"].append("NHR alto (>0.15): confirma componente de ruido respiratorio.")
+    if b_val == 0:
+        if hnr is not None and hnr < 15:
+            result["alerts"].append("B=0 pero HNR<15 dB: posible breathiness subclínica.")
+
+    if a_val >= 2:
+        if f0 is not None:
+            result["acoustic_indicators"].append(f"F0={f0} Hz: evaluar rango dinámico paraasténico (A≥2).")
+    if s_val >= 2:
+        if jitter is not None and jitter > 2.0:
+            result["acoustic_indicators"].append("Jitter elevado (>2%): correlaciona con S≥2 (tensión).")
+
+    matched_paths = []
+    for key, prof in paths.items():
+        score = 0
+        notes = []
+        pattern = prof.get("acoustic_pattern", {})
+        exp_grbas = prof.get("expected_grbas", {})
+
+        if jitter is not None:
+            if "aumento_moderado" in pattern.get("jitter", "") or "aumento_severo" in pattern.get("jitter", ""):
+                if jitter > 1.5:
+                    score += 1
+                    notes.append(f"Jitter ({jitter}%) >1.5%")
+            if "leve_aumento" in pattern.get("jitter", ""):
+                if 0.5 < jitter <= 1.5:
+                    score += 0.5
+
+        if shimmer is not None:
+            if "aumento_moderado" in pattern.get("shimmer", "") or "aumento_severo" in pattern.get("shimmer", ""):
+                if shimmer > 5.0:
+                    score += 1
+                    notes.append(f"Shimmer ({shimmer}%) >5%")
+            if "leve_aumento" in pattern.get("shimmer", ""):
+                if 3.0 < shimmer <= 5.0:
+                    score += 0.5
+
+        if hnr is not None:
+            if "disminuido" in pattern.get("hnr", "") or "severamente_disminuido" in pattern.get("hnr", ""):
+                if hnr < 15:
+                    score += 1
+                    notes.append(f"HNR ({hnr} dB) <15 dB")
+            if "leve_disminución" in pattern.get("hnr", ""):
+                if 15 <= hnr < 20:
+                    score += 0.5
+
+        if cpps is not None:
+            if "disminuido" in pattern.get("cpps", "") or "severamente_disminuido" in pattern.get("cpps", ""):
+                if cpps < 12:
+                    score += 1
+                    notes.append(f"CPPS ({cpps} dB) <12 dB")
+            if "leve_disminución" in pattern.get("cpps", ""):
+                if 10 <= cpps < 14.47:
+                    score += 0.5
+
+        if score >= 2:
+            matched_paths.append({
+                "key": key,
+                "name": prof["name"],
+                "match_score": round(score, 1),
+                "matching_indicators": notes,
+                "clinical_notes": prof.get("clinical_notes", ""),
+            })
+
+    matched_paths.sort(key=lambda x: x["match_score"], reverse=True)
+    result["pathology_matches"] = matched_paths[:3]
+
+    for rule_key, rule in rules.items():
+        cond = rule.get("pattern", "")
+        if rule_key == "high_jitter_high_shimmer":
+            if jitter is not None and shimmer is None:
+                continue
+            if jitter is not None and shimmer is not None and jitter > 1.5 and shimmer > 5.0:
+                result["clinical_observations"].append({
+                    "pattern": cond,
+                    "etiologies": rule.get("possible_etiologies", []),
+                    "suggestion": rule.get("clinical_suggestion", ""),
+                })
+        elif rule_key == "low_hnr_low_cpps":
+            if hnr is not None and cpps is not None and hnr < 15 and cpps < 12:
+                result["clinical_observations"].append({
+                    "pattern": cond,
+                    "etiologies": rule.get("possible_etiologies", []),
+                    "suggestion": rule.get("clinical_suggestion", ""),
+                })
+        elif rule_key == "high_jitter_normal_shimmer":
+            if jitter is not None and shimmer is not None and jitter > 1.5 and shimmer <= 3.81:
+                result["clinical_observations"].append({
+                    "pattern": cond,
+                    "etiologies": rule.get("possible_etiologies", []),
+                    "suggestion": rule.get("clinical_suggestion", ""),
+                })
+        elif rule_key == "normal_jitter_high_shimmer":
+            if jitter is not None and shimmer is not None and jitter <= 1.04 and shimmer > 5.0:
+                result["clinical_observations"].append({
+                    "pattern": cond,
+                    "etiologies": rule.get("possible_etiologies", []),
+                    "suggestion": rule.get("clinical_suggestion", ""),
+                })
+        elif rule_key == "very_low_f0_female":
+            if f0 is not None and f0 < 140:
+                result["clinical_observations"].append({
+                    "pattern": cond,
+                    "etiologies": rule.get("possible_etiologies", []),
+                    "suggestion": rule.get("clinical_suggestion", ""),
+                })
+        elif rule_key == "very_high_f0_male":
+            if f0 is not None and f0 > 250:
+                result["clinical_observations"].append({
+                    "pattern": cond,
+                    "etiologies": rule.get("possible_etiologies", []),
+                    "suggestion": rule.get("clinical_suggestion", ""),
+                })
+
+    if grbas and f0 is not None and jitter is not None:
+        acoustic_score = 0
+        if jitter > 1.5: acoustic_score += 1
+        if shimmer is not None and shimmer > 5.0: acoustic_score += 1
+        if hnr is not None and hnr < 15: acoustic_score += 1
+        if cpps is not None and cpps < 12: acoustic_score += 1
+        perceptual_score = g_val
+
+        if abs(acoustic_score - perceptual_score) <= 1:
+            result["perceptual_acoustic_consistency"] = "Consistente"
+        elif acoustic_score > perceptual_score:
+            result["perceptual_acoustic_consistency"] = "Acústica sugiere mayor severidad que la percepción"
+        else:
+            result["perceptual_acoustic_consistency"] = "Percepción sugiere mayor severidad que la acústica"
+
+    return result
+
 app = FastAPI(title="VocalisLab Bioacoustic API")
 
 app.add_middleware(
@@ -198,6 +391,10 @@ async def analizar(
     json_export = resultado.get("json_export", {})
     csv_export = resultado.get("csv_export", [])
 
+    # --- Cross-check acoustics vs GRBAS/RASATI ---
+    pathology_db = _load_pathology_db()
+    cross_check = _cross_check_acoustics_vs_perceptual(metrics_raw, {}, {}, pathology_db)
+
     metrics = {
         "f0_mean": metrics_raw.get("f0_mean"),
         "f0_min": metrics_raw.get("f0_min"),
@@ -265,6 +462,7 @@ async def analizar(
         "classifications": resultado.get("classifications", {}),
         "voxplot": resultado.get("voxplot", {}),
         "charts": resultado.get("charts", {}),
+        "crossCheck": cross_check,
         "jsonExport": json_export,
         "csvExport": json.dumps(csv_export),
     }
@@ -333,6 +531,21 @@ async def analizar_y_reportar(
     metrics = resultado.get("metrics", {})
     audio_info = resultado.get("audio", {})
 
+    # --- Cross-check acoustics vs GRBAS/RASATI ---
+    pathology_db = _load_pathology_db()
+    g_dict = {}
+    r_dict = {}
+    try:
+        g_dict = json.loads(grbas) if grbas.startswith('{') else {}
+    except Exception:
+        pass
+    try:
+        r_dict = json.loads(rasati) if rasati.startswith('{') else {}
+    except Exception:
+        pass
+
+    cross_check = _cross_check_acoustics_vs_perceptual(metrics, g_dict, r_dict, pathology_db)
+
     sintesis_ia = ""
     groq_key = os.environ.get("GROQ_API_KEY")
     if groq_key:
@@ -340,36 +553,63 @@ async def analizar_y_reportar(
             from groq import Groq
             client = Groq(api_key=groq_key)
             avqi_str = str(resultado.get("avqi_components", {}).get("avqi", "N/D"))
+            avqi_status = resultado.get("avqi_components", {}).get("status", "ok")
+
+            cc_text = ""
+            if cross_check.get("acoustic_indicators"):
+                cc_text += "\nIndicadores acústicos relevantes:\n" + "\n".join(f"- {x}" for x in cross_check["acoustic_indicators"])
+            if cross_check.get("pathology_matches"):
+                cc_text += "\n\nPerfiles clínicos compatibles (no diagnósticos):\n"
+                for m in cross_check["pathology_matches"][:2]:
+                    cc_text += f"- {m['name']} (coincidencia {m['match_score']}/3): {'; '.join(m['matching_indicators'])}\n  Nota: {m['clinical_notes']}\n"
+            if cross_check.get("clinical_observations"):
+                cc_text += "\nObservaciones clínicas:\n"
+                for obs in cross_check["clinical_observations"][:2]:
+                    cc_text += f"- Patrón: {obs['pattern']}\n  Etiologías posibles: {', '.join(obs['etiologies'])}\n  Sugerencia: {obs['suggestion']}\n"
+            if cross_check.get("alerts"):
+                cc_text += "\nAlertas:\n" + "\n".join(f"- {a}" for a in cross_check["alerts"])
+            if cross_check.get("perceptual_acoustic_consistency") != "N/D":
+                cc_text += f"\n\nConsistencia percepción-acústica: {cross_check['perceptual_acoustic_consistency']}"
+
+            grbas_line = f"GRBAS: G{g_dict.get('G',0)} R{g_dict.get('R',0)} B{g_dict.get('B',0)} A{g_dict.get('A',0)} S{g_dict.get('S',0)}" if g_dict else "GRBAS no disponible"
+            rasati_line = f"RASATI: R{r_dict.get('R',0)} A{r_dict.get('A',0)} S{r_dict.get('S',0)} A2{r_dict.get('A2',0)} T{r_dict.get('T',0)} I{r_dict.get('I',0)}" if r_dict else "RASATI no disponible"
+
             prompt = (
-                f"Actúa como Fonoaudiólogo especialista en voz. NO emitas diagnóstico etiológico médicos "
-                f"(ej. 'el paciente tiene pólipo'). Solo describe el patrón acústico fonoaudiológico.\n\n"
-                f"Paciente: {nombre} ({edad} años, {sexo}). Motivo: {motivo}.\n\n"
-                f"Resultados bioacústicos:\n"
-                f"- F0 media: {metrics.get('f0_mean', 'N/D')} Hz (mín: {metrics.get('f0_min', 'N/D')}, máx: {metrics.get('f0_max', 'N/D')}, DE: {metrics.get('f0_sd', 'N/D')})\n"
-                f"- Jitter local: {metrics.get('jitter_local_pct', 'N/D')}%\n"
-                f"- Jitter RAP: {metrics.get('jitter_rap_pct', 'N/D')}%\n"
-                f"- Jitter PPQ5: {metrics.get('jitter_ppq5_pct', 'N/D')}%\n"
-                f"- Jitter DDP: {metrics.get('jitter_ddp_pct', 'N/D')}%\n"
-                f"- Shimmer local: {metrics.get('shimmer_local_pct', 'N/D')}% ({metrics.get('shimmer_local_db', 'N/D')} dB)\n"
-                f"- Shimmer APQ3: {metrics.get('shimmer_apq3_pct', 'N/D')}%\n"
-                f"- Shimmer APQ5: {metrics.get('shimmer_apq5_pct', 'N/D')}%\n"
-                f"- Shimmer APQ11: {metrics.get('shimmer_apq11_pct', 'N/D')}%\n"
-                f"- Shimmer DDA: {metrics.get('shimmer_dda_pct', 'N/D')}%\n"
-                f"- HNR: {metrics.get('hnr_db', 'N/D')} dB\n"
-                f"- CPPS: {metrics.get('cpps_db', 'N/D')} dB\n"
-                f"- NNE: {metrics.get('nne_db', 'N/D')} dB\n"
-                f"- NHR: {metrics.get('nhr', 'N/D')}\n"
-                f"- Formantes: F1={metrics.get('f1_hz', 'N/D')}, F2={metrics.get('f2_hz', 'N/D')}, F3={metrics.get('f3_hz', 'N/D')}, F4={metrics.get('f4_hz', 'N/D')}\n"
-                f"- Pendiente espectral: {resultado.get('spectral', {}).get('spectral_tilt_slope', 'N/D')}\n"
-                f"- AVQI v03.01: {avqi_str}\n\n"
-                f"Tono técnico formal en español latinoamericano.\n"
-                f"Indica que se trata de mediciones instrumentales que requieren correlación clínica."
+                f"Eres un sistema de apoyo fonoaudiológico clínico. Actúa como Fonoaudiólogo especialista en voz.\n\n"
+                f"IMPORTANTE: NO emitas diagnóstico médico etiológico (ej. 'nodo cordal', 'pólipo'). "
+                f"Describe el PATRÓN ACÚSTICO FONOAUDIOLÓGICO y su correlación con la evaluación perceptual.\n"
+                f"El informe es para ser revisado por el profesional tratante.\n\n"
+                f"--- DATOS DEL PACIENTE ---\n"
+                f"Nombre: {nombre} | Edad: {edad} años | Sexo: {sexo}\n"
+                f"Motivo de consulta: {motivo}\n"
+                f"Derivador: {derivador}\n"
+                f"Tiempo máximo de fonación (TMF): {tmf} s\n\n"
+                f"--- EVALUACIÓN PERCEPTUAL ---\n"
+                f"{grbas_line}\n"
+                f"{rasati_line}\n\n"
+                f"--- MEDICIONES BIOACÚSTICAS (Parselmouth/VoiceLab) ---\n"
+                f"F0 media: {metrics.get('f0_mean', 'N/D')} Hz | Mín: {metrics.get('f0_min', 'N/D')} | Máx: {metrics.get('f0_max', 'N/D')} | DE: {metrics.get('f0_sd', 'N/D')} | Rango: {metrics.get('f0_range', 'N/D')} Hz\n"
+                f"Jitter: local={metrics.get('jitter_local_pct', 'N/D')}% | RAP={metrics.get('jitter_rap_pct', 'N/D')}% | PPQ5={metrics.get('jitter_ppq5_pct', 'N/D')}% | DDP={metrics.get('jitter_ddp_pct', 'N/D')}%\n"
+                f"Shimmer: local={metrics.get('shimmer_local_pct', 'N/D')}% ({metrics.get('shimmer_local_db', 'N/D')} dB) | APQ3={metrics.get('shimmer_apq3_pct', 'N/D')}% | APQ5={metrics.get('shimmer_apq5_pct', 'N/D')}% | APQ11={metrics.get('shimmer_apq11_pct', 'N/D')}%\n"
+                f"HNR: {metrics.get('hnr_db', 'N/D')} dB | CPPS: {metrics.get('cpps_db', 'N/D')} dB\n"
+                f"NHR: {metrics.get('nhr', 'N/D')} | NNE: {metrics.get('nne_db', 'N/D')} dB\n"
+                f"Formantes: F1={metrics.get('f1_hz', 'N/D')} | F2={metrics.get('f2_hz', 'N/D')} | F3={metrics.get('f3_hz', 'N/D')} | F4={metrics.get('f4_hz', 'N/D')}\n"
+                f"Pendiente espectral: {resultado.get('spectral', {}).get('spectral_tilt_slope', 'N/D')}\n"
+                f"AVQI v03.01: {avqi_str} (Estado: {avqi_status})\n"
+                f"{cc_text}\n\n"
+                f"--- INSTRUCCIONES PARA EL INFORME ---\n"
+                f"1. Correlaciona los hallazgos acústicos con la escala GRBAS ingresada.\n"
+                f"2. Si hay inconsistencia entre percepción y acústica, señálala como hallazgo clínico relevante.\n"
+                f"3. Describe qué parámetros acústicos sugieren qué tipo de alteración fonoaudiológica (ronquedad, breathiness, astenia, tensión).\n"
+                f"4. Indica qué estudios complementarios podrían complementar la evaluación.\n"
+                f"5. Formato: 3-4 párrafos, tono formal técnico fonoaudiológico latinoamericano.\n"
+                f"6. Incluye al final: 'Interpretación generada por IA — Requiere correlación clínica del profesional tratante.'\n"
             )
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="llama-3.3-70b-versatile",
-                temperature=0.2,
-                max_tokens=400,
+                temperature=0.15,
+                max_tokens=600,
             )
             sintesis_ia = chat_completion.choices[0].message.content
         except Exception as e:
@@ -431,7 +671,7 @@ async def analizar_y_reportar(
             "parselmouth_version": resultado.get("parselmouth_version", "0.4.3"),
             "praat_script": f"VoiceLab/{resultado.get('voicelab_version', '2.0.0')}",
         }
-        generar_pdf_clinico(paciente_dict, metricas_pdf, img_path, pdf_path, charts=charts)
+        generar_pdf_clinico(paciente_dict, metricas_pdf, img_path, pdf_path, charts=charts, cross_check=cross_check)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error al generar el PDF: {str(e)}")

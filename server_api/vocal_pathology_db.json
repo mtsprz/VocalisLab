@@ -1,0 +1,236 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Base de conocimiento clínico fonoaudiológico para análisis bioacústico de la voz",
+    "references": [
+      "Titze, I.R. (1994). Principles of Voice Production.",
+      "Cecconello, A. et al. Aplicación del análisis acústico en la clínica vocal.",
+      "Maryn, Y. et al. (2010). The Acoustic Voice Quality Index (AVQI).",
+      "Yanagihara, N. (1967). Significance of harmonic changes and noise components in hoarseness.",
+      "Núñez Batalla, F. et al. Índice de astenia vocal.",
+      "Feinberg, D. (2022). VoiceLab. Proc. Interspeech 2022."
+    ]
+  },
+  "normative_ranges": {
+    "adult_female": {
+      "f0_mean_hz": {"min": 165, "max": 255, "typical": 210, "unit": "Hz"},
+      "jitter_local_pct": {"max_normal": 1.04, "mild": 2.0, "moderate": 3.0, "unit": "%"},
+      "shimmer_local_pct": {"max_normal": 3.81, "mild": 5.0, "moderate": 7.0, "unit": "%"},
+      "shimmer_db": {"max_normal": 0.5, "mild": 1.0, "moderate": 2.0, "unit": "dB"},
+      "hnr_db": {"min_normal": 20, "mild_loss": 15, "moderate_loss": 10, "unit": "dB"},
+      "cpps_db": {"min_normal": 14.47, "mild_loss": 10, "moderate_loss": 5.5, "unit": "dB"},
+      "nne_db": {"max_normal": 1.5, "mild": 2.5, "moderate": 3.5, "unit": "dB"},
+      "nhr": {"max_normal": 0.05, "mild": 0.15, "moderate": 0.25, "unit": ""},
+      "jitter_rap_pct": {"max_normal": 1.04, "mild": 2.0, "moderate": 3.0, "unit": "%"},
+      "jitter_ppq5_pct": {"max_normal": 0.5, "mild": 1.0, "moderate": 1.5, "unit": "%"},
+      "shimmer_apq3_pct": {"max_normal": 3.0, "mild": 4.5, "moderate": 6.0, "unit": "%"},
+      "shimmer_apq5_pct": {"max_normal": 2.5, "mild": 4.0, "moderate": 6.0, "unit": "%"},
+      "shimmer_apq11_pct": {"max_normal": 3.0, "mild": 5.0, "moderate": 7.0, "unit": "%"}
+    },
+    "adult_male": {
+      "f0_mean_hz": {"min": 85, "max": 180, "typical": 120, "unit": "Hz"},
+      "jitter_local_pct": {"max_normal": 1.04, "mild": 2.0, "moderate": 3.0, "unit": "%"},
+      "shimmer_local_pct": {"max_normal": 3.81, "mild": 5.0, "moderate": 7.0, "unit": "%"},
+      "shimmer_db": {"max_normal": 0.5, "mild": 1.0, "moderate": 2.0, "unit": "dB"},
+      "hnr_db": {"min_normal": 20, "mild_loss": 15, "moderate_loss": 10, "unit": "dB"},
+      "cpps_db": {"min_normal": 14.47, "mild_loss": 10, "moderate_loss": 5.5, "unit": "dB"},
+      "nne_db": {"max_normal": 1.5, "mild": 2.5, "moderate": 3.5, "unit": "dB"},
+      "nhr": {"max_normal": 0.05, "mild": 0.15, "moderate": 0.25, "unit": ""},
+      "jitter_rap_pct": {"max_normal": 1.04, "mild": 2.0, "moderate": 3.0, "unit": "%"},
+      "jitter_ppq5_pct": {"max_normal": 0.5, "mild": 1.0, "moderate": 1.5, "unit": "%"},
+      "shimmer_apq3_pct": {"max_normal": 3.0, "mild": 4.5, "moderate": 6.0, "unit": "%"},
+      "shimmer_apq5_pct": {"max_normal": 2.5, "mild": 4.0, "moderate": 6.0, "unit": "%"},
+      "shimmer_apq11_pct": {"max_normal": 3.0, "mild": 5.0, "moderate": 7.0, "unit": "%"}
+    }
+  },
+  "pathology_profiles": {
+    "nodo_cordial": {
+      "name": "Nodo Cordal",
+      "description": "Lesión benigna de masa en el borde libre de las cuerdas vocales",
+      "acoustic_pattern": {
+        "f0_tendency": "ligeramente_elevada_o_normal",
+        "jitter": "leve_a_moderado_aumento",
+        "shimmer": "leve_a_moderado_aumento",
+        "hnr": "disminuido",
+        "cpps": "disminuido",
+        "spectral_tilt": "empinado",
+        "formants": "pueden estar alterados por la masa"
+      },
+      "expected_grbas": {"G": [1, 2], "R": [1, 2], "B": [0, 1], "A": [0, 1], "S": [0, 1]},
+      "clinical_notes": "La presencia de una masa interpone una interferencia en la vibración mucosa, generando irregularidades cíclicas y aperiódicas."
+    },
+    "polipo_vocal": {
+      "name": "Pólipo Vocal",
+      "description": "Lesión benigna pediculada o sésil, generalmente unilateral",
+      "acoustic_pattern": {
+        "f0_tendency": "puede estar_normal_o_ligeramente_disminuida",
+        "jitter": "aumento_moderado",
+        "shimmer": "aumento_moderado_a_severo",
+        "hnr": "disminuido_moderado",
+        "cpps": "disminuido",
+        "spectral_tilt": "empinado",
+        "formants": "alterados por la masa"
+      },
+      "expected_grbas": {"G": [2, 3], "R": [1, 2], "B": [1, 2], "A": [0, 1], "S": [0, 1]},
+      "clinical_notes": "El pólipo genera una vibración asimétrica con componente de ruido predominante. La evaluación perceptual suele mostrar ronquedad."
+    },
+    "edema_reinkes": {
+      "name": "Edema de Reinkes",
+      "description": "Acumulación de líquido en la capa de Reinke (lámina propria superficial)",
+      "acoustic_pattern": {
+        "f0_tendency": "disminuida",
+        "jitter": "leve_aumento",
+        "shimmer": "aumento_leve",
+        "hnr": "leve_disminución",
+        "cpps": "leve_disminución",
+        "spectral_tilt": "menos_empinado_que_nodo",
+        "formants": "pueden estar_normalizados"
+      },
+      "expected_grbas": {"G": [1, 2], "R": [1, 2], "B": [1, 2], "A": [0, 1], "S": [0, 1]},
+      "clinical_notes": "El edema de Reinke produce una voz de tono grave ('voz de fumador') con componente de breathiness por cierre incompleto."
+    },
+    "paralisis_cuerda_vocal": {
+      "name": "Parálisis de Cuerda Vocal",
+      "description": "Inmovilidad de una o ambas cuerdas vocales por lesión del nervio laríngeo recurrente o superior",
+      "acoustic_pattern": {
+        "f0_tendency": "disminuida_o_inestable",
+        "jitter": "aumento_moderado_a_severo",
+        "shimmer": "aumento_severo",
+        "hnr": "severamente_disminuido",
+        "cpps": "severamente_disminuido",
+        "spectral_tilt": "muy_empinado",
+        "formants": "pueden estar_alterados",
+        "voice_breaks": "frecuentes"
+      },
+      "expected_grbas": {"G": [2, 3], "R": [1, 3], "B": [2, 3], "A": [1, 3], "S": [1, 2]},
+      "clinical_notes": "La incompletitud del cierre glótico genera fuga de aire y componente de ruido predominante. Puede haber aspiración de saliva."
+    },
+    "disfoniaespasmodica": {
+      "name": "Disfonía Espasmódica",
+      "description": "Trastorno distónico focal que afecta los músculos intrínsecos de la laringe",
+      "acoustic_pattern": {
+        "f0_tendency": "inestable_con_cambios_bruscos",
+        "jitter": "altamente_variable",
+        "shimmer": "altamente_variable",
+        "hnr": "variable",
+        "cpps": "variable",
+        "spectral_tilt": "inestable",
+        "formants": "inestables"
+      },
+      "expected_grbas": {"G": [2, 3], "R": [0, 1], "B": [0, 1], "A": [0, 1], "S": [0, 2]},
+      "clinical_notes": "Los espasmos laringeos generan interrupciones bruscas del flujo fonatorio. La voz puede sonar normal entre episodios."
+    },
+    "laringitis_cronica": {
+      "name": "Laringitis Crónica / Edema Vocal",
+      "description": "Inflamación crónica de las cuerdas vocales por reflujo, irritación o hábitos vocales",
+      "acoustic_pattern": {
+        "f0_tendency": "normal_o_ligeramente_disminuida",
+        "jitter": "leve_aumento",
+        "shimmer": "leve_aumento",
+        "hnr": "leve_disminución",
+        "cpps": "leve_disminución",
+        "spectral_tilt": "ligeramente_empinado"
+      },
+      "expected_grbas": {"G": [1, 2], "R": [0, 1], "B": [0, 1], "A": [0, 1], "S": [0, 1]},
+      "clinical_notes": "El edema crónico engrosa la mucosa y afecta la onda mucosa. Generalmente responde a tratamiento conservador."
+    },
+    "presbifonia": {
+      "name": "Presbifonia",
+      "description": "Cambios vocales asociados al envejecimiento de la laringe",
+      "acoustic_pattern": {
+        "f0_tendency": "aumento_en_mujeres_disminucion_en_hombres",
+        "jitter": "aumento_leve",
+        "shimmer": "aumento_leve",
+        "hnr": "leve_disminución",
+        "cpps": "leve_disminución",
+        "spectral_tilt": "ligeramente_empinado"
+      },
+      "expected_grbas": {"G": [1, 2], "R": [0, 1], "B": [1, 2], "A": [0, 1], "S": [0, 1]},
+      "clinical_notes": "La atrofia muscular y la rigidez tisular reducen la excursión vibratoria y aumentan la fuga de aire."
+    },
+    "tension_muscular": {
+      "name": "Disfonía por Tensión Muscular",
+      "description": "Uso inadecuado de los músculos extrínsecos de la laringe durante la fonación",
+      "acoustic_pattern": {
+        "f0_tendency": "puede_elevarse_o_ser_inestable",
+        "jitter": "aumento_leve_a_moderado",
+        "shimmer": "normal_o_leve_aumento",
+        "hnr": "leve_disminución",
+        "cpps": "normal_o_leve_disminución",
+        "spectral_tilt": "normal_o_ligeramente_empinado"
+      },
+      "expected_grbas": {"G": [1, 2], "R": [0, 1], "B": [0, 1], "A": [0, 1], "S": [0, 1]},
+      "clinical_notes": "La hiperfunción muscular genera tensión en el margen vocal y puede confundirse con un nodo en estadio temprano."
+    }
+  },
+  "grbas_acoustic_correlation": {
+    "description": "Correlación entre escala GRBAS (perceptual) y medidas bioacústicas",
+    "G_grado_global": {
+      "0_normal": {"f0_sd_max": 5.0, "jitter_max": 0.5, "shimmer_max": 3.0, "hnr_min": 20, "cpps_min": 14.5},
+      "1_leve": {"f0_sd_max": 15.0, "jitter_max": 1.5, "shimmer_max": 5.0, "hnr_min": 15, "cpps_min": 10},
+      "2_moderado": {"f0_sd_max": 30.0, "jitter_max": 3.0, "shimmer_max": 7.0, "hnr_min": 10, "cpps_min": 5.5},
+      "3_severo": {"f0_sd_max": 999, "jitter_max": 999, "shimmer_max": 999, "hnr_min": 0, "cpps_min": 0}
+    },
+    "R_ronquedad": {
+      "0_normal": {"cpps_min": 14.5, "hnr_min": 20, "spectral_tilt_max": -4.0},
+      "1_leve": {"cpps_min": 10, "hnr_min": 15, "spectral_tilt_max": -6.0},
+      "2_moderado": {"cpps_min": 5.5, "hnr_min": 10, "spectral_tilt_max": -8.0},
+      "3_severo": {"cpps_min": 0, "hnr_min": 0, "spectral_tilt_max": -999}
+    },
+    "B_breathiness": {
+      "0_normal": {"hnr_min": 20, "nhr_max": 0.05, "nne_max": 1.5},
+      "1_leve": {"hnr_min": 15, "nhr_max": 0.15, "nne_max": 2.5},
+      "2_moderado": {"hnr_min": 10, "nhr_max": 0.25, "nne_max": 3.5},
+      "3_severo": {"hnr_min": 0, "nhr_max": 999, "nne_max": 999}
+    },
+    "A_astenia": {
+      "0_normal": {"f0_range_max": 50, "intensity_mean_min": 65, "alpha_ratio_min": 2},
+      "1_leve": {"f0_range_max": 100, "intensity_mean_min": 55, "alpha_ratio_min": 0},
+      "2_moderado": {"f0_range_max": 200, "intensity_mean_min": 45, "alpha_ratio_min": -5},
+      "3_severo": {"f0_range_max": 999, "intensity_mean_min": 0, "alpha_ratio_min": -999}
+    },
+    "S_tensión": {
+      "0_normal": {"f0_sd_max": 5.0, "f0_range_max": 50, "jitter_max": 0.5},
+      "1_leve": {"f0_sd_max": 15.0, "f0_range_max": 150, "jitter_max": 1.5},
+      "2_moderado": {"f0_sd_max": 30.0, "f0_range_max": 300, "jitter_max": 3.0},
+      "3_severo": {"f0_sd_max": 999, "f0_range_max": 999, "jitter_max": 999}
+    }
+  },
+  "clinical_interpretation_rules": {
+    "high_jitter_high_shimmer": {
+      "pattern": "Jitter y Shimmer elevados simultáneamente",
+      "possible_etiologies": ["Lesión orgánica (nodo, pólipio)", "Edema de Reinkes", "Laringitis crónica"],
+      "clinical_suggestion": "Evaluar lesión estructural mediante nasolaringoscopía. Correlacionar con GRBAS G≥2."
+    },
+    "low_hnr_low_cpps": {
+      "pattern": "HNR y CPPS disminuidos",
+      "possible_etiologies": ["Escape de aire glótico", "Parálisis de cuerda vocal", "Fisura glótica posterior"],
+      "clinical_suggestion": "Evaluar competencia glótica. Buscar componente de breathiness en GRBAS B≥1."
+    },
+    "high_jitter_normal_shimmer": {
+      "pattern": "Jitter elevado con Shimmer normal",
+      "possible_etiologies": ["Tensión muscular", "Nodo bilateral pequeño", "Disfonía espasmódica"],
+      "clinical_suggestion": "Evaluar patrón de tensión. Considerar videolaringoestroboscopia."
+    },
+    "normal_jitter_high_shimmer": {
+      "pattern": "Shimmer elevado con Jitter normal",
+      "possible_etiologies": ["Lesión de masa (pólipo)", "Edema localizado", "Trauma vocal agudo"],
+      "clinical_suggestion": "Buscar lesión unilateral. Evaluar consistencia del tono en la tarea de sostenido."
+    },
+    "very_low_f0_female": {
+      "pattern": "F0 muy grave en mujer",
+      "possible_etiologies": ["Edema de Reinkes", "Presbifonia avanzada", "Uso hormonal"],
+      "clinical_suggestion": "Evaluar extensión de edema. Considerar antecedentes hormonales."
+    },
+    "very_high_f0_male": {
+      "pattern": "F0 muy agudo en hombre",
+      "possible_etiologies": ["Tensión muscular severa", "Disfonía espasmódica", "Uso de voz en registro falso"],
+      "clinical_suggestion": "Evaluar registro fonatorio habitual. Buscar signos de espasmo."
+    },
+    "grbas_acoustic_mismatch": {
+      "pattern": "Inconsistencia entre percepción (GRBAS) y acústica",
+      "possible_etiologies": ["Factores psicogénicos", "Fatiga vocal intermitente", "Hiperfunción compensatoria"],
+      "clinical_suggestion": "Considerar evaluación fonoaudiológica integral con énfasis en patrón respiratorio y tensión corporal."
+    }
+  }
+}
