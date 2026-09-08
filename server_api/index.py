@@ -14,6 +14,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from voicelab_analysis import analisis_completo, validar_audio_completo
 from reportes_pdf import generar_pdf_clinico
+from api_clinica import router as clinica_router
+from anamnesis_engine import transcribir_audio_groq, estructurar_anamnesis_llm, generar_muestra_vocal_prompt
+from cuadernillo_pdf import generar_cuadernillo_pdf
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "vocal_pathology_db.json")
 
@@ -328,6 +331,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(clinica_router)
 
 
 @app.get("/api/health")
@@ -1005,3 +1010,109 @@ def _generar_graficos_clinicos(resultado: dict, audio_path: str, output_img_path
     plt.tight_layout()
     plt.savefig(output_img_path, dpi=220, bbox_inches="tight")
     plt.close()
+
+
+# ─── ANAMNESIS INTELIGENTE ──────────────────────────────────
+
+@app.post("/api/anamnesis/transcribir")
+async def transcribir_anamnesis(audio: UploadFile = File(...)):
+    try:
+        audio_bytes = await audio.read()
+        if len(audio_bytes) < 100:
+            raise HTTPException(status_code=400, detail="Audio demasiado corto o vacío")
+        if len(audio_bytes) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Audio demasiado grande (máx 25MB)")
+
+        result = transcribir_audio_groq(audio_bytes, audio.filename or "anamnesis.wav")
+        return JSONResponse(content=result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error transcribiendo: {str(e)}")
+
+
+@app.post("/api/anamnesis/estructurar")
+async def estructurar_anamnesis_endpoint(
+    transcripcion: str = Form(...),
+):
+    try:
+        result = estructurar_anamnesis_llm(transcripcion)
+        return JSONResponse(content=result)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error estructurando: {str(e)}")
+
+
+@app.post("/api/anamnesis/completa")
+async def anamnesis_completa(
+    audio: UploadFile = File(...),
+    paciente_id: str = Form(""),
+):
+    try:
+        audio_bytes = await audio.read()
+        if len(audio_bytes) < 100:
+            raise HTTPException(status_code=400, detail="Audio demasiado corto o vacío")
+
+        transcription = transcribir_audio_groq(audio_bytes, audio.filename or "anamnesis.wav")
+        if transcription.get("error"):
+            return JSONResponse(content={"transcripcion": transcription, "estructuracion": {}, "muestra_vocal": {}})
+
+        estructuracion = estructurar_anamnesis_llm(transcription.get("transcripcion", ""))
+        muestra = generar_muestra_vocal_prompt(estructuracion)
+
+        return JSONResponse(content={
+            "transcripcion": transcription,
+            "estructuracion": estructuracion if "error" not in estructuracion else {},
+            "muestra_vocal": muestra,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error en anamnesis completa: {str(e)}")
+
+
+# ─── CUADERNILLO TERAPÉUTICO PDF ────────────────────────────
+
+@app.post("/api/cuadernillo/generar")
+async def generar_cuadernillo_endpoint(
+    paciente_nombre: str = Form(""),
+    titulo: str = Form("Cuadernillo Terapéutico Vocal"),
+    sesiones: int = Form(8),
+    ejercicios_json: str = Form("[]"),
+    contrato_json: str = Form("{}"),
+    notas: str = Form(""),
+):
+    try:
+        ejercicios = json.loads(ejercicios_json) if ejercicios_json.startswith("[") else []
+        contrato = json.loads(contrato_json) if contrato_json.startswith("{") else {}
+    except Exception:
+        ejercicios, contrato = [], {}
+
+    pdf_path = generar_cuadernillo_pdf(
+        paciente_nombre=paciente_nombre,
+        titulo=titulo,
+        sesiones=sesiones,
+        ejercicios=ejercicios,
+        contrato=contrato,
+        notas=notas,
+    )
+
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+
+    try:
+        os.unlink(pdf_path)
+    except Exception:
+        pass
+
+    import base64
+    pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+    return JSONResponse(content={
+        "ok": True,
+        "pdf_base64": pdf_b64,
+        "filename": f"{titulo.replace(' ', '_')}.pdf",
+        "size_bytes": len(pdf_bytes),
+    })
