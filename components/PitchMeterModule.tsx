@@ -75,7 +75,7 @@ export default function PitchMeterModule() {
     const hist = histogram;
     const maxH = Math.max(...hist, 1);
 
-    ctx.fillStyle = 'rgba(99, 102, 241, 0.3)';
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.35)';
     const barW = w / hist.length;
     hist.forEach((v, i) => {
       const barH = (v / maxH) * h * 0.8;
@@ -85,7 +85,7 @@ export default function PitchMeterModule() {
     if (currentFreq) {
       const x = ((currentFreq - 50) / 550) * w;
       ctx.strokeStyle = '#22c55e';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -165,22 +165,32 @@ export default function PitchMeterModule() {
 
   return (
     <div className="max-w-4xl space-y-4">
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="bg-white dark:bg-[#111827] rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm transition-all duration-200">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-            <Music size={18} /> Pitch Meter en Vivo
+          <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2 text-base">
+            <Music size={18} className="text-indigo-600 dark:text-indigo-400" /> Pitch Meter en Vivo
           </h3>
           <div className="flex items-center gap-3">
-            <select value={sexo} onChange={e => setSexo(e.target.value)} className="px-3 py-1.5 border rounded-lg text-sm">
+            <select
+              value={sexo}
+              onChange={e => setSexo(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            >
               <option>Femenino</option>
               <option>Masculino</option>
             </select>
             {!active ? (
-              <button onClick={startMeter} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+              <button
+                onClick={startMeter}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-all shadow-md shadow-indigo-600/10 active:scale-95"
+              >
                 <Mic size={16} /> Iniciar
               </button>
             ) : (
-              <button onClick={stopMeter} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600">
+              <button
+                onClick={stopMeter}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-semibold transition-all shadow-md shadow-red-500/10 active:scale-95"
+              >
                 <Square size={16} /> Detener
               </button>
             )}
@@ -188,34 +198,38 @@ export default function PitchMeterModule() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div className={`rounded-xl p-4 text-center ${inRange ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-            <p className="text-xs text-gray-500 mb-1">Frecuencia Actual</p>
-            <p className={`text-3xl font-bold ${inRange ? 'text-green-700' : 'text-red-700'}`}>
+          <div className={`rounded-xl p-4 text-center border transition-all duration-200 ${
+            inRange
+              ? 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900/60'
+              : 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900/60'
+          }`}>
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Frecuencia Actual</p>
+            <p className={`text-3xl font-extrabold ${inRange ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
               {currentFreq ? `${currentFreq.toFixed(1)}` : '—'} <span className="text-lg">Hz</span>
             </p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-4 text-center border border-gray-200">
-            <p className="text-xs text-gray-500 mb-1">Rango Observado</p>
-            <p className="text-xl font-bold text-gray-700">
+          <div className="bg-gray-50 dark:bg-gray-800/40 rounded-xl p-4 text-center border border-gray-200 dark:border-gray-800">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Rango Observado</p>
+            <p className="text-xl font-bold text-gray-700 dark:text-gray-200">
               {minFreq === Infinity ? '—' : Math.round(minFreq)} — {maxFreq === 0 ? '—' : Math.round(maxFreq)} Hz
             </p>
           </div>
-          <div className="bg-blue-50 rounded-xl p-4 text-center border border-blue-200">
-            <p className="text-xs text-gray-500 mb-1">{range.label}</p>
-            <p className="text-sm font-medium text-blue-700 mt-1">
+          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-4 text-center border border-blue-200 dark:border-blue-900/60">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">{range.label}</p>
+            <p className="text-sm font-bold text-blue-700 dark:text-blue-400 mt-1">
               Típico: {range.typical} Hz
             </p>
           </div>
         </div>
 
-        <div className="bg-[#0f172a] rounded-xl overflow-hidden">
-          <canvas ref={canvasRef} width={800} height={200} className="w-full" />
+        <div className="bg-[#0f172a] rounded-xl overflow-hidden shadow-inner border border-gray-800">
+          <canvas ref={canvasRef} width={800} height={200} className="w-full h-[220px]" />
         </div>
 
         {active && (
-          <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+          <div className="mt-3 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 font-semibold">
             <Volume2 size={14} className="text-green-500 animate-pulse" />
-            Escuchando...
+            Escuchando señal de audio en tiempo real...
           </div>
         )}
       </div>

@@ -17,6 +17,7 @@ from reportes_pdf import generar_pdf_clinico
 from api_clinica import router as clinica_router
 from anamnesis_engine import transcribir_audio_groq, estructurar_anamnesis_llm, generar_muestra_vocal_prompt
 from cuadernillo_pdf import generar_cuadernillo_pdf
+from recomendar_motor import generar_recomendacion_terapeutica
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "vocal_pathology_db.json")
 
@@ -1116,3 +1117,36 @@ async def generar_cuadernillo_endpoint(
         "filename": f"{titulo.replace(' ', '_')}.pdf",
         "size_bytes": len(pdf_bytes),
     })
+
+
+# ─── MOTOR DE RECOMENDACIÓN IA TERAPÉUTICO ─────────────────
+
+@app.post("/api/recomendar-terapia")
+async def recomendar_terapia_endpoint(
+    paciente_json: str = Form("{}"),
+    anamnesis_json: str = Form("{}"),
+    riesgo_vocal_json: str = Form("{}"),
+    escalas_json: str = Form("{}"),
+    acustica_json: str = Form("{}"),
+):
+    try:
+        paciente = json.loads(paciente_json) if paciente_json.startswith("{") else {}
+        anamnesis = json.loads(anamnesis_json) if anamnesis_json.startswith("{") else {}
+        riesgo_vocal = json.loads(riesgo_vocal_json) if riesgo_vocal_json.startswith("{") else {}
+        escalas = json.loads(escalas_json) if escalas_json.startswith("{") else {}
+        acustica = json.loads(acustica_json) if acustica_json.startswith("{") else {}
+    except Exception:
+        paciente, anamnesis, riesgo_vocal, escalas, acustica = {}, {}, {}, {}, {}
+
+    try:
+        recomendacion = generar_recomendacion_terapeutica(
+            paciente=paciente,
+            anamnesis=anamnesis,
+            riesgo_vocal=riesgo_vocal,
+            escalas=escalas,
+            acustica=acustica
+        )
+        return JSONResponse(content={"ok": True, "recomendacion": recomendacion})
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error en recomendación IA: {str(e)}")

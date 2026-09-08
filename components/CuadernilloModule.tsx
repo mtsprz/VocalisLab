@@ -3,7 +3,10 @@ import { FileText, Download, Loader2, CheckCircle2, Settings } from 'lucide-reac
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
-interface Props { pacienteId: string | null; }
+interface Props {
+  pacienteId: string | null;
+  initialExerciseIds?: string[];
+}
 
 interface Exercise {
   id: string; name: string; description: string; steps: string[];
@@ -19,17 +22,24 @@ interface Preset {
   sesiones_recomendadas: number; frecuencia: string;
 }
 
-export default function CuadernilloModule({ pacienteId }: Props) {
+export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Props) {
   const [sections, setSections] = useState<Section[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [selectedPreset, setSelectedPreset] = useState('');
-  const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
+  const [selectedExercises, setSelectedExercises] = useState<string[]>(initialExerciseIds || []);
   const [titulo, setTitulo] = useState('Cuadernillo Terapéutico Vocal');
   const [sesiones, setSesiones] = useState(8);
   const [notas, setNotas] = useState('');
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (initialExerciseIds && initialExerciseIds.length > 0) {
+      setSelectedExercises(initialExerciseIds);
+      setTitulo('Cuadernillo — Prescripción IA Fonoaudiológica');
+    }
+  }, [initialExerciseIds]);
 
   useEffect(() => { loadBank(); }, []);
 

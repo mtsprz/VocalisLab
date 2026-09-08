@@ -5,8 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VocalisLab - Analisis Bioacustico Vocal</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              premium: {
+                dark: '#0b0f19',
+                card: '#161d30',
+                border: '#242f4c'
+              }
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body class="bg-slate-950">
+  <body class="bg-gray-50 dark:bg-premium-dark">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
