@@ -231,12 +231,13 @@ def measure_cpp(sound, pitch_floor=None, pitch_ceiling=None):
 
 def measure_formants(sound, pitch_floor=None, pitch_ceiling=None):
     mean_f0 = None
-    if pitch_floor is None or pitch_ceiling is None:
-        try:
-            pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
-            mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
-        except Exception:
-            pass
+    try:
+        pf_adapt = pitch_floor if pitch_floor and pitch_floor > 0 else 75
+        pc_adapt = pitch_ceiling if pitch_ceiling and pitch_ceiling > 0 else 600
+        pitch = call(sound, "To Pitch (ac)", 0.0, pf_adapt, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pc_adapt)
+        mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
+    except Exception:
+        pass
 
     max_formant = _max_formant_from_f0(mean_f0)
 
@@ -405,12 +406,13 @@ def measure_nne_nhr(sound, pitch_floor=None):
 
 def measure_formant_bandwidths(sound, pitch_floor=None, pitch_ceiling=None):
     mean_f0 = None
-    if pitch_floor is None or pitch_ceiling is None:
-        try:
-            pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
-            mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
-        except Exception:
-            pass
+    try:
+        pf_adapt = pitch_floor if pitch_floor and pitch_floor > 0 else 75
+        pc_adapt = pitch_ceiling if pitch_ceiling and pitch_ceiling > 0 else 600
+        pitch = call(sound, "To Pitch (ac)", 0.0, pf_adapt, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pc_adapt)
+        mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
+    except Exception:
+        pass
     max_formant = _max_formant_from_f0(mean_f0)
     try:
         formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis_from=50)
@@ -493,12 +495,13 @@ def extract_glottal_pulses(sound, pitch_floor=None, pitch_ceiling=None):
 
 def extract_formant_tracks(sound, pitch_floor=None, pitch_ceiling=None):
     mean_f0 = None
-    if pitch_floor is None or pitch_ceiling is None:
-        try:
-            pitch = call(sound, "To Pitch (ac)", 0.0, 75, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, 600)
-            mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
-        except Exception:
-            pass
+    try:
+        pf_adapt = pitch_floor if pitch_floor and pitch_floor > 0 else 75
+        pc_adapt = pitch_ceiling if pitch_ceiling and pitch_ceiling > 0 else 600
+        pitch = call(sound, "To Pitch (ac)", 0.0, pf_adapt, 15, True, 0.03, 0.45, 0.01, 0.35, 0.14, pc_adapt)
+        mean_f0 = call(pitch, "Get mean", 0, 0, "Hertz")
+    except Exception:
+        pass
     max_formant = _max_formant_from_f0(mean_f0)
     try:
         formant = sound.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant, window_length=0.025, pre_emphasis_from=50)
@@ -755,16 +758,29 @@ def extract_harmonics(sound, f0_mean=None, n_harmonics=10):
         freqs = np.array(spectrum.xs())
         amps_db = 20 * np.log10(np.maximum(np.array(spectrum.values[0]), 1e-10))
         harmonics = []
+        search_window_hz = f0_mean * 0.25
         for h in range(1, n_harmonics + 1):
             h_freq = f0_mean * h
             if h_freq > 5000:
                 break
-            idx = np.argmin(np.abs(freqs - h_freq))
-            harmonics.append({
-                "number": h,
-                "frequency_hz": round(float(freqs[idx]), 1),
-                "amplitude_db": round(float(amps_db[idx]), 1),
-            })
+            mask = (freqs >= h_freq - search_window_hz) & (freqs <= h_freq + search_window_hz)
+            if np.any(mask):
+                peak_idx_local = np.argmax(amps_db[mask])
+                peak_idx = np.where(mask)[0][peak_idx_local]
+                peak_amp = float(amps_db[peak_idx])
+                if peak_amp < -80:
+                    continue
+                harmonics.append({
+                    "number": h,
+                    "frequency_hz": round(float(freqs[peak_idx]), 1),
+                    "amplitude_db": round(peak_amp, 1),
+                })
+            else:
+                harmonics.append({
+                    "number": h,
+                    "frequency_hz": round(float(h_freq), 1),
+                    "amplitude_db": None,
+                })
         return harmonics
     except Exception:
         return []
