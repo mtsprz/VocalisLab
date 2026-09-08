@@ -392,8 +392,12 @@ async def analizar(
     csv_export = resultado.get("csv_export", [])
 
     # --- Cross-check acoustics vs GRBAS/RASATI ---
-    pathology_db = _load_pathology_db()
-    cross_check = _cross_check_acoustics_vs_perceptual(metrics_raw, {}, {}, pathology_db)
+    try:
+        pathology_db = _load_pathology_db()
+        cross_check = _cross_check_acoustics_vs_perceptual(metrics_raw, {}, {}, pathology_db)
+    except Exception as e:
+        traceback.print_exc()
+        cross_check = {"perceptual_acoustic_consistency": "N/D", "acoustic_indicators": [], "pathology_matches": [], "clinical_observations": [], "alerts": []}
 
     metrics = {
         "f0_mean": metrics_raw.get("f0_mean"),
@@ -544,7 +548,11 @@ async def analizar_y_reportar(
     except Exception:
         pass
 
-    cross_check = _cross_check_acoustics_vs_perceptual(metrics, g_dict, r_dict, pathology_db)
+    try:
+        cross_check = _cross_check_acoustics_vs_perceptual(metrics, g_dict, r_dict, pathology_db)
+    except Exception as e:
+        traceback.print_exc()
+        cross_check = {"perceptual_acoustic_consistency": "N/D", "acoustic_indicators": [], "pathology_matches": [], "clinical_observations": [], "alerts": []}
 
     sintesis_ia = ""
     groq_key = os.environ.get("GROQ_API_KEY")
