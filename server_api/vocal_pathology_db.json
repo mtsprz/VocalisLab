@@ -11,12 +11,60 @@
       "Cecconello, A. et al. Aplicación del análisis acústico en la clínica vocal. Revista Fonoaudiologia.",
       "Feinberg, D. (2022). VoiceLab: A deep learning approach to acoustic voice analysis. Proc. Interspeech 2022.",
       "Núñez Batalla, F. et al. Índice de astenia vocal.",
-      "Yanagihara, N. (1967). Significance of harmonic changes and noise components in hoarseness.",
+      "Yanagihara, N. (1967). Significance of harmonic changes and noise components in hoarseness."
     ]
   },
   "normative_ranges": {
+    "f0_by_age_sex": {
+      "_description": "F0 normativa por edad y sexo. Referencias: Colton, Casper & Leonard (2011) citado por Farías (2012, 2016); Paolini et al. (2018); Aronson et al. (2001).",
+      "_note": "Valores de F0 media en Hz para habla/lectura. Los rangos 'mild/moderate/severe' son desviaciones porcentuales del típico.",
+      "male": [
+        {"age_min": 0, "age_max": 2, "typical_hz": 330, "min_hz": 250, "max_hz": 400, "note": "Llanto/producción prelingüística"},
+        {"age_min": 3, "age_max": 5, "typical_hz": 295, "min_hz": 250, "max_hz": 350, "note": "Preescolar - voz de niño pequeño"},
+        {"age_min": 6, "age_max": 8, "typical_hz": 295, "min_hz": 260, "max_hz": 330, "note": "Colton et al.: 7a=294, 8a=297 (lectura)"},
+        {"age_min": 9, "age_max": 11, "typical_hz": 250, "min_hz": 192, "max_hz": 297, "note": "Colton et al.: 10a=270, 11a=227 (SD=1.5 st)"},
+        {"age_min": 12, "age_max": 14, "typical_hz": 210, "min_hz": 160, "max_hz": 270, "note": "Cambio vocal - transición puberal"},
+        {"age_min": 15, "age_max": 17, "typical_hz": 140, "min_hz": 100, "max_hz": 200, "note": "Post-cambio vocal - establecimiento"},
+        {"age_min": 18, "age_max": 29, "typical_hz": 120, "min_hz": 85, "max_hz": 155, "note": "Colton et al.: 19a=117, 20-29=120 (SD=2.1 st)"},
+        {"age_min": 30, "age_max": 39, "typical_hz": 112, "min_hz": 85, "max_hz": 145, "note": "Colton et al.: 30-39=112"},
+        {"age_min": 40, "age_max": 49, "typical_hz": 107, "min_hz": 80, "max_hz": 140, "note": "Colton et al.: 40-49=107"},
+        {"age_min": 50, "age_max": 59, "typical_hz": 118, "min_hz": 85, "max_hz": 155, "note": "Colton et al.: 50-59=118"},
+        {"age_min": 60, "age_max": 69, "typical_hz": 112, "min_hz": 80, "max_hz": 150, "note": "Colton et al.: 60-69=112"},
+        {"age_min": 70, "age_max": 79, "typical_hz": 132, "min_hz": 90, "max_hz": 170, "note": "Colton et al.: 70-79=132 (presbifonia)"},
+        {"age_min": 80, "age_max": 120, "typical_hz": 146, "min_hz": 100, "max_hz": 190, "note": "Colton et al.: 80-89=146 (presbifonia avanzada)"}
+      ],
+      "female": [
+        {"age_min": 0, "age_max": 2, "typical_hz": 380, "min_hz": 300, "max_hz": 450, "note": "Llanto/producción prelingüística"},
+        {"age_min": 3, "age_max": 5, "typical_hz": 330, "min_hz": 270, "max_hz": 400, "note": "Preescolar - voz de niña pequeña"},
+        {"age_min": 6, "age_max": 8, "typical_hz": 285, "min_hz": 240, "max_hz": 330, "note": "Colton et al.: 7a=281, 8a=288 (lectura)"},
+        {"age_min": 9, "age_max": 11, "typical_hz": 260, "min_hz": 198, "max_hz": 310, "note": "Colton et al.: 11a=238 (SD=1.51 st)"},
+        {"age_min": 12, "age_max": 14, "typical_hz": 235, "min_hz": 180, "max_hz": 290, "note": "Adolescencia - estabilización vocal"},
+        {"age_min": 15, "age_max": 17, "typical_hz": 220, "min_hz": 165, "max_hz": 275, "note": "Post-adolescencia - rango establecido"},
+        {"age_min": 18, "age_max": 29, "typical_hz": 224, "min_hz": 165, "max_hz": 275, "note": "Colton et al.: 19a=217, 20-29=224 (SD=3.8)"},
+        {"age_min": 30, "age_max": 39, "typical_hz": 196, "min_hz": 150, "max_hz": 240, "note": "Colton et al.: 30-40=196 (SD=2.5 st)"},
+        {"age_min": 40, "age_max": 49, "typical_hz": 189, "min_hz": 145, "max_hz": 235, "note": "Colton et al.: 40-50=189 (SD=2.8 st)"},
+        {"age_min": 50, "age_max": 59, "typical_hz": 195, "min_hz": 145, "max_hz": 240, "note": "Interpolación entre 40-50 y 60-69"},
+        {"age_min": 60, "age_max": 69, "typical_hz": 200, "min_hz": 143, "max_hz": 235, "note": "Colton et al.: 60-69=200 (SD=4.3 st)"},
+        {"age_min": 70, "age_max": 79, "typical_hz": 202, "min_hz": 150, "max_hz": 250, "note": "Colton et al.: 70+=202 (SD=4.7 st)"},
+        {"age_min": 80, "age_max": 120, "typical_hz": 200, "min_hz": 155, "max_hz": 245, "note": "Colton et al.: 80-94=200 (SD=2.7 st)"}
+      ],
+      "severity_thresholds_pct": {
+        "_description": "Umbrales de severidad como porcentaje de desviación del típico para F0",
+        "mild_pct": 15,
+        "moderate_pct": 30,
+        "severe_pct": 50
+      },
+      "references": [
+        "Colton, R., Casper, J. & Leonard, R. (2011). Understanding Voice Problems. Williams & Wilkins.",
+        "Farías, P. (2012). Ejercicios que restauran la función vocal. Ed. Univ. de la Plata.",
+        "Farías, P. (2016). Guía clínica para el especialista en laringe y voz. Adriana Hidalgo.",
+        "Paolini, A. et al. (2018). F0 de habla de voz normal según sexo en Córdoba, Argentina. Rev. Med. Univ. Nac. Córdoba.",
+        "Aronson, A. et al. (2001). Valores frecuenciales vocálicos: F0 y formantes. Español Rioplatense.",
+        "Koishi, Tsuji et al. (2003) citado por Farías (2010). F0 habitual: Hombres=138.80 Hz, Mujeres=209.34 Hz."
+      ]
+    },
     "adult_female": {
-      "f0_mean_hz": {"min": 165, "max": 255, "typical": 210, "unit": "Hz"},
+      "f0_mean_hz": {"min": 145, "max": 255, "typical": 200, "unit": "Hz"},
       "jitter_local_pct": {"max_normal": 1.04, "mild": 2.0, "moderate": 3.0, "unit": "%"},
       "shimmer_local_pct": {"max_normal": 3.81, "mild": 5.0, "moderate": 7.0, "unit": "%"},
       "shimmer_db": {"max_normal": 0.5, "mild": 1.0, "moderate": 2.0, "unit": "dB"},
@@ -31,7 +79,7 @@
       "shimmer_apq11_pct": {"max_normal": 3.0, "mild": 5.0, "moderate": 7.0, "unit": "%"}
     },
     "adult_male": {
-      "f0_mean_hz": {"min": 85, "max": 180, "typical": 120, "unit": "Hz"},
+      "f0_mean_hz": {"min": 80, "max": 165, "typical": 120, "unit": "Hz"},
       "jitter_local_pct": {"max_normal": 1.04, "mild": 2.0, "moderate": 3.0, "unit": "%"},
       "shimmer_local_pct": {"max_normal": 3.81, "mild": 5.0, "moderate": 7.0, "unit": "%"},
       "shimmer_db": {"max_normal": 0.5, "mild": 1.0, "moderate": 2.0, "unit": "dB"},

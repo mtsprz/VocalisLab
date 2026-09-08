@@ -41,6 +41,41 @@ def _severity_cell_text(valor, umbrales, unit=""):
     return f'<font color="{hex_clr}"><b>[{nivel}]</b> {label}</font> ({val_str})'
 
 
+def _f0_severity_cell(metricas, cross_check):
+    """Generate F0 severity cell using age/sex normative data from cross_check."""
+    f0 = metricas.get("f0_mean")
+    if f0 is None:
+        return '<font color="#94a3b8"><b>[—]</b> N/D</font> (N/D)'
+
+    f0_norm = None
+    if cross_check:
+        f0_norm = cross_check.get("f0_normative")
+
+    if not f0_norm or f0_norm.get("typical_hz") is None:
+        return '<font color="#94a3b8"><b>[—]</b> Sin ref.</font> (sin datos normativos)'
+
+    typical = f0_norm["typical_hz"]
+    if typical <= 0:
+        return '<font color="#94a3b8"><b>[—]</b> N/D</font>'
+
+    deviation_pct = abs(f0 - typical) / typical * 100
+    mild = f0_norm.get("mild_pct", 15)
+    moderate = f0_norm.get("moderate_pct", 30)
+    severe = f0_norm.get("severe_pct", 50)
+
+    if deviation_pct <= mild:
+        nivel, hex_clr, label = "0", "#22c55e", "Normal"
+    elif deviation_pct <= moderate:
+        nivel, hex_clr, label = "1", "#eab308", "Leve"
+    elif deviation_pct <= severe:
+        nivel, hex_clr, label = "2", "#f97316", "Moderado"
+    else:
+        nivel, hex_clr, label = "3", "#ef4444", "Marcado"
+
+    direction = "↑" if f0 > typical else "↓"
+    return f'<font color="{hex_clr}"><b>[{nivel}]</b> {label}</font> ({_fmt(f0)} Hz {direction} {_fmt(typical, 0)} Hz típ.)'
+
+
 def _chart_from_b64(charts, key):
     if not charts:
         return None
@@ -212,7 +247,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
     elements.append(Paragraph("<b>1. Métricas Bioacústicas Principales</b>", section_style))
     metrics_data = [
         [P("Parámetro", header_style), P("Valor", header_style), P("Severidad", header_style), P("Referencia", header_style)],
-        [P("F0 media"), P(f"{_fmt(metricas.get('f0_mean'))} Hz"), P(_severity_cell_text(metricas.get('f0_mean'), (0, 0, 0), " Hz")), P("Variable (sexo/edad)")],
+        [P("F0 media"), P(f"{_fmt(metricas.get('f0_mean'))} Hz"), P(_f0_severity_cell(metricas, cross_check)), P("Según edad/sexo")],
         [P("F0 mínima"), P(f"{_fmt(metricas.get('f0_min'))} Hz"), P("—"), P("—")],
         [P("F0 máxima"), P(f"{_fmt(metricas.get('f0_max'))} Hz"), P("—"), P("—")],
         [P("F0 DE"), P(f"{_fmt(metricas.get('f0_sd'))} Hz"), P("—"), P("—")],
@@ -292,8 +327,21 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
         if cross_check.get("acoustic_indicators"):
             elements.append(Paragraph("<b>Indicadores acústicos relevantes:</b>", body_style))
-            for ind in cross_check["acoustic_indicators"][:4]:
+            for ind in cross_check["acoustic_indicators"][:5]:
                 elements.append(Paragraph(f"• {ind}", small_style))
+            elements.append(Spacer(1, 4))
+
+        f0_norm = cross_check.get("f0_normative")
+        if f0_norm and f0_norm.get("typical_hz"):
+            elements.append(Paragraph(
+                f'<font color="#1e40af"><b>Referencia F0:</b></font> '
+                f'Típico = {f0_norm["typical_hz"]} Hz | '
+                f'Rango = {f0_norm["min_hz"]}-{f0_norm["max_hz"]} Hz | '
+                f'Severidad: ≤{f0_norm["mild_pct"]}% Normal, ≤{f0_norm["moderate_pct"]}% Leve, '
+                f'≤{f0_norm["severe_pct"]}% Moderado, >{f0_norm["severe_pct"]}% Marcado | '
+                f'Fuente: {f0_norm.get("source", "Colton et al.")}',
+                small_style
+            ))
             elements.append(Spacer(1, 4))
 
         if cross_check.get("pathology_matches"):

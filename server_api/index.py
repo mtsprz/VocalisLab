@@ -24,7 +24,98 @@ def _load_pathology_db() -> dict:
     except Exception:
         return {}
 
-def _cross_check_acoustics_vs_perceptual(metrics: dict, grbas: dict, rasati: dict, db: dict) -> dict:
+
+def _f0_normative_for_age_sex(edad, sexo, db=None):
+    """Return F0 normative data (typical, min, max, severity thresholds) for a given age and sex.
+    References: Colton, Casper & Leonard (2011) cited by Farías (2012, 2016); Paolini et al. (2018).
+    Returns dict with keys: typical_hz, min_hz, max_hz, mild_pct, moderate_pct, severe_pct, note, source.
+    """
+    if db is None:
+        db = _load_pathology_db()
+    f0_db = db.get("normative_ranges", {}).get("f0_by_age_sex", {})
+    severity_pct = f0_db.get("severity_thresholds_pct", {})
+    mild_pct = severity_pct.get("mild_pct", 15)
+    moderate_pct = severity_pct.get("moderate_pct", 30)
+    severe_pct = severity_pct.get("severe_pct", 50)
+
+    if not sexo:
+        return {"typical_hz": None, "min_hz": None, "max_hz": None, "mild_pct": mild_pct, "moderate_pct": moderate_pct, "severe_pct": severe_pct, "note": "Sexo no especificado", "source": "N/D"}
+
+    sexo_lower = sexo.lower()
+    if "masc" in sexo_lower or "hombre" in sexo_lower or "male" in sexo_lower or "varon" in sexo_lower:
+        sex_key = "male"
+    elif "fem" in sexo_lower or "mujer" in sexo_lower or "female" in sexo_lower or "inf" in sexo_lower or "niñ" in sexo_lower or "child" in sexo_lower:
+        sex_key = "female"
+    else:
+        return {"typical_hz": None, "min_hz": None, "max_hz": None, "mild_pct": mild_pct, "moderate_pct": moderate_pct, "severe_pct": severe_pct, "note": "Sexo no reconocido", "source": "N/D"}
+
+    age_entries = f0_db.get(sex_key, [])
+    if not age_entries:
+        return {"typical_hz": None, "min_hz": None, "max_hz": None, "mild_pct": mild_pct, "moderate_pct": moderate_pct, "severe_pct": severe_pct, "note": "Sin datos normativos", "source": "N/D"}
+
+    try:
+        age_num = int(edad) if edad else None
+    except (ValueError, TypeError):
+        age_num = None
+
+    if age_num is None:
+        if sex_key == "male":
+            return {"typical_hz": 120, "min_hz": 85, "max_hz": 165, "mild_pct": mild_pct, "moderate_pct": moderate_pct, "severe_pct": severe_pct, "note": "Edad no especificada - usando rango adulto masculino típico", "source": "Colton et al. (2011)"}
+        else:
+            return {"typical_hz": 200, "min_hz": 145, "max_hz": 255, "mild_pct": mild_pct, "moderate_pct": moderate_pct, "severe_pct": severe_pct, "note": "Edad no especificada - usando rango adulto femenino típico", "source": "Colton et al. (2011)"}
+
+    for entry in age_entries:
+        if entry["age_min"] <= age_num <= entry["age_max"]:
+            return {
+                "typical_hz": entry["typical_hz"],
+                "min_hz": entry["min_hz"],
+                "max_hz": entry["max_hz"],
+                "mild_pct": mild_pct,
+                "moderate_pct": moderate_pct,
+                "severe_pct": severe_pct,
+                "note": entry.get("note", ""),
+                "source": "Colton et al. (2011) / Farías (2012, 2016)",
+            }
+
+    last = age_entries[-1]
+    return {
+        "typical_hz": last["typical_hz"],
+        "min_hz": last["min_hz"],
+        "max_hz": last["max_hz"],
+        "mild_pct": mild_pct,
+        "moderate_pct": moderate_pct,
+        "severe_pct": severe_pct,
+        "note": f"Edad {age_num} fuera de rangos tabulados - usando el más cercano",
+        "source": "Colton et al. (2011)",
+    }
+
+
+def _f0_severity(f0_mean, normative):
+    """Classify F0 deviation severity based on age/sex normative data.
+    Returns (severity_level, label, color_hex) where severity_level is 0-3.
+    """
+    if f0_mean is None or normative is None or normative.get("typical_hz") is None:
+        return (None, "N/D", "#94a3b8")
+
+    typical = normative["typical_hz"]
+    if typical <= 0:
+        return (None, "N/D", "#94a3b8")
+
+    deviation_pct = abs(f0_mean - typical) / typical * 100
+    mild = normative.get("mild_pct", 15)
+    moderate = normative.get("moderate_pct", 30)
+    severe = normative.get("severe_pct", 50)
+
+    if deviation_pct <= mild:
+        return (0, "Normal", "#22c55e")
+    elif deviation_pct <= moderate:
+        return (1, "Leve", "#eab308")
+    elif deviation_pct <= severe:
+        return (2, "Moderado", "#f97316")
+    else:
+        return (3, "Marcado", "#ef4444")
+
+def _cross_check_acoustics_vs_perceptual(metrics: dict, grbas: dict, rasati: dict, db: dict, edad: str = None, sexo: str = None) -> dict:
     """Cross-check acoustic measurements with GRBAS/RASATI perceptual scales using the pathology database."""
     result = {
         "acoustic_indicators": [],
@@ -32,7 +123,11 @@ def _cross_check_acoustics_vs_perceptual(metrics: dict, grbas: dict, rasati: dic
         "perceptual_acoustic_consistency": "N/D",
         "clinical_observations": [],
         "alerts": [],
+        "f0_normative": None,
     }
+
+    f0_norm = _f0_normative_for_age_sex(edad, sexo, db)
+    result["f0_normative"] = f0_norm
 
     corr = db.get("grbas_acoustic_correlation", {})
     rules = db.get("clinical_interpretation_rules", {})
@@ -81,6 +176,22 @@ def _cross_check_acoustics_vs_perceptual(metrics: dict, grbas: dict, rasati: dic
     if b_val == 0:
         if hnr is not None and hnr < 15:
             result["alerts"].append("B=0 pero HNR<15 dB: posible breathiness subclínica.")
+
+    if f0 is not None and f0_norm.get("typical_hz") is not None:
+        f0_sev, f0_label, f0_color = _f0_severity(f0, f0_norm)
+        typical = f0_norm["typical_hz"]
+        deviation = abs(f0 - typical)
+        deviation_pct = round(deviation / typical * 100, 1)
+        direction = "por encima" if f0 > typical else "por debajo"
+        if f0_sev is not None and f0_sev > 0:
+            result["acoustic_indicators"].append(
+                f"F0={f0} Hz ({f0_label}): {deviation_pct}% {direction} del típico ({typical} Hz para {sexo or 'N/D'} de {edad or 'N/D'} años). "
+                f"Rango normativo: {f0_norm['min_hz']}-{f0_norm['max_hz']} Hz."
+            )
+        else:
+            result["acoustic_indicators"].append(
+                f"F0={f0} Hz (Normal): dentro del rango normativo para {sexo or 'N/D'} de {edad or 'N/D'} años (típico={typical} Hz, rango={f0_norm['min_hz']}-{f0_norm['max_hz']} Hz)."
+            )
 
     if a_val >= 2:
         if f0 is not None:
@@ -318,6 +429,7 @@ async def analizar(
     audio_habla: UploadFile = File(None),
     modo: str = Form("clinico"),
     sexo: str = Form(""),
+    edad: str = Form(""),
     pitch_floor: Optional[float] = Form(None),
     pitch_ceiling: Optional[float] = Form(None),
 ):
@@ -377,7 +489,7 @@ async def analizar(
     # --- Cross-check acoustics vs GRBAS/RASATI ---
     try:
         pathology_db = _load_pathology_db()
-        cross_check = _cross_check_acoustics_vs_perceptual(metrics_raw, {}, {}, pathology_db)
+        cross_check = _cross_check_acoustics_vs_perceptual(metrics_raw, {}, {}, pathology_db, edad=edad, sexo=sexo)
     except Exception as e:
         traceback.print_exc()
         cross_check = {"perceptual_acoustic_consistency": "N/D", "acoustic_indicators": [], "pathology_matches": [], "clinical_observations": [], "alerts": []}
@@ -532,7 +644,7 @@ async def analizar_y_reportar(
         pass
 
     try:
-        cross_check = _cross_check_acoustics_vs_perceptual(metrics, g_dict, r_dict, pathology_db)
+        cross_check = _cross_check_acoustics_vs_perceptual(metrics, g_dict, r_dict, pathology_db, edad=edad, sexo=sexo)
     except Exception as e:
         traceback.print_exc()
         cross_check = {"perceptual_acoustic_consistency": "N/D", "acoustic_indicators": [], "pathology_matches": [], "clinical_observations": [], "alerts": []}
@@ -580,6 +692,9 @@ async def analizar_y_reportar(
                 f"{rasati_line}\n\n"
                 f"--- MEDICIONES BIOACÚSTICAS (Parselmouth/VoiceLab) ---\n"
                 f"F0 media: {metrics.get('f0_mean', 'N/D')} Hz | Mín: {metrics.get('f0_min', 'N/D')} | Máx: {metrics.get('f0_max', 'N/D')} | DE: {metrics.get('f0_sd', 'N/D')} | Rango: {metrics.get('f0_range', 'N/D')} Hz\n"
+                f"Referencia F0 para {sexo} de {edad} años: típico={cross_check.get('f0_normative', {}).get('typical_hz', 'N/D')} Hz, "
+                f"rango={cross_check.get('f0_normative', {}).get('min_hz', 'N/D')}-{cross_check.get('f0_normative', {}).get('max_hz', 'N/D')} Hz "
+                f"(Colton et al. 2011 / Farías 2012)\n"
                 f"Jitter: local={metrics.get('jitter_local_pct', 'N/D')}% | RAP={metrics.get('jitter_rap_pct', 'N/D')}% | PPQ5={metrics.get('jitter_ppq5_pct', 'N/D')}% | DDP={metrics.get('jitter_ddp_pct', 'N/D')}%\n"
                 f"Shimmer: local={metrics.get('shimmer_local_pct', 'N/D')}% ({metrics.get('shimmer_local_db', 'N/D')} dB) | APQ3={metrics.get('shimmer_apq3_pct', 'N/D')}% | APQ5={metrics.get('shimmer_apq5_pct', 'N/D')}% | APQ11={metrics.get('shimmer_apq11_pct', 'N/D')}%\n"
                 f"HNR: {metrics.get('hnr_db', 'N/D')} dB | CPPS: {metrics.get('cpps_db', 'N/D')} dB\n"
