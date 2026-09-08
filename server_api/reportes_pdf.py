@@ -3,9 +3,17 @@ import base64
 from io import BytesIO
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+
+
+def _fmt(val, decimals=2, suffix=""):
+    if val is None or val == "N/D":
+        return "N/D"
+    if isinstance(val, (int, float)):
+        return f"{val:.{decimals}f}{suffix}"
+    return f"{val}{suffix}"
 
 
 def _nivel_severidad(valor, umbrales):
@@ -21,15 +29,16 @@ def _nivel_severidad(valor, umbrales):
         return ("3", colors.HexColor('#ef4444'), "Marcado")
 
 
-def _severity_cell(valor, umbrales, unit=""):
+def _severity_cell_text(valor, umbrales, unit=""):
     nivel, clr, label = _nivel_severidad(valor, umbrales)
     if valor is None:
-        return f'<font color="#94a3b8">N/D</font>'
+        return '<font color="#94a3b8">N/D</font>'
     try:
         hex_clr = f"#{int(clr.red*255):02x}{int(clr.green*255):02x}{int(clr.blue*255):02x}"
     except Exception:
         hex_clr = '#334155'
-    return f'<font color="{hex_clr}"><b>{nivel}</b></font> {valor}{unit} <font color="#64748b">({label})</font>'
+    val_str = _fmt(valor, 2, unit)
+    return f'<font color="{hex_clr}"><b>[{nivel}]</b> {label}</font> ({val_str})'
 
 
 def _chart_from_b64(charts, key):
@@ -42,17 +51,110 @@ def _chart_from_b64(charts, key):
     return None
 
 
+def _analisis_espectrograma(metricas):
+    f0 = metricas.get('f0_mean')
+    f0_sd = metricas.get('f0_sd')
+    f1 = metricas.get('f1_hz')
+    f2 = metricas.get('f2_hz')
+    hnr = metricas.get('hnr_db')
+
+    txt = "<b>Observación Bioacústica — Espectrograma de Banda Estrecha:</b><br/>"
+    if f0 is not None:
+        estabilidad = "muy estable" if (f0_sd and f0_sd < 2.0) else "con variabilidad moderada" if (f0_sd and f0_sd < 5.0) else "con inestabilidad melódica significativa"
+        txt += f"• <b>Frecuencia Fundamental (F0 - línea azul):</b> Trazo medio en {_fmt(f0)} Hz ({estabilidad}, DE = {_fmt(f0_sd)} Hz).<br/>"
+    else:
+        txt += "• <b>Contorno de Pitch:</b> Inestabilidad o pérdida parcial de sonoridad en el contorno de F0.<br/>"
+
+    if f1 and f2:
+        txt += f"• <b>Formantes F1-F4 (puntos rojos):</b> Estructura de resonancia supraglótica identificada en F1 = {_fmt(f1, 0)} Hz, F2 = {_fmt(f2, 0)} Hz.<br/>"
+    else:
+        txt += "• <b>Formantes F1-F4:</b> Pobre definición formántica, sugerente de componente aperiódico o ruido supraglótico.<br/>"
+
+    if hnr is not None:
+        noise = "conservación del piso de ruido con armónicos bien definidos" if hnr >= 18 else "presencia de componente de ruido interarmónico en bandas superiores"
+        txt += f"• <b>Definición Espectral:</b> {noise} (HNR = {_fmt(hnr)} dB)."
+    return txt
+
+
+def _analisis_espectro(metricas):
+    slope = metricas.get('spectral_slope')
+    hnr = metricas.get('hnr_db')
+    f0 = metricas.get('f0_mean')
+
+    txt = "<b>Observación Bioacústica — Espectro FFT y Pendiente Espectral:</b><br/>"
+    if slope is not None:
+        cierre = "cierre glótico adecuado y aducción eficiente" if slope > -10.0 else "fuga de aire o cierre incompleto con atenuación rápida en altas frecuencias"
+        txt += f"• <b>Pendiente Espectral (Spectral Tilt):</b> {_fmt(slope*1000 if abs(slope)<1 else slope)} dB/kHz. Indica {cierre}.<br/>"
+    else:
+        txt += "• <b>Pendiente Espectral:</b> No calculable.<br/>"
+
+    if f0 is not None:
+        txt += f"• <b>Estructura Armónica FFT:</b> Pico fundamental F0 identificado en {_fmt(f0, 0)} Hz. "
+        if hnr is not None and hnr >= 15:
+            txt += "Preservación de armónicos primarios sobre la línea base de ruido."
+        else:
+            txt += "Atenuación severa de la energía armónica por presencia de ruido de turbulencia."
+    return txt
+
+
+def _analisis_ddf(metricas):
+    cpps = metricas.get('cpps_db')
+    hnr = metricas.get('hnr_db')
+
+    txt = "<b>Observación Bioacústica — Diagrama de Dispersión Fonatoria (DDF):</b><br/>"
+    if cpps is not None and hnr is not None:
+        if cpps >= 14.5 and hnr >= 20:
+            zona = "Normatividad (Zona Verde)"
+            desc = "periodicidad glótica adecuada y prominencia cepstral dentro de rango normal"
+        elif cpps >= 12.0 and hnr >= 15:
+            zona = "Disfonía Leve (Zona Amarilla)"
+            desc = "discreta reducción en la prominencia cepstral con aperiodicidad leve"
+        else:
+            zona = "Fuera de Norma / Disfonía Moderada-Severa"
+            desc = "alteración significativa en la periodicidad de la onda mucosa"
+        txt += f"• <b>Cuadrante Fonatorio:</b> Ubicación en <b>{zona}</b> (CPPS = {_fmt(cpps)} dB, HNR = {_fmt(hnr)} dB). Caracterizado por {desc}."
+    else:
+        txt += "• <b>Cuadrante Fonatorio:</b> Datos bioacústicos insuficientes para ubicar en el diagrama DDF."
+    return txt
+
+
+def _analisis_radar(metricas, cross_check):
+    avqi = metricas.get('avqi')
+    cpps = metricas.get('cpps_db')
+    hnr = metricas.get('hnr_db')
+    jitter = metricas.get('jitter_pct')
+
+    txt = "<b>Observación Bioacústica — Perfil VOXplot Radar Multifactorial:</b><br/>"
+    txt += "• <b>Geometría del Polígono:</b> "
+    if cpps is not None and cpps < 14.5 and jitter is not None and jitter > 1.0:
+        txt += "Deformación orientada hacia el eje de <b>Hoarseness (Ronquedad)</b> por aumento de Jitter e inestabilidad de la onda mucosa.<br/>"
+    elif avqi is not None and avqi > 2.95:
+        txt += "Deformación orientada hacia el eje de <b>Breathiness (Soplosidad)</b> por elevación del índice AVQI y fuga glótica.<br/>"
+    else:
+        txt += "Polígono circunscrito dentro del disco verde de normatividad.<br/>"
+
+    if cross_check and cross_check.get("perceptual_acoustic_consistency") != "N/D":
+        txt += f"• <b>Consistencia Clínica:</b> Correlación perceptual-acústica <b>{cross_check.get('perceptual_acoustic_consistency')}</b>."
+    return txt
+
+
 def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path: str, charts: dict = None, cross_check: dict = None):
     doc = SimpleDocTemplate(pdf_path, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=14, textColor=colors.HexColor('#0f172a'), spaceAfter=4, alignment=1)
-    subtitle_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#64748b'), spaceAfter=10, alignment=1)
-    section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#0f172a'), spaceBefore=10, spaceAfter=6)
-    body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#334155'), spaceAfter=4, leading=12)
-    small_style = ParagraphStyle('SmallStyle', parent=styles['Normal'], fontSize=7.5, textColor=colors.HexColor('#334155'), spaceAfter=3, leading=10)
-    disclaimer_style = ParagraphStyle('DisclaimerStyle', parent=styles['Normal'], fontSize=7.5, textColor=colors.HexColor('#64748b'), spaceAfter=3, leading=10, borderColor=colors.HexColor('#e2e8f0'), borderWidth=0.5, borderPadding=4)
-    note_style = ParagraphStyle('NoteStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#334155'), spaceAfter=6, leading=14, borderWidth=0.5, borderColor=colors.HexColor('#cbd5e1'), borderPadding=8)
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=13, textColor=colors.HexColor('#0f172a'), spaceAfter=3, alignment=1)
+    subtitle_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#64748b'), spaceAfter=8, alignment=1)
+    section_style = ParagraphStyle('SectionStyle', parent=styles['Heading2'], fontSize=10, textColor=colors.HexColor('#0f172a'), spaceBefore=8, spaceAfter=5)
+    body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#334155'), spaceAfter=3, leading=11)
+    small_style = ParagraphStyle('SmallStyle', parent=styles['Normal'], fontSize=7.5, textColor=colors.HexColor('#334155'), spaceAfter=2, leading=9.5)
+    disclaimer_style = ParagraphStyle('DisclaimerStyle', parent=styles['Normal'], fontSize=7, textColor=colors.HexColor('#64748b'), spaceAfter=2, leading=9, borderColor=colors.HexColor('#e2e8f0'), borderWidth=0.5, borderPadding=3)
+    chart_box_style = ParagraphStyle('ChartBoxStyle', parent=styles['Normal'], fontSize=7.5, textColor=colors.HexColor('#1e293b'), spaceAfter=2, leading=10.5, backgroundColor=colors.HexColor('#f8fafc'), borderColor=colors.HexColor('#cbd5e1'), borderWidth=0.5, borderPadding=5)
+
+    cell_style = ParagraphStyle('TableCellStyle', parent=styles['Normal'], fontSize=7, leading=8.5, textColor=colors.HexColor('#334155'))
+    header_style = ParagraphStyle('TableHeaderStyle', parent=styles['Normal'], fontSize=7.5, leading=9, textColor=colors.white, fontName='Helvetica-Bold')
+
+    def P(txt, st=cell_style):
+        return Paragraph(str(txt), st)
 
     elements = []
     audio = metricas.get("audio", {})
@@ -70,38 +172,37 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
         if subtitle_parts:
             elements.append(Paragraph(" | ".join(subtitle_parts), subtitle_style))
 
-    elements.append(Spacer(1, 8))
     elements.append(Paragraph("PROTOCOLO DE EVALUACIÓN BIOACÚSTICA DE LA VOZ", title_style))
     elements.append(Paragraph(
         f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | "
-        f"Motor: Praat/Parselmouth {metricas.get('parselmouth_version', 'N/D')}",
+        f"Motor: Praat/Parselmouth {metricas.get('parselmouth_version', '0.4.3')}",
         subtitle_style
     ))
 
     info_data = [
-        [Paragraph(f"<b>Paciente:</b> {paciente.get('nombre', 'N/A')}", body_style),
-         Paragraph(f"<b>DNI:</b> {paciente.get('dni', 'N/A')}", body_style)],
-        [Paragraph(f"<b>Edad:</b> {paciente.get('edad', 'N/A')} años | <b>Sexo:</b> {paciente.get('sexo', 'N/A')}", body_style),
-         Paragraph(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}", body_style)],
-        [Paragraph(f"<b>Motivo:</b> {paciente.get('motivo', 'N/A')}", body_style),
-         Paragraph(f"<b>Derivador:</b> {paciente.get('derivador', 'N/A')}", body_style)],
-        [Paragraph(f"<b>GRBAS:</b> {grbas_str}", body_style),
-         Paragraph(f"<b>RASATI:</b> {rasati_str}", body_style)],
-        [Paragraph(f"<b>Audio:</b> SR={audio.get('sample_rate_hz', 'N/D')} Hz, Dur={audio.get('duration_s', 'N/D')}s, RMS={audio.get('rms', 'N/D')}", body_style),
-         Paragraph(f"<b>Hash:</b> {audio.get('file_hash_sha256', 'N/D')[:16]}...", body_style)],
+        [P(f"<b>Paciente:</b> {paciente.get('nombre', 'N/A')}", body_style),
+         P(f"<b>DNI:</b> {paciente.get('dni', 'N/A')}", body_style)],
+        [P(f"<b>Edad:</b> {paciente.get('edad', 'N/A')} años | <b>Sexo:</b> {paciente.get('sexo', 'N/A')}", body_style),
+         P(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}", body_style)],
+        [P(f"<b>Motivo:</b> {paciente.get('motivo', 'N/A')}", body_style),
+         P(f"<b>Derivador:</b> {paciente.get('derivador', 'N/A')}", body_style)],
+        [P(f"<b>GRBAS:</b> {grbas_str}", body_style),
+         P(f"<b>RASATI:</b> {rasati_str}", body_style)],
+        [P(f"<b>Audio:</b> SR={audio.get('sample_rate_hz', 'N/D')} Hz, Dur={_fmt(audio.get('duration_s'))}s, RMS={_fmt(audio.get('rms'), 4)}", body_style),
+         P(f"<b>Hash:</b> {audio.get('file_hash_sha256', 'N/D')[:16]}...", body_style)],
     ]
-    t = Table(info_data, colWidths=[270, 270])
-    t.setStyle(TableStyle([
+    t_info = Table(info_data, colWidths=[260, 260])
+    t_info.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
         ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0')),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
     ]))
-    elements.append(t)
-    elements.append(Spacer(1, 8))
+    elements.append(t_info)
+    elements.append(Spacer(1, 6))
 
     if not audio.get("valid", True):
         issues_text = " | ".join(audio.get("issues", []))
@@ -110,102 +211,61 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements.append(Paragraph("<b>1. Métricas Bioacústicas Principales</b>", section_style))
     metrics_data = [
-        ["Parámetro", "Valor", "Severidad", "Referencia"],
-        ["F0 media", f"{metricas.get('f0_mean', 'N/D')} Hz",
-         _severity_cell(metricas.get('f0_mean'), (0, 0, 0), " Hz"),
-         "Variable (sexo/edad)"],
-        ["F0 mínima", f"{metricas.get('f0_min', 'N/D')} Hz", "—", "—"],
-        ["F0 máxima", f"{metricas.get('f0_max', 'N/D')} Hz", "—", "—"],
-        ["F0 DE", f"{metricas.get('f0_sd', 'N/D')} Hz", "—", "—"],
-        ["Jitter local", f"{metricas.get('jitter_pct', 'N/D')}%",
-         _severity_cell(metricas.get('jitter_pct'), (1.04, 2.0, 3.0), "%"),
-         "< 1.04%"],
-        ["Jitter RAP", f"{metricas.get('jitter_rap_pct', 'N/D')}%",
-         _severity_cell(metricas.get('jitter_rap_pct'), (1.04, 2.0, 3.0), "%"),
-         "< 1.04%"],
-        ["Jitter PPQ5", f"{metricas.get('jitter_ppq5_pct', 'N/D')}%",
-         _severity_cell(metricas.get('jitter_ppq5_pct'), (0.5, 1.0, 1.5), "%"),
-         "< 0.5%"],
-        ["Shimmer local", f"{metricas.get('shimmer_pct', 'N/D')}%",
-         _severity_cell(metricas.get('shimmer_pct'), (3.81, 5.0, 7.0), "%"),
-         "< 3.81%"],
-        ["Shimmer (dB)", f"{metricas.get('shimmer_db', 'N/D')} dB",
-         _severity_cell(metricas.get('shimmer_db'), (0.5, 1.0, 2.0), " dB"),
-         "< 0.5 dB"],
-        ["Shimmer APQ3", f"{metricas.get('shimmer_apq3_pct', 'N/D')}%",
-         _severity_cell(metricas.get('shimmer_apq3_pct'), (3.0, 4.5, 6.0), "%"),
-         "< 3.0%"],
-        ["Shimmer APQ5", f"{metricas.get('shimmer_apq5_pct', 'N/D')}%",
-         _severity_cell(metricas.get('shimmer_apq5_pct'), (2.5, 4.0, 6.0), "%"),
-         "< 2.5%"],
-        ["Shimmer APQ11", f"{metricas.get('shimmer_apq11_pct', 'N/D')}%",
-         _severity_cell(metricas.get('shimmer_apq11_pct'), (3.0, 5.0, 7.0), "%"),
-         "< 3.0%"],
-        ["HNR", f"{metricas.get('hnr_db', 'N/D')} dB",
-         _severity_cell(metricas.get('hnr_db'), (20, 15, 10), " dB"),
-         "> 20 dB"],
-        ["CPPS", f"{metricas.get('cpps_db', 'N/D')} dB",
-         _severity_cell(metricas.get('cpps_db'), (5.5, 3.0, 1.0), " dB"),
-         "> 5.5 dB"],
-        ["NNE", f"{metricas.get('nne_db', 'N/D')} dB",
-         _severity_cell(metricas.get('nne_db'), (1.5, 2.5, 3.5), " dB"),
-         "< 1.5 dB"],
-        ["NHR", f"{metricas.get('nhr', 'N/D')}",
-         _severity_cell(metricas.get('nhr'), (0.05, 0.15, 0.25), ""),
-         "< 0.05"],
-        ["F1", f"{metricas.get('f1_hz', 'N/D')} Hz", "—", "Variable"],
-        ["F2", f"{metricas.get('f2_hz', 'N/D')} Hz", "—", "Variable"],
-        ["Intensidad Media", f"{metricas.get('intensity_mean_db', 'N/D')} dB", "—", "60-80 dB"],
-        ["Alpha Ratio", f"{metricas.get('alpha_ratio_db', 'N/D')} dB", "—", "Variable"],
+        [P("Parámetro", header_style), P("Valor", header_style), P("Severidad", header_style), P("Referencia", header_style)],
+        [P("F0 media"), P(f"{_fmt(metricas.get('f0_mean'))} Hz"), P(_severity_cell_text(metricas.get('f0_mean'), (0, 0, 0), " Hz")), P("Variable (sexo/edad)")],
+        [P("F0 mínima"), P(f"{_fmt(metricas.get('f0_min'))} Hz"), P("—"), P("—")],
+        [P("F0 máxima"), P(f"{_fmt(metricas.get('f0_max'))} Hz"), P("—"), P("—")],
+        [P("F0 DE"), P(f"{_fmt(metricas.get('f0_sd'))} Hz"), P("—"), P("—")],
+        [P("Jitter local"), P(f"{_fmt(metricas.get('jitter_pct'))}%"), P(_severity_cell_text(metricas.get('jitter_pct'), (1.04, 2.0, 3.0), "%")), P("< 1.04%")],
+        [P("Jitter RAP"), P(f"{_fmt(metricas.get('jitter_rap_pct'))}%"), P(_severity_cell_text(metricas.get('jitter_rap_pct'), (1.04, 2.0, 3.0), "%")), P("< 1.04%")],
+        [P("Jitter PPQ5"), P(f"{_fmt(metricas.get('jitter_ppq5_pct'))}%"), P(_severity_cell_text(metricas.get('jitter_ppq5_pct'), (0.5, 1.0, 1.5), "%")), P("< 0.5%")],
+        [P("Shimmer local"), P(f"{_fmt(metricas.get('shimmer_pct'))}%"), P(_severity_cell_text(metricas.get('shimmer_pct'), (3.81, 5.0, 7.0), "%")), P("< 3.81%")],
+        [P("Shimmer (dB)"), P(f"{_fmt(metricas.get('shimmer_db'))} dB"), P(_severity_cell_text(metricas.get('shimmer_db'), (0.5, 1.0, 2.0), " dB")), P("< 0.5 dB")],
+        [P("Shimmer APQ3"), P(f"{_fmt(metricas.get('shimmer_apq3_pct'))}%"), P(_severity_cell_text(metricas.get('shimmer_apq3_pct'), (3.0, 4.5, 6.0), "%")), P("< 3.0%")],
+        [P("Shimmer APQ5"), P(f"{_fmt(metricas.get('shimmer_apq5_pct'))}%"), P(_severity_cell_text(metricas.get('shimmer_apq5_pct'), (2.5, 4.0, 6.0), "%")), P("< 2.5%")],
+        [P("Shimmer APQ11"), P(f"{_fmt(metricas.get('shimmer_apq11_pct'))}%"), P(_severity_cell_text(metricas.get('shimmer_apq11_pct'), (3.0, 5.0, 7.0), "%")), P("< 3.0%")],
+        [P("HNR"), P(f"{_fmt(metricas.get('hnr_db'))} dB"), P(_severity_cell_text(metricas.get('hnr_db'), (20, 15, 10), " dB")), P("> 20 dB")],
+        [P("CPPS"), P(f"{_fmt(metricas.get('cpps_db'))} dB"), P(_severity_cell_text(metricas.get('cpps_db'), (5.5, 3.0, 1.0), " dB")), P("> 5.5 dB")],
+        [P("NNE"), P(f"{_fmt(metricas.get('nne_db'))} dB"), P(_severity_cell_text(metricas.get('nne_db'), (1.5, 2.5, 3.5), " dB")), P("< 1.5 dB")],
+        [P("NHR"), P(f"{_fmt(metricas.get('nhr'))}"), P(_severity_cell_text(metricas.get('nhr'), (0.05, 0.15, 0.25), "")), P("< 0.05")],
+        [P("F1"), P(f"{_fmt(metricas.get('f1_hz'), 0)} Hz"), P("—"), P("Variable")],
+        [P("F2"), P(f"{_fmt(metricas.get('f2_hz'), 0)} Hz"), P("—"), P("Variable")],
+        [P("Intensidad Media"), P(f"{_fmt(metricas.get('intensity_mean_db'))} dB"), P("—"), P("60-80 dB")],
+        [P("Alpha Ratio"), P(f"{_fmt(metricas.get('alpha_ratio_db'))} dB"), P("—"), P("Variable")],
     ]
-    t_metrics = Table(metrics_data, colWidths=[95, 95, 145, 140])
+    t_metrics = Table(metrics_data, colWidths=[95, 80, 185, 160])
     t_metrics.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 7),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#ffffff')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#ffffff'), colors.HexColor('#f8fafc')]),
     ]))
     elements.append(t_metrics)
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 6))
 
     elements.append(Paragraph("<b>2. AVQI v03.01 — Acoustic Voice Quality Index</b>", section_style))
     avqi_calculable = metricas.get("avqi_calculable", False)
     avqi_val = metricas.get("avqi")
-    avqi_status = metricas.get("avqi_status", "ok")
 
     if avqi_calculable and avqi_val is not None:
         avqi_data = [
-            ["Componente", "Resultado", "Unidad"],
-            ["CPPS", str(metricas.get('cpps_db', 'N/D')), "dB"],
-            ["HNR", str(metricas.get('hnr_db', 'N/D')), "dB"],
-            ["Shimmer local", str(metricas.get('shimmer_pct', 'N/D')), "%"],
-            ["Spectral Slope", str(metricas.get('spectral_tilt_slope', 'N/D')), "dB/Hz"],
-            ["AVQI v03.01", str(avqi_val), ""],
+            [P("Componente", header_style), P("Resultado", header_style), P("Unidad", header_style)],
+            [P("CPPS"), P(_fmt(metricas.get('cpps_db'))), P("dB")],
+            [P("HNR"), P(_fmt(metricas.get('hnr_db'))), P("dB")],
+            [P("Shimmer local"), P(_fmt(metricas.get('shimmer_pct'))), P("%")],
+            [P("Spectral Slope"), P(_fmt(metricas.get('spectral_slope'))), P("dB/Hz")],
+            [P("<b>AVQI v03.01</b>"), P(f"<b>{_fmt(avqi_val)}</b>"), P("")],
         ]
-        t_avqi = Table(avqi_data, colWidths=[200, 160, 80])
-        avqi_style_list = [
+        t_avqi = Table(avqi_data, colWidths=[200, 200, 120])
+        t_avqi.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e40af')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 7.5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#ffffff'), colors.HexColor('#eff6ff')]),
-        ]
-        avqi_nivel, avqi_clr, avqi_label = _nivel_severidad(avqi_val, (2.0, 2.9, 3.5))
-        try:
-            avqi_hex = f"#{int(avqi_clr.red*255):02x}{int(avqi_clr.green*255):02x}{int(avqi_clr.blue*255):02x}"
-        except Exception:
-            avqi_hex = '#334155'
-        avqi_style_list.append(('BACKGROUND', (1, 5), (1, 5), colors.HexColor(avqi_hex)))
-        avqi_style_list.append(('TEXTCOLOR', (1, 5), (1, 5), colors.white))
-        t_avqi.setStyle(TableStyle(avqi_style_list))
+        ]))
         elements.append(t_avqi)
     else:
         elements.append(Paragraph(
@@ -232,7 +292,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
         if cross_check.get("acoustic_indicators"):
             elements.append(Paragraph("<b>Indicadores acústicos relevantes:</b>", body_style))
-            for ind in cross_check["acoustic_indicators"][:5]:
+            for ind in cross_check["acoustic_indicators"][:4]:
                 elements.append(Paragraph(f"• {ind}", small_style))
             elements.append(Spacer(1, 4))
 
@@ -253,33 +313,41 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
         if cross_check.get("alerts"):
             elements.append(Paragraph('<font color="#f97316"><b>Alertas:</b></font>', body_style))
-            for alert in cross_check["alerts"][:3]:
+            for alert in cross_check["alerts"][:2]:
                 elements.append(Paragraph(f'• <font color="#f97316">{alert}</font>', small_style))
             elements.append(Spacer(1, 4))
 
-    elements.append(Paragraph("<b>4. Gráficos Clínicos de Alta Resolución</b>", section_style))
+    elements.append(Paragraph("<b>4. Gráficos Clínicos de Alta Resolución y Análisis Individual</b>", section_style))
     chart_embedded = False
     if charts:
-        for chart_key, chart_title, chart_h in [
-            ("spectrogram_img", "Espectrograma de Banda Estrecha con F0 y Formantes", 280),
-            ("spectrum_img", "Espectro de Potencia FFT y Pendiente Espectral", 280),
-            ("ddf_img", "Diagrama de Dispersión Fonatoria (DDF)", 280),
-            ("radar_img", "VOXplot Radar — Severidad Multifactorial", 350),
-        ]:
+        chart_configs = [
+            ("spectrogram_img", "Espectrograma de Banda Estrecha con F0 y Formantes", _analisis_espectrograma(metricas)),
+            ("spectrum_img", "Espectro de Potencia FFT y Pendiente Espectral (Tilt)", _analisis_espectro(metricas)),
+            ("ddf_img", "Diagrama de Dispersión Fonatoria (DDF - CPPS vs HNR)", _analisis_ddf(metricas)),
+            ("radar_img", "VOXplot Radar — Severidad Multifactorial", _analisis_radar(metricas, cross_check)),
+        ]
+        for chart_key, chart_title, analysis_text in chart_configs:
             img_bytes = _chart_from_b64(charts, chart_key)
             if img_bytes:
-                elements.append(Spacer(1, 4))
-                elements.append(Paragraph(f"<b>{chart_title}</b>", small_style))
-                chart_w = 400 if chart_key == "radar_img" else 500
-                elements.append(RLImage(BytesIO(img_bytes), width=chart_w, height=chart_h))
-                elements.append(Spacer(1, 6))
+                chart_w = 440 if chart_key == "radar_img" else 480
+                chart_h = 210 if chart_key == "radar_img" else 180
+                block = [
+                    Paragraph(f"<b>{chart_title}</b>", small_style),
+                    Spacer(1, 2),
+                    RLImage(BytesIO(img_bytes), width=chart_w, height=chart_h),
+                    Spacer(1, 3),
+                    Paragraph(analysis_text, chart_box_style),
+                    Spacer(1, 8),
+                ]
+                elements.append(KeepTogether(block))
                 chart_embedded = True
+
     if not chart_embedded and os.path.exists(img_path):
-        elements.append(RLImage(img_path, width=500, height=620))
+        elements.append(RLImage(img_path, width=480, height=580))
 
     elements.append(PageBreak())
 
-    elements.append(Paragraph("<b>4. Interpretación Asistida por IA</b>", section_style))
+    elements.append(Paragraph("<b>5. Interpretación Asistida por IA</b>", section_style))
     sintesis = paciente.get('sintesis_ia', '')
     if sintesis and sintesis.strip():
         for para in sintesis.split('\n'):
@@ -292,21 +360,21 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
             body_style
         ))
 
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph("<b>5. Observaciones Fonoaudiológicas</b>", section_style))
+    elements.append(Spacer(1, 8))
+    elements.append(Paragraph("<b>6. Observaciones Fonoaudiológicas</b>", section_style))
     elements.append(Paragraph(
-        '<font color="#94a3b8"><i>Espacio para observaciones del profesional. '
+        '<font color="#94a3b8"><i>Espacio para observaciones del profesional tratante. '
         'El contenido puede completarse antes de estampar en el informe definitivo.</i></font>',
         body_style
     ))
-    elements.append(Spacer(1, 4))
-    for _ in range(8):
+    elements.append(Spacer(1, 3))
+    for _ in range(6):
         elements.append(Paragraph("_" * 95, body_style))
 
-    elements.append(Spacer(1, 8))
-    elements.append(Paragraph("<b>6. Referencias Bibliográficas y Avisos Clínicos</b>", section_style))
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph("<b>7. Referencias Bibliográficas y Avisos Clínicos</b>", section_style))
     disclaimers = [
-        "Este informe es una herramienta de apoyo y no sustituye la evaluación clínica del profesional fonoaudiólogo.",
+        "Este informe es una herramienta de apoyo instrumental y no sustituye la evaluación clínica del profesional fonoaudiólogo.",
         "Los valores bioacústicos son mediciones objetivas. La interpretación diagnóstica es responsabilidad exclusiva del clínico.",
         "Los rangos de referencia son orientativos y dependen de edad, sexo, tarea vocal, contexto y población normativa utilizada.",
         "El AVQI v03.01 fue validado para clasificación de disfonía en adultos. Su aplicabilidad a niños debe considerarse con cautela.",
@@ -315,29 +383,27 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
     for d in disclaimers:
         elements.append(Paragraph(f"• {d}", disclaimer_style))
 
-    elements.append(Spacer(1, 8))
-    elements.append(Paragraph("<b>Referencias:</b>", body_style))
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph("<b>Referencias Bibliográficas:</b>", body_style))
     refs = [
-        "Farías, P. (2012). Ejercicios que restauran la función vocal. Editorial: Editorial de la Universidad de la Plata.",
-        "Farías, P. (2016). Guía clínica para el especialista en laringe y voz. Editorial: Adriana Hidalgo Editora.",
+        "Farías, P. (2012). Ejercicios que restauran la función vocal. Editorial de la Universidad de la Plata.",
+        "Farías, P. (2016). Guía clínica para el especialista en laringe y voz. Adriana Hidalgo Editora.",
         "Maryn, Y. et al. (2010). The Acoustic Voice Quality Index (AVQI). Journal of Speech, Language, and Hearing Research.",
         "Titze, I. R. (1994). Principles of Voice Production. National Center for Voice and Speech.",
-        "Titze, I. R. (2000). Principles of Voice Production (2nd printing). Prentice-Hall.",
-        "Cecconello, A. et al. Aplicación del análisis acústico en la clínica vocal. Revista Fonoaudiologia.",
         "Feinberg, D. (2022). VoiceLab: A deep learning approach to acoustic voice analysis. Proc. Interspeech 2022.",
     ]
     for ref in refs:
         elements.append(Paragraph(f"• {ref}", small_style))
 
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 15))
     elements.append(Paragraph("_" * 95, disclaimer_style))
     footer_data = [
-        [Paragraph(f"<b>Profesional:</b> {prof_name or 'N/D'}", body_style),
-         Paragraph(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", body_style)],
-        [Paragraph(f"<b>Matrícula:</b> {prof_mat or 'N/D'}", body_style),
-         Paragraph(f"<b>Hash SHA-256:</b> {audio.get('file_hash_sha256', 'N/D')[:32]}...", body_style)],
+        [P(f"<b>Profesional:</b> {prof_name or 'N/D'}", body_style),
+         P(f"<b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", body_style)],
+        [P(f"<b>Matrícula:</b> {prof_mat or 'N/D'}", body_style),
+         P(f"<b>Hash SHA-256:</b> {audio.get('file_hash_sha256', 'N/D')[:32]}...", body_style)],
     ]
-    t_footer = Table(footer_data, colWidths=[270, 270])
+    t_footer = Table(footer_data, colWidths=[260, 260])
     t_footer.setStyle(TableStyle([
         ('FONTSIZE', (0, 0), (-1, -1), 7),
         ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -345,9 +411,9 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
     ]))
     elements.append(t_footer)
 
-    elements.append(Spacer(1, 30))
+    elements.append(Spacer(1, 25))
     elements.append(Paragraph("<b>Firma y Sello del Profesional:</b>", body_style))
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 8))
     elements.append(Paragraph("_" * 50, body_style))
 
     doc.build(elements)

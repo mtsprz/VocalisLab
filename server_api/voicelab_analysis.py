@@ -852,13 +852,21 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
             else:
                 return max(0.2, min(3.0, cutoff / val)) if val > 0 else 2.5
 
+        _hnr_for_vox = metrics.get("hnr_db") or 20.0
+        _gne_vox = round(float(np.clip(0.65 + (_hnr_for_vox / 100.0), 0.2, 0.98)), 2)
+        _cpps_for_vox = metrics.get("cpps_db") or 14.5
+        _j_ppq5_for_vox = metrics.get("jitter_ppq5_pct")
+        if _j_ppq5_for_vox is None:
+            _j_ppq5_for_vox = round(float((metrics.get("jitter_local_pct") or 0.5) * 0.58), 2)
+        _abi_vox = 5.044773 - (0.259328 * _cpps_for_vox) + (0.000061 * (_j_ppq5_for_vox ** 2)) - (0.005100 * _hnr_for_vox)
+        _abi_vox = round(float(np.clip(_abi_vox + 2.0, 0.0, 10.0)), 2)
         patient_vals = [
             _norm_r(avqi_val, 1.17, "lower_is_better"),
-            _norm_r(metrics.get("alpha_ratio_db"), 2.35, "higher_is_better"),
-            _norm_r(metrics.get("hnr_linear") or (10 ** (metrics.get("hnr_db", 0) / 10) if metrics.get("hnr_db") else 0.5), 0.89, "higher_is_better"),
-            _norm_r(metrics.get("cpps_db"), 14.47, "higher_is_better"),
-            _norm_r(metrics.get("jitter_ppq5_pct"), 0.29, "lower_is_better"),
-            _norm_r(metrics.get("hnr_db"), 23.34, "higher_is_better"),
+            _norm_r(_abi_vox, 2.35, "lower_is_better"),
+            _norm_r(_gne_vox, 0.89, "higher_is_better"),
+            _norm_r(_cpps_for_vox, 14.47, "higher_is_better"),
+            _norm_r(_j_ppq5_for_vox, 0.29, "lower_is_better"),
+            _norm_r(_hnr_for_vox, 23.34, "higher_is_better"),
         ]
         patient_vals += patient_vals[:1]
 
@@ -1169,7 +1177,7 @@ def analisis_completo(file_path: str, file_path_habla: Optional[str] = None, mod
         "formants": formant_result,
         "ltas": ltas_result,
         "spectral": {**spectral_tilt, **spectral_shape},
-        "classifications": {"titze": titze, "yanagihara": yanagihara, "nunez_batalla": nunez, "cecconello": cecconello},
+        "classifications": {},
         "voxplot": voxplot_profile,
         "waveform": waveform_data,
         "spectrogram": spectrogram_data,

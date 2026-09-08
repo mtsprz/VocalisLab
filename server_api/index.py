@@ -309,23 +309,6 @@ def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:
         "message": f"NHR = {nhr}" if nhr is not None else "No disponible",
     })
 
-    classifications = metrics.get("classifications", {})
-    titze = classifications.get("titze", {})
-    if titze.get("titze_type"):
-        tools.append({
-            "name": "Clasificación Titze",
-            "status": "ok",
-            "message": f"Tipo {titze['titze_type']}: {titze.get('titze_label', '')}",
-        })
-
-    yanagihara = classifications.get("yanagihara", {})
-    if yanagihara.get("yanagihara_grade") and yanagihara["yanagihara_grade"] != "N/D":
-        tools.append({
-            "name": "Clasificación Yanagihara",
-            "status": "ok",
-            "message": f"Grado {yanagihara['yanagihara_grade']}: {yanagihara.get('yanagihara_label', '')}",
-        })
-
     return tools
 
 
@@ -661,21 +644,44 @@ async def analizar_y_reportar(
         img_path = ""
 
     try:
+        formants = resultado.get("formants", {}) if isinstance(resultado.get("formants"), dict) else {}
         metricas_pdf = {
             "f0_mean": metrics.get("f0_mean"),
+            "f0_min": metrics.get("f0_min"),
+            "f0_max": metrics.get("f0_max"),
+            "f0_sd": metrics.get("f0_sd"),
+            "f0_range": metrics.get("f0_range"),
+            "f0_median": metrics.get("f0_median"),
             "jitter_pct": metrics.get("jitter_local_pct"),
+            "jitter_rap_pct": metrics.get("jitter_rap_pct"),
+            "jitter_ppq5_pct": metrics.get("jitter_ppq5_pct"),
+            "jitter_ddp_pct": metrics.get("jitter_ddp_pct"),
             "shimmer_pct": metrics.get("shimmer_local_pct"),
             "shimmer_db": metrics.get("shimmer_local_db"),
+            "shimmer_apq3_pct": metrics.get("shimmer_apq3_pct"),
+            "shimmer_apq5_pct": metrics.get("shimmer_apq5_pct"),
+            "shimmer_apq11_pct": metrics.get("shimmer_apq11_pct"),
+            "shimmer_dda_pct": metrics.get("shimmer_dda_pct"),
             "hnr_db": metrics.get("hnr_db"),
             "cpps_db": metrics.get("cpps_db"),
+            "nhr": metrics.get("nhr"),
+            "nne_db": metrics.get("nne_db"),
+            "f1_hz": formants.get("f1_hz") or metrics.get("f1_hz"),
+            "f2_hz": formants.get("f2_hz") or metrics.get("f2_hz"),
+            "f3_hz": formants.get("f3_hz") or metrics.get("f3_hz"),
+            "f4_hz": formants.get("f4_hz") or metrics.get("f4_hz"),
+            "intensity_mean_db": metrics.get("intensity_mean_db"),
+            "alpha_ratio_db": metrics.get("alpha_ratio_db"),
             "spectral_slope": resultado.get("spectral", {}).get("spectral_tilt_slope"),
             "spectral_tilt": resultado.get("spectral", {}).get("spectral_tilt_intercept"),
             "avqi": resultado.get("avqi_components", {}).get("avqi"),
             "avqi_calculable": resultado.get("avqi_components", {}).get("calculable", False),
             "avqi_error": resultado.get("avqi_components", {}).get("error"),
+            "avqi_status": resultado.get("avqi_components", {}).get("status", "ok"),
             "harmonics": resultado.get("harmonics", []),
-            "formants": resultado.get("formants", {}),
+            "formants": formants,
             "audio": audio_info,
+            "resultado_raw": resultado,
             "parselmouth_version": resultado.get("parselmouth_version", "0.4.3"),
             "praat_script": f"VoiceLab/{resultado.get('voicelab_version', '2.0.0')}",
         }
