@@ -88,7 +88,7 @@ const METRIC_CLINICAL_NOTES: Record<string, string> = {
 export default function ClinicalReviewScreen({
   audioInfo, metrics, avqiComponents, tools, timestamp, engineVersion, scriptVersion,
   fileHash, harmonics, formants, ltas, spectral, waveform, spectrogram, glottalPulses = [],
-  formantTracks, f0Contour, intensityContour, classifications, voxplot, charts = {}, avqiStatus = 'ok', modo,
+  formantTracks, f0Contour, intensityContour, classifications, voxplot, charts = {}, avqiStatus = 'ok', crossCheck, modo,
   onViewJson, onViewCsv, onViewGraphs, onRecalculate, onApprove, onDownloadPreliminar,
 }: ClinicalReviewProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['validity', 'metrics', 'graphs']));
