@@ -386,10 +386,19 @@ def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:
 
     avqi_val = avqi.get("avqi")
     calculable = avqi.get("calculable", False)
+    avqi_status = avqi.get("status", "ok")
+    if calculable and avqi_val is not None:
+        avqi_tool_status = "ok"
+    elif avqi_status == "untestable_requires_continuous_speech":
+        avqi_tool_status = "warning"
+    elif calculable and avqi_val is None:
+        avqi_tool_status = "warning"
+    else:
+        avqi_tool_status = "warning"
     tools.append({
         "name": "AVQI v03.01",
-        "status": "ok" if calculable and avqi_val is not None else ("warning" if calculable else "error"),
-        "message": f"AVQI = {avqi_val}" if calculable else (avqi.get("error", "No calculable")),
+        "status": avqi_tool_status,
+        "message": f"AVQI = {avqi_val}" if calculable else (avqi.get("error", "No calculable (requiere habla continua)")),
     })
 
     f1 = metrics.get("f1_hz")
