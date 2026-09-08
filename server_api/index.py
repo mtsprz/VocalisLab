@@ -616,13 +616,12 @@ async def analizar_y_reportar(
         )
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error en el análisis bioacústico: {str(e)}")
-    finally:
         try:
             if os.path.exists(tmp_vocal): os.remove(tmp_vocal)
             if tmp_habla and os.path.exists(tmp_habla): os.remove(tmp_habla)
         except Exception:
             pass
+        raise HTTPException(status_code=500, detail=f"Error en el análisis bioacústico: {str(e)}")
 
     if resultado["status"] == "error":
         return JSONResponse(status_code=422, content=resultado)
@@ -654,7 +653,7 @@ async def analizar_y_reportar(
     if groq_key:
         try:
             from groq import Groq
-            client = Groq(api_key=groq_key)
+            client = Groq(api_key=groq_key, timeout=20.0)
             avqi_str = str(resultado.get("avqi_components", {}).get("avqi", "N/D"))
             avqi_status = resultado.get("avqi_components", {}).get("status", "ok")
 
