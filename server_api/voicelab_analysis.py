@@ -658,96 +658,6 @@ def extract_intensity_contour(sound):
         return {"intensity_times_s": [], "intensity_values_db": []}
 
 
-def classify_titze(hnr_db, shimmer_pct, jitter_pct, cpps_db, spectral_tilt):
-    scores = {"Type_1_vocal_fatigue": 0, "Type_2_muscle_tension": 0, "Type_3_mucosal_wave": 0}
-    if hnr_db is not None:
-        if hnr_db < 10: scores["Type_3_mucosal_wave"] += 2
-        elif hnr_db < 15: scores["Type_3_mucosal_wave"] += 1; scores["Type_1_vocal_fatigue"] += 1
-        elif hnr_db > 20: scores["Type_1_vocal_fatigue"] += 1
-    if shimmer_pct is not None:
-        if shimmer_pct > 5: scores["Type_3_mucosal_wave"] += 2
-        elif shimmer_pct > 3.8: scores["Type_2_muscle_tension"] += 1
-    if jitter_pct is not None:
-        if jitter_pct > 2: scores["Type_2_muscle_tension"] += 2
-        elif jitter_pct > 1.0: scores["Type_1_vocal_fatigue"] += 1
-    if cpps_db is not None:
-        if cpps_db < 3: scores["Type_3_mucosal_wave"] += 2
-        elif cpps_db < 5.5: scores["Type_2_muscle_tension"] += 1
-    if spectral_tilt is not None:
-        if spectral_tilt < -1.0: scores["Type_3_mucosal_wave"] += 1
-    best = max(scores, key=scores.get)
-    best_score = scores[best]
-    type_map = {"Type_1_vocal_fatigue": 1, "Type_2_muscle_tension": 2, "Type_3_mucosal_wave": 3}
-    labels = {1: "Fatiga Vocal (Tensión Muscular)", 2: "Disfonía por Tensión Muscular", 3: "Déficit de Onda Mucosa"}
-    return {"titze_type": type_map[best], "titze_label": labels[type_map[best]], "scores": scores, "confidence": best_score}
-
-
-def classify_yanagihara(hnr_db, shimmer_pct, shimmer_db, cpps_db, spectral_tilt):
-    score = 0
-    if hnr_db is not None:
-        if hnr_db > 20: score += 0
-        elif hnr_db > 15: score += 1
-        elif hnr_db > 10: score += 2
-        else: score += 3
-    if shimmer_pct is not None:
-        if shimmer_pct < 3.8: score += 0
-        elif shimmer_pct < 5: score += 1
-        elif shimmer_pct < 7: score += 2
-        else: score += 3
-    if cpps_db is not None:
-        if cpps_db > 5.5: score += 0
-        elif cpps_db > 3: score += 1
-        elif cpps_db > 1: score += 2
-        else: score += 3
-    avg = score / 3
-    if avg <= 0.3: grade, label = "I", "Normal"
-    elif avg <= 1.0: grade, label = "II", "Disfonía Leve"
-    elif avg <= 2.0: grade, label = "III", "Disfonía Moderada"
-    else: grade, label = "IV", "Disfonía Severa"
-    return {"yanagihara_grade": grade, "yanagihara_label": label, "raw_score": round(avg, 2)}
-
-
-def classify_nunez_batalla(jitter_pct, shimmer_pct, hnr_db, f0_sd, f0_range):
-    astenia_score = 0
-    if jitter_pct is not None:
-        if jitter_pct > 2.0: astenia_score += 3
-        elif jitter_pct > 1.0: astenia_score += 2
-        elif jitter_pct > 0.5: astenia_score += 1
-    if shimmer_pct is not None:
-        if shimmer_pct > 5.0: astenia_score += 3
-        elif shimmer_pct > 3.8: astenia_score += 2
-        elif shimmer_pct > 2.0: astenia_score += 1
-    if hnr_db is not None:
-        if hnr_db < 10: astenia_score += 3
-        elif hnr_db < 15: astenia_score += 2
-        elif hnr_db < 20: astenia_score += 1
-    if f0_range is not None:
-        if f0_range > 100: astenia_score += 1
-    avg = astenia_score / 3
-    if avg <= 0.3: grade, label = "I", "Normal"
-    elif avg <= 1.0: grade, label = "II", "Astenia Leve"
-    elif avg <= 2.0: grade, label = "III", "Astenia Moderada"
-    else: grade, label = "IV", "Astenia Severa"
-    return {"nunez_batalla_grade": grade, "nunez_batalla_label": label, "raw_score": round(avg, 2)}
-
-
-def classify_cecconello(harmonics, f0_mean):
-    if not harmonics or f0_mean is None or f0_mean <= 0:
-        return {"harmonic_loss_pct": None, "classification": "No calculable"}
-    total_power = sum(10 ** (h["amplitude_db"] / 10) for h in harmonics if h["amplitude_db"] is not None)
-    if total_power == 0:
-        return {"harmonic_loss_pct": None, "classification": "No calculable"}
-    h1_power = 10 ** (harmonics[0]["amplitude_db"] / 10) if harmonics[0]["amplitude_db"] is not None else 0
-    harmonic_power = sum(10 ** (h["amplitude_db"] / 10) for h in harmonics[1:] if h["amplitude_db"] is not None)
-    loss_pct = (1 - harmonic_power / (total_power - h1_power)) * 100 if (total_power - h1_power) > 0 else 0
-    loss_pct = max(0, min(100, loss_pct))
-    if loss_pct < 20: label = "Conservación normal de armónicos"
-    elif loss_pct < 40: label = "Pérdida armónica leve"
-    elif loss_pct < 60: label = "Pérdida armónica moderada"
-    else: label = "Pérdida armónica severa"
-    return {"harmonic_loss_pct": round(loss_pct, 1), "classification": label}
-
-
 def extract_harmonics(sound, f0_mean=None, n_harmonics=10):
     if f0_mean is None or f0_mean <= 0:
         return []
@@ -1178,31 +1088,6 @@ def analisis_completo(file_path: str, file_path_habla: Optional[str] = None, mod
         avqi_result = {"avqi": None, "calculable": False, "error": f"Error calculando AVQI: {str(e)}", "components": {}}
 
     try:
-        titze = classify_titze(
-            hnr_result.get("hnr_db"), shimmer_pct, jitter_result.get("jitter_local_pct"),
-            cpp_result.get("cpps_db"), spectral_tilt.get("spectral_tilt_slope")
-        )
-    except Exception:
-        titze = {"titze_type": None, "titze_label": "No clasificable", "scores": {}, "confidence": 0}
-
-    try:
-        yanagihara = classify_yanagihara(
-            hnr_result.get("hnr_db"), shimmer_pct, shimmer_db,
-            cpp_result.get("cpps_db"), spectral_tilt.get("spectral_tilt_slope")
-        )
-    except Exception:
-        yanagihara = {"yanagihara_grade": "N/D", "yanagihara_label": "No clasificable", "raw_score": 0}
-
-    try:
-        nunez = classify_nunez_batalla(
-            jitter_result.get("jitter_local_pct"), shimmer_pct,
-            hnr_result.get("hnr_db"), pitch_result.get("f0_sd_hz"),
-            pitch_result.get("f0_range_hz")
-        )
-    except Exception:
-        nunez = {"nunez_batalla_grade": "N/D", "nunez_batalla_label": "No clasificable", "raw_score": 0}
-
-    try:
         glottal_pulses = extract_glottal_pulses(sound, pf, pc)
     except Exception:
         glottal_pulses = []
@@ -1211,11 +1096,6 @@ def analisis_completo(file_path: str, file_path_habla: Optional[str] = None, mod
         formant_tracks = extract_formant_tracks(sound, pf, pc)
     except Exception:
         formant_tracks = {"times_s": [], "f1_hz": [], "f2_hz": [], "f3_hz": [], "f4_hz": []}
-
-    try:
-        cecconello = classify_cecconello(harmonics, pitch_result.get("f0_mean_hz"))
-    except Exception:
-        cecconello = {"harmonic_loss_pct": None, "classification": "No clasificable"}
 
     try:
         voxplot_profile = calculate_voxplot_profile(
@@ -1256,7 +1136,7 @@ def analisis_completo(file_path: str, file_path_habla: Optional[str] = None, mod
             "avqi": avqi_result,
             "ltas": ltas_result,
             "spectral": {**spectral_tilt, **spectral_shape},
-            "classifications": {"titze": titze, "yanagihara": yanagihara, "nunez_batalla": nunez, "cecconello": cecconello},
+            "classifications": {},
             "engine": ENGINE_VERSION,
             "voicelab_version": VOICELAB_VERSION,
             "parselmouth_version": PARSELMOUTH_VERSION,

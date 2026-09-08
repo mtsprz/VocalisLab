@@ -3,12 +3,15 @@
     "version": "1.0.0",
     "description": "Base de conocimiento clínico fonoaudiológico para análisis bioacústico de la voz",
     "references": [
-      "Titze, I.R. (1994). Principles of Voice Production.",
-      "Cecconello, A. et al. Aplicación del análisis acústico en la clínica vocal.",
-      "Maryn, Y. et al. (2010). The Acoustic Voice Quality Index (AVQI).",
-      "Yanagihara, N. (1967). Significance of harmonic changes and noise components in hoarseness.",
+      "Farías, P. (2012). Ejercicios que restauran la función vocal. Editorial: Editorial de la Universidad de la Plata.",
+      "Farías, P. (2016). Guía clínica para el especialista en laringe y voz. Editorial: Adriana Hidalgo Editora.",
+      "Maryn, Y. et al. (2010). The Acoustic Voice Quality Index (AVQI). Journal of Speech, Language, and Hearing Research.",
+      "Titze, I. R. (1994). Principles of Voice Production. National Center for Voice and Speech.",
+      "Titze, I. R. (2000). Principles of Voice Production (2nd printing). Prentice-Hall.",
+      "Cecconello, A. et al. Aplicación del análisis acústico en la clínica vocal. Revista Fonoaudiologia.",
+      "Feinberg, D. (2022). VoiceLab: A deep learning approach to acoustic voice analysis. Proc. Interspeech 2022.",
       "Núñez Batalla, F. et al. Índice de astenia vocal.",
-      "Feinberg, D. (2022). VoiceLab. Proc. Interspeech 2022."
+      "Yanagihara, N. (1967). Significance of harmonic changes and noise components in hoarseness.",
     ]
   },
   "normative_ranges": {

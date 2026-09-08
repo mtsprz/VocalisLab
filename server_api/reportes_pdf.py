@@ -223,35 +223,8 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements.append(PageBreak())
 
-    elements.append(Paragraph("<b>3. Clasificaciones Clínicas</b>", section_style))
-    classifications = metricas.get("classifications", {})
-    titze = classifications.get("titze", {})
-    yanagihara = classifications.get("yanagihara", {})
-    nunez = classifications.get("nunez_batalla", {})
-    cecconello = classifications.get("cecconello", {})
-    class_data = [
-        ["Clasificación", "Resultado"],
-        ["Titze", f"Tipo {titze.get('titze_type', 'N/D')}: {titze.get('titze_label', 'No clasificable')}"],
-        ["Yanagihara", f"Grado {yanagihara.get('yanagihara_grade', 'N/D')}: {yanagihara.get('yanagihara_label', 'No clasificable')}"],
-        ["Núñez Batalla", f"Grado {nunez.get('nunez_batalla_grade', 'N/D')}: {nunez.get('nunez_batalla_label', 'No clasificable')}"],
-        ["Cecconello", f"{cecconello.get('classification', 'No clasificable')} ({cecconello.get('harmonic_loss_pct', 'N/D')}% pérdida)"],
-    ]
-    t_class = Table(class_data, colWidths=[140, 360])
-    t_class.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#334155')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#ffffff'), colors.HexColor('#f8fafc')]),
-    ]))
-    elements.append(t_class)
-    elements.append(Spacer(1, 8))
-
     if cross_check and cross_check.get("perceptual_acoustic_consistency") != "N/D":
-        elements.append(Paragraph("<b>3.1 Correlación Percepción-Acústica (GRBAS vs Bioacústica)</b>", section_style))
+        elements.append(Paragraph("<b>3. Correlación Percepción-Acústica (GRBAS vs Bioacústica)</b>", section_style))
         consistency = cross_check.get("perceptual_acoustic_consistency", "")
         consistency_color = "#22c55e" if consistency == "Consistente" else "#f97316"
         elements.append(Paragraph(f'<font color="{consistency_color}"><b>Consistencia:</b></font> {consistency}', body_style))
@@ -306,7 +279,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements.append(PageBreak())
 
-    elements.append(Paragraph("<b>5. Interpretación Asistida por IA</b>", section_style))
+    elements.append(Paragraph("<b>4. Interpretación Asistida por IA</b>", section_style))
     sintesis = paciente.get('sintesis_ia', '')
     if sintesis and sintesis.strip():
         for para in sintesis.split('\n'):
@@ -320,7 +293,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
         ))
 
     elements.append(Spacer(1, 10))
-    elements.append(Paragraph("<b>6. Observaciones Fonoaudiológicas</b>", section_style))
+    elements.append(Paragraph("<b>5. Observaciones Fonoaudiológicas</b>", section_style))
     elements.append(Paragraph(
         '<font color="#94a3b8"><i>Espacio para observaciones del profesional. '
         'El contenido puede completarse antes de estampar en el informe definitivo.</i></font>',
@@ -331,17 +304,30 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
         elements.append(Paragraph("_" * 95, body_style))
 
     elements.append(Spacer(1, 8))
-    elements.append(Paragraph("<b>7. Avisos Clínicos Obligatorios</b>", section_style))
+    elements.append(Paragraph("<b>6. Referencias Bibliográficas y Avisos Clínicos</b>", section_style))
     disclaimers = [
         "Este informe es una herramienta de apoyo y no sustituye la evaluación clínica del profesional fonoaudiólogo.",
         "Los valores bioacústicos son mediciones objetivas. La interpretación diagnóstica es responsabilidad exclusiva del clínico.",
         "Los rangos de referencia son orientativos y dependen de edad, sexo, tarea vocal, contexto y población normativa utilizada.",
         "El AVQI v03.01 fue validado para clasificación de disfonía en adultos. Su aplicabilidad a niños debe considerarse con cautela.",
         "Este sistema no almacena diagnósticos. Todos los resultados son mediciones instrumentales que requieren correlación clínica.",
-        "Los puntos de corte del AVQI varían según versión, idioma y población. Los valores mostrados son referenciales.",
     ]
     for d in disclaimers:
         elements.append(Paragraph(f"• {d}", disclaimer_style))
+
+    elements.append(Spacer(1, 8))
+    elements.append(Paragraph("<b>Referencias:</b>", body_style))
+    refs = [
+        "Farías, P. (2012). Ejercicios que restauran la función vocal. Editorial: Editorial de la Universidad de la Plata.",
+        "Farías, P. (2016). Guía clínica para el especialista en laringe y voz. Editorial: Adriana Hidalgo Editora.",
+        "Maryn, Y. et al. (2010). The Acoustic Voice Quality Index (AVQI). Journal of Speech, Language, and Hearing Research.",
+        "Titze, I. R. (1994). Principles of Voice Production. National Center for Voice and Speech.",
+        "Titze, I. R. (2000). Principles of Voice Production (2nd printing). Prentice-Hall.",
+        "Cecconello, A. et al. Aplicación del análisis acústico en la clínica vocal. Revista Fonoaudiologia.",
+        "Feinberg, D. (2022). VoiceLab: A deep learning approach to acoustic voice analysis. Proc. Interspeech 2022.",
+    ]
+    for ref in refs:
+        elements.append(Paragraph(f"• {ref}", small_style))
 
     elements.append(Spacer(1, 20))
     elements.append(Paragraph("_" * 95, disclaimer_style))

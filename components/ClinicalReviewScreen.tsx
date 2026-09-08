@@ -227,37 +227,6 @@ export default function ClinicalReviewScreen({
             )}
           </div>
         )}
-        {/* Classifications */}
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          {classif.titze && classif.titze.titze_type && (
-            <div className="p-3 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Titze</div>
-              <div className="text-sm font-bold text-slate-200">Tipo {classif.titze.titze_type}</div>
-              <div className="text-[10px] text-slate-400">{classif.titze.titze_label}</div>
-            </div>
-          )}
-          {classif.yanagihara && classif.yanagihara.yanagihara_grade && (
-            <div className="p-3 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Yanagihara</div>
-              <div className="text-sm font-bold text-slate-200">Grado {classif.yanagihara.yanagihara_grade}</div>
-              <div className="text-[10px] text-slate-400">{classif.yanagihara.yanagihara_label}</div>
-            </div>
-          )}
-          {classif.nunez_batalla && classif.nunez_batalla.nunez_batalla_grade && (
-            <div className="p-3 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Núñez Batalla</div>
-              <div className="text-sm font-bold text-slate-200">Grado {classif.nunez_batalla.nunez_batalla_grade}</div>
-              <div className="text-[10px] text-slate-400">{classif.nunez_batalla.nunez_batalla_label}</div>
-            </div>
-          )}
-          {classif.cecconello && classif.cecconello.harmonic_loss_pct != null && (
-            <div className="p-3 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Cecconello</div>
-              <div className="text-sm font-bold text-slate-200">{classif.cecconello.harmonic_loss_pct}%</div>
-              <div className="text-[10px] text-slate-400">{classif.cecconello.classification}</div>
-            </div>
-          )}
-        </div>
       </SectionBlock>
 
       {/* BLOCK C: Clinical Graphs */}
