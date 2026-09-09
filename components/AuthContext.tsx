@@ -43,8 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = () => {
-    window.location.href = `${BACKEND_URL}/api/auth/google/url`;
+  const login = async () => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/auth/google/url`);
+      const data = await r.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (e) {
+      console.error('Error getting Google auth URL:', e);
+    }
   };
 
   const logout = () => {
