@@ -1,11 +1,11 @@
-{
+﻿{
   "metadata": {
     "version": "1.0.0",
-    "description": "Banco de ejercicios terapéuticos vocales basado en Farías (2012, 2016), FonoAr y práctica clínica fonoaudiológica",
+    "description": "Banco de ejercicios terapéuticos vocales basado en Farías (2012, 2016), y práctica clínica fonoaudiológica",
     "references": [
       "Farías, P. (2012). Ejercicios que restauran la función vocal.",
       "Farías, P. (2016). Guía clínica para el especialista en laringe y voz.",
-      "FonoAr. Cuadernillo terapéutico vocal.",
+      "Cuadernillo terapéutico vocal.",
       "Le Huche, F. (1991). La voz: anatomía y fisiología."
     ]
   },
@@ -373,3 +373,4 @@
     }
   ]
 }
+

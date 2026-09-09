@@ -1,7 +1,7 @@
-"""
+﻿"""
 VocalisLab Pro — Motor de Recomendación IA Fonoaudiológico
-Basado en Farías (2012, 2016), FonoAr, Le Huche y correlación multidimensional:
-Anamnesis + Ficha de Riesgo FonoAr (69 ítems) + Escalas Clínicas + Acústica Praat.
+Basado en Farías (2012, 2016), Le Huche y correlación multidimensional:
+Anamnesis + Ficha de Riesgo Vocal (69 ítems) + Escalas Clínicas + Acústica Praat.
 """
 import os
 import json
@@ -26,7 +26,7 @@ def generar_recomendacion_terapeutica(
 ) -> dict:
     """
     Sintetiza la clínica completa del paciente y genera un plan terapéutico
-    personalizado con ejercicios del banco de Farías y FonoAr.
+    personalizado con ejercicios del banco de Farías.
     """
     groq_key = os.environ.get("GROQ_API_KEY")
     bank = _load_bank()
@@ -38,7 +38,7 @@ def generar_recomendacion_terapeutica(
     ocupacion = paciente.get("ocupacion", "Sin ocupación especificada")
     demanda = paciente.get("demanda_vocal_horas", "N/D")
 
-    # Riesgo FonoAr
+    # Riesgo Vocal
     riesgo_total = riesgo_vocal.get("puntaje_total", 0)
     riesgo_grupo = riesgo_vocal.get("grupo", "Grupo 1")
     riesgo_alertas = riesgo_vocal.get("alertas_conductas_3", [])
@@ -73,11 +73,11 @@ def generar_recomendacion_terapeutica(
                 "Tu marco conceptual y metodológico se rige estrictamente por:\n"
                 "1. Farías, Patricia (2012). 'Ejercicios que restauran la función vocal'.\n"
                 "2. Farías, Patricia (2016). 'Guía clínica para el especialista en laringe y voz'.\n"
-                "3. Cuadernillo Terapéutico Vocal FonoAr.\n"
+                "3. Cuadernillo Terapéutico Vocal.\n"
                 "4. Técnicas miofasciales, Le Huche y Semioclusión del Tracto Vocal (SOVTE).\n\n"
                 "Debes devolver EXCLUSIVAMENTE un objeto JSON válido con las siguientes claves obligatorias:\n"
                 "{\n"
-                '  "sintesis_fisiopatologica": "Análisis exhaustivo integrando riesgo vocal FonoAr, patrón perceptual y acústica.",\n'
+                '  "sintesis_fisiopatologica": "Análisis exhaustivo integrando riesgo vocal, patrón perceptual y acústica.",\n'
                 '  "diagnostico_funcional_fonoaudiologico": "Definición del cuadro funcional vocal (ej. Disfonía músculo tensional grado II, Incompetencia glótica compensatoria, etc.)",\n'
                 '  "objetivos_terapeuticos": ["Obj 1", "Obj 2", "Obj 3"],\n'
                 '  "ejercicios_recomendados": [\n'
@@ -104,7 +104,7 @@ DATOS DEL CASO CLÍNICO:
 - Paciente: {nombre} ({edad} años, {sexo}), Ocupación: {ocupacion}, Demanda vocal: {demanda} h/día.
 - Anamnesis: Motivo: {anamnesis.get('motivo_consulta', 'N/D')}. Diagnóstico ORL: {anamnesis.get('diagnostico_orl', 'Sin informe laringoscópico previo')}.
   Síntomas: {json.dumps(anamnesis.get('sintomas', {}), ensure_ascii=False)}
-- Evaluación de Riesgo Vocal FonoAr:
+- Evaluación de riesgo vocal:
   * Puntaje Total: {riesgo_total}/207 -> {riesgo_grupo}
   * Subtotales: {json.dumps(subtotales, ensure_ascii=False)}
   * Conductas críticas puntuadas con 3 (Mucho/Siempre): {', '.join(riesgo_alertas) if riesgo_alertas else 'Ninguna puntual'}
@@ -134,7 +134,7 @@ Genera la recomendación terapéutica precisa.
         except Exception as e:
             traceback.print_exc()
 
-    # 2. Motor Heurístico de Respaldo Clínico (Reglas de Farías 2012 / 2016 y FonoAr)
+    # 2. Motor Heurístico de Respaldo Clínico (Reglas de Farías 2012 / 2016)
     g_score = grbas.get("G", 0)
     tension_score = max(grbas.get("S", 0), rasati.get("T", 0))
     soplo_score = max(grbas.get("B", 0), rasati.get("S", 0))
@@ -213,12 +213,12 @@ Genera la recomendación terapéutica precisa.
         "Monitorear intensidad vocal en ambientes ruidosos evitando competir con ruido de fondo."
     ]
     if riesgo_alertas:
-        pautas.insert(0, f"Control prioritario de las conductas FonoAr de grado 3: {', '.join(riesgo_alertas[:3])}.")
+        pautas.insert(0, f"Control prioritario de las conductas de riesgo de grado 3: {', '.join(riesgo_alertas[:3])}.")
 
     total_ses = 12 if riesgo_total > 90 else (10 if riesgo_total > 60 else 8)
 
     return {
-        "sintesis_fisiopatologica": f"Paciente {sexo} de {edad} años con demanda vocal de {demanda} h/día y puntaje de riesgo FonoAr de {riesgo_total} ({riesgo_grupo}). Se observa compromiso biomecánico con grado de disfonía G{g_score} y tensión asociada T{tension_score}, correlacionado con perturbación acústica.",
+        "sintesis_fisiopatologica": f"Paciente {sexo} de {edad} años con demanda vocal de {demanda} h/día y puntaje de riesgo vocal de {riesgo_total} ({riesgo_grupo}). Se observa compromiso biomecánico con grado de disfonía G{g_score} y tensión asociada T{tension_score}, correlacionado con perturbación acústica.",
         "diagnostico_funcional_fonoaudiologico": "Sobreesfuerzo Vocal e Hiperfunción Laríngea con Patrón Hipercinético" if tension_score >= 2 else "Incompetencia Glótica Funcional con Desbalance Resonancial",
         "objetivos_terapeuticos": [
             "Desactivar constricción supraglótica e hipertonía cervical.",
@@ -234,3 +234,4 @@ Genera la recomendación terapéutica precisa.
             "etapas": "Fase 1: Trabajo corporal, respiratorio y desfonación tensa. Fase 2: Flexibilización glótica con SOVTE y resonancia. Fase 3: Transferencia a voz proyectada e integración laboral."
         }
     }
+
