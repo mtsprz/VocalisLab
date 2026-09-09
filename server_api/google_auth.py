@@ -139,9 +139,7 @@ async def google_callback(code: str = "", state: str = ""):
 
         return HTMLResponse(content=f"""
             <html><body><script>
-                const data = JSON.parse(atob('{encoded}'));
-                localStorage.setItem('vocalislab_user', JSON.stringify(data));
-                window.location.href = '{FRONTEND_URL}';
+                window.location.href = '{FRONTEND_URL}?auth=1&user={encoded}';
             </script></body></html>
         """)
 

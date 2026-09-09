@@ -30,7 +30,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check localStorage for existing session
+    // Check for OAuth callback with user data in URL params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('auth') === '1' && params.get('user')) {
+      try {
+        const decoded = JSON.parse(atob(params.get('user')!));
+        localStorage.setItem('vocalislab_user', JSON.stringify(decoded));
+        setUser(decoded);
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch {}
+      setLoading(false);
+      return;
+    }
+    // Existing localStorage check
     const saved = localStorage.getItem('vocalislab_user');
     if (saved) {
       try {
