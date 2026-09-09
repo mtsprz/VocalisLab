@@ -13,13 +13,18 @@ from fastapi.responses import JSONResponse
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+supabase = None
+_supabase_error = None
 try:
     from supabase import create_client
     SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
     SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_ANON_KEY", ""))
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
-except Exception:
-    supabase = None
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    else:
+        _supabase_error = "SUPABASE_URL o SUPABASE_KEY no configurados"
+except Exception as e:
+    _supabase_error = str(e)
 
 router = APIRouter()
 
@@ -40,6 +45,7 @@ def _db_insert(table: str, data: dict):
         result = supabase.table(table).insert(data).execute()
         return result.data[0] if result.data else data
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error insertando en {table}: {str(e)}")
 
 
@@ -50,6 +56,7 @@ def _db_upsert(table: str, data: dict, on_conflict: str = "id"):
         result = supabase.table(table).upsert(data, on_conflict=on_conflict).execute()
         return result.data[0] if result.data else data
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error upsert en {table}: {str(e)}")
 
 
@@ -60,14 +67,17 @@ def _db_select(table: str, filters: dict = None, order: str = None, limit: int =
         q = supabase.table(table).select("*")
         if filters:
             for k, v in filters.items():
-                q = q.eq(k, v)
+                if v is not None:
+                    q = q.eq(k, v)
         if order:
             q = q.order(order, desc=True)
         q = q.limit(limit)
         result = q.execute()
         return result.data or []
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error consultando {table}: {str(e)}")
+        traceback.print_exc()
+        print(f"[api_clinica] Error consultando {table}: {e}")
+        return []
 
 
 def _db_update(table: str, record_id: str, data: dict):
@@ -77,6 +87,7 @@ def _db_update(table: str, record_id: str, data: dict):
         result = supabase.table(table).update(data).eq("id", record_id).execute()
         return result.data[0] if result.data else {**data, "id": record_id}
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error actualizando {table}: {str(e)}")
 
 
@@ -87,6 +98,7 @@ def _db_delete(table: str, record_id: str):
         supabase.table(table).delete().eq("id", record_id).execute()
         return True
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error eliminando de {table}: {str(e)}")
 
 
@@ -128,22 +140,31 @@ async def listar_pacientes(
     activo: bool = Query(True),
     limit: int = Query(100),
 ):
-    if supabase:
+    if not supabase:
+        return JSONResponse(content=[])
+    try:
         q = supabase.table("pacientes").select("*").eq("activo", activo).order("nombre_completo")
         if buscar:
             q = q.or_(f"nombre_completo.ilike.%{buscar}%,dni.ilike.%{buscar}%")
         q = q.limit(limit)
         result = q.execute()
         return JSONResponse(content=result.data or [])
-    return JSONResponse(content=[])
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[api_clinica] Error en listar_pacientes: {e}")
+        return JSONResponse(content=[])
 
 
 @router.get("/api/pacientes/{paciente_id}")
 async def obtener_paciente(paciente_id: str):
-    if supabase:
+    if not supabase:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado (Supabase no configurado)")
+    try:
         result = supabase.table("pacientes").select("*").eq("id", paciente_id).execute()
         if result.data:
             return JSONResponse(content=result.data[0])
+    except Exception as e:
+        traceback.print_exc()
     raise HTTPException(status_code=404, detail="Paciente no encontrado")
 
 
@@ -411,7 +432,9 @@ async def listar_turnos(
     estado: str = Query(None),
     limit: int = Query(100),
 ):
-    if supabase:
+    if not supabase:
+        return JSONResponse(content=[])
+    try:
         q = supabase.table("turnos").select("*, pacientes(nombre_completo, dni, telefono)")
         if fecha_desde:
             q = q.gte("fecha_hora", fecha_desde)
@@ -422,7 +445,10 @@ async def listar_turnos(
         q = q.order("fecha_hora").limit(limit)
         result = q.execute()
         return JSONResponse(content=result.data or [])
-    return JSONResponse(content=[])
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[api_clinica] Error en listar_turnos: {e}")
+        return JSONResponse(content=[])
 
 
 @router.put("/api/turnos/{turno_id}")
@@ -465,7 +491,9 @@ async def dashboard():
             "evaluaciones_mes": evaluaciones.count or 0,
             "analisis_mes": analisis.count or 0,
         })
-    except Exception:
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[api_clinica] Error en dashboard: {e}")
         return JSONResponse(content={
             "total_pacientes": 0, "turnos_hoy": 0,
             "evaluaciones_mes": 0, "analisis_mes": 0,
