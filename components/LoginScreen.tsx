@@ -49,7 +49,7 @@ export default function LoginScreen() {
         {/* Features */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { icon: <Shield size={16} />, label: 'Riesgo FonoAr' },
+            { icon: <Shield size={16} />, label: 'Riesgo Vocal' },
             { icon: <Activity size={16} />, label: 'Análisis Praat' },
             { icon: <Sparkles size={16} />, label: 'Motor IA' },
           ].map((f) => (

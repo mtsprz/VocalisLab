@@ -152,7 +152,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
             </div>
             <h2 className="text-2xl font-extrabold tracking-tight">Prescripción Terapéutica Vocal Basada en IA</h2>
             <p className="text-sm text-indigo-200 mt-1 max-w-2xl">
-              Sintetiza la Ficha FonoAr de Riesgo Vocal, Anamnesis, Escalas Perceptuales (GRBAS/RASATI) y Acústica de Praat bajo la evidencia metodológica de la Lic. Patricia Farías.
+              Sintetiza la Ficha de Riesgo Vocal, Anamnesis, Escalas Perceptuales (GRBAS/RASATI) y Acústica de Praat bajo la evidencia metodológica de la Lic. Patricia Farías.
             </p>
           </div>
           <button
@@ -196,15 +196,15 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
           </div>
         </div>
 
-        {/* FonoAr Risk & Scales Summary Card */}
+        {/* Risk & Scales Summary Card */}
         <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-xl p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Riesgo FonoAr y Escalas</span>
+            <span className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Riesgo Vocal y Escalas</span>
             <Shield size={16} className="text-amber-500" />
           </div>
           <div className="space-y-2 text-xs">
             <div className="flex justify-between items-center bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200/50 dark:border-amber-900/50">
-              <span className="font-bold text-amber-800 dark:text-amber-300">Puntaje FonoAr:</span>
+              <span className="font-bold text-amber-800 dark:text-amber-300">Puntaje Riesgo Vocal:</span>
               <span className="font-extrabold text-amber-700 dark:text-amber-400">{riesgoVocalData.puntaje_total} pts</span>
             </div>
             <div className="flex justify-between text-gray-600 dark:text-gray-400">
@@ -293,7 +293,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <FileText size={18} className="text-indigo-500" /> Prescripción de Ejercicios (Metodología Farías)
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Ejercicios seleccionados por el motor según biomecánica cordal y FonoAr</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Ejercicios seleccionados por el motor según biomecánica cordal y riesgo vocal</p>
               </div>
               <button
                 onClick={handleTransferToCuadernillo}
@@ -329,7 +329,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
             </div>
           </div>
 
-          {/* Pautas de Higiene Vocal e Intervención FonoAr */}
+          {/* Pautas de Higiene Vocal */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-2xl p-6 shadow-sm space-y-3">
               <h3 className="font-bold text-gray-900 dark:text-white text-sm uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-2">

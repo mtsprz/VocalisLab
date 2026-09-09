@@ -7,7 +7,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 interface Props { pacienteId: string | null; }
 
 const RIESGO_VOCAL_FONOAR = {
-  name: 'Ficha de Evaluación de Riesgo Vocal (FonoAr)',
+  name: 'Ficha de Evaluación de Riesgo Vocal',
   dimensions: [
     {
       categoria: "Hábitos Vocales",
@@ -294,7 +294,7 @@ export default function EscalasModule({ pacienteId }: Props) {
         {/* Header Clinical Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111827] shadow-sm flex flex-col justify-center">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Puntaje Total FonoAr</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Puntaje Total Riesgo Vocal</span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">{total}</span>
               <span className="text-sm font-medium text-gray-400">/ 207 pts</span>
@@ -441,7 +441,7 @@ export default function EscalasModule({ pacienteId }: Props) {
               : 'bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/80'
           }`}
         >
-          Riesgo Vocal (FonoAr)
+          Riesgo Vocal
         </button>
       </div>
 
