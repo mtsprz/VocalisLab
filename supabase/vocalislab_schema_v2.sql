@@ -188,3 +188,20 @@ CREATE TRIGGER trigger_pacientes_updated_at
     BEFORE UPDATE ON pacientes
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at();
+
+-- 11. TABLA USUARIOS GOOGLE (OAuth 2.0)
+CREATE TABLE IF NOT EXISTS usuarios_google (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    google_id TEXT UNIQUE NOT NULL,
+    email TEXT NOT NULL,
+    name TEXT,
+    picture TEXT,
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS idx_usuarios_google_email ON usuarios_google(email);
+
+CREATE POLICY "Allow access to authenticated users" ON usuarios_google FOR ALL TO authenticated USING (true) WITH CHECK (true);

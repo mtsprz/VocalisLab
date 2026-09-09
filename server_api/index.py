@@ -18,6 +18,8 @@ from api_clinica import router as clinica_router
 from anamnesis_engine import transcribir_audio_groq, estructurar_anamnesis_llm, generar_muestra_vocal_prompt
 from cuadernillo_pdf import generar_cuadernillo_pdf
 from recomendar_motor import generar_recomendacion_terapeutica
+from google_auth import router as google_auth_router
+from google_calendar import router as google_calendar_router
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "vocal_pathology_db.json")
 
@@ -325,15 +327,38 @@ def _cross_check_acoustics_vs_perceptual(metrics: dict, grbas: dict, rasati: dic
 
 app = FastAPI(title="VocalisLab Bioacoustic API")
 
+ALLOWED_ORIGINS = [
+    "https://vocalis-lab.vercel.app",
+    "https://vocalis-lab-*.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:4173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://vocalis-lab-.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Error interno del servidor", "detail": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": "https://vocalis-lab.vercel.app",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+
 app.include_router(clinica_router)
+app.include_router(google_auth_router)
+app.include_router(google_calendar_router)
 
 
 @app.get("/api/health")

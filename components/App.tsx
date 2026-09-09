@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, FileText, Mic, BarChart3, Music,
-  Stethoscope, Activity, ChevronRight, Menu, X, Sun, Moon, Sparkles
+  Stethoscope, Activity, ChevronRight, Menu, X, Sun, Moon, Sparkles, LogOut
 } from 'lucide-react';
+import { AuthProvider, useAuth } from './AuthContext';
+import LoginScreen from './LoginScreen';
 import { ClinicalProvider } from './ClinicalContext';
 import ClinicalStepper from './ClinicalStepper';
 import DashboardModule from './DashboardModule';
@@ -28,6 +30,7 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
 ];
 
 function AppInner() {
+  const { user, logout } = useAuth();
   const [activeModule, setActiveModule] = useState<ActiveModule>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
@@ -132,12 +135,27 @@ function AppInner() {
             <ClinicalStepper activeModule={activeModule} onNavigate={setActiveModule as any} />
           </div>
           <div className="flex items-center gap-3">
+            {user && (
+              <div className="flex items-center gap-2">
+                {user.picture && (
+                  <img src={user.picture} alt={user.name} className="w-7 h-7 rounded-full border border-gray-200 dark:border-gray-700" />
+                )}
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 hidden md:inline">{user.name}</span>
+              </div>
+            )}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-300 transition-all"
               title={theme === 'light' ? 'Activar modo oscuro' : 'Activar modo claro'}
             >
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
+            <button
+              onClick={logout}
+              className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-300 transition-all"
+              title="Cerrar sesión"
+            >
+              <LogOut size={18} />
             </button>
           </div>
         </header>
@@ -150,6 +168,23 @@ function AppInner() {
 }
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}
+
+function AuthGate() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <LoginScreen />;
   return (
     <ClinicalProvider>
       <AppInner />

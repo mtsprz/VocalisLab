@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, FileText, Activity, Clock, AlertCircle, Sparkles } from 'lucide-react';
+import { Users, Calendar, FileText, Activity, Clock, AlertCircle, Sparkles, ExternalLink } from 'lucide-react';
+import { useAuth } from './AuthContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -9,12 +10,15 @@ interface DashboardProps {
 }
 
 export default function DashboardModule({ onNavigate, onSelectPaciente }: DashboardProps) {
+  const { user } = useAuth();
   const [stats, setStats] = useState({ total_pacientes: 0, turnos_hoy: 0, evaluaciones_mes: 0, analisis_mes: 0 });
   const [turnos, setTurnos] = useState<any[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadDashboard();
+    loadCalendarEvents();
   }, []);
 
   const loadDashboard = async () => {
@@ -28,6 +32,17 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
       if (r.ok) setTurnos(await r.json());
     } catch {}
     setLoading(false);
+  };
+
+  const loadCalendarEvents = async () => {
+    if (!user?.id) return;
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/calendar/events?user_id=${user.id}`);
+      if (r.ok) {
+        const data = await r.json();
+        setCalendarEvents(data.events || []);
+      }
+    } catch {}
   };
 
   const statCards = [
@@ -59,10 +74,10 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
           <Calendar size={18} className="text-indigo-600 dark:text-indigo-400" /> Agenda de Hoy
         </h3>
-        {turnos.length === 0 ? (
+        {turnos.length === 0 && calendarEvents.length === 0 ? (
           <div className="text-center py-8 text-gray-400 dark:text-gray-500">
             <Clock size={32} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No hay turnos programados para hoy</p>
+            <p className="text-sm">No hay turnos ni eventos programados para hoy</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -86,6 +101,31 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
                 </span>
               </div>
             ))}
+            {calendarEvents.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 py-2">
+                  <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider">Google Calendar</span>
+                  <div className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
+                </div>
+                {calendarEvents.slice(0, 5).map((ev: any) => (
+                  <div key={ev.id} className="flex items-center gap-4 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40">
+                    <div className="text-sm font-mono text-blue-600 dark:text-blue-400 w-16">
+                      {ev.start_datetime ? new Date(ev.start_datetime).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white">{ev.summary}</p>
+                      {ev.description && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{ev.description}</p>}
+                    </div>
+                    {ev.html_link && (
+                      <a href={ev.html_link} target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
