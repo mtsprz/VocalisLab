@@ -1,4 +1,4 @@
-﻿"""
+"""
 VocalisLab Pro - Google OAuth 2.0 + Calendar API Integration
 """
 import os
@@ -14,7 +14,7 @@ router = APIRouter()
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "https://vocalis-lab.vercel.app/api/auth/callback/google")
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "https://vocalislab.onrender.com/api/auth/callback/google")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://vocalis-lab.vercel.app")
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
