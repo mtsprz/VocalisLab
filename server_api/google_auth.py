@@ -1,13 +1,12 @@
-"""
-VocalisLab Pro — Google OAuth 2.0 + Calendar API Integration
-Maneja autenticación con Google Identity Services y sincronización bidireccional con Google Calendar.
+﻿"""
+VocalisLab Pro - Google OAuth 2.0 + Calendar API Integration
 """
 import os
 import json
 import time
 import traceback
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse
 import httpx
 
@@ -31,7 +30,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
 ]
 
-# In-memory token store (replace with Supabase in production)
 _tokens_store: dict = {}
 
 
@@ -86,14 +84,13 @@ async def google_callback(code: str = "", state: str = ""):
             })
 
         if token_response.status_code != 200:
-            return HTMLResponse(content=f"<script>alert('Error exchanging token'); window.close();</script>")
+            return HTMLResponse(content="<script>alert('Error exchanging token'); window.close();</script>")
 
         tokens = token_response.json()
         access_token = tokens.get("access_token")
         refresh_token = tokens.get("refresh_token")
         expires_in = tokens.get("expires_in", 3600)
 
-        # Get user info
         async with httpx.AsyncClient() as client:
             user_response = await client.get(GOOGLE_USERINFO_URL, headers={
                 "Authorization": f"Bearer {access_token}"
@@ -113,7 +110,6 @@ async def google_callback(code: str = "", state: str = ""):
             "token_expires_at": int(time.time()) + expires_in,
         }
 
-        # Store tokens in Supabase if available
         supabase = _get_provider()
         if supabase:
             try:
@@ -129,10 +125,8 @@ async def google_callback(code: str = "", state: str = ""):
             except Exception as e:
                 print(f"[google_auth] Error guardando tokens en Supabase: {e}")
 
-        # Store in memory as fallback
         _tokens_store[user_data["id"]] = user_data
 
-        # Redirect to frontend with token data
         frontend_data = json.dumps({
             "id": user_data["id"],
             "email": user_data["email"],
@@ -172,10 +166,8 @@ async def _refresh_access_token(refresh_token: str) -> dict:
 
 async def _get_valid_token(user_id: str) -> str:
     """Get a valid access token, refreshing if necessary."""
-    # Try memory store first
     user_data = _tokens_store.get(user_id)
     if not user_data:
-        # Try Supabase
         supabase = _get_provider()
         if supabase:
             try:
@@ -188,9 +180,8 @@ async def _get_valid_token(user_id: str) -> str:
     if not user_data:
         raise HTTPException(status_code=401, detail="Usuario no autenticado con Google")
 
-    # Check if token is expired
     expires_at = user_data.get("token_expires_at", 0)
-    if time.time() > expires_at - 300:  # 5 min buffer
+    if time.time() > expires_at - 300:
         refresh_token = user_data.get("refresh_token")
         if refresh_token:
             new_tokens = await _refresh_access_token(refresh_token)
@@ -198,7 +189,6 @@ async def _get_valid_token(user_id: str) -> str:
             user_data["token_expires_at"] = int(time.time()) + new_tokens.get("expires_in", 3600)
             _tokens_store[user_id] = user_data
 
-            # Update Supabase
             supabase = _get_provider()
             if supabase:
                 try:
