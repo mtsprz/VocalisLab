@@ -465,7 +465,7 @@ async def crear_turno(
         "notas": notas,
         "meet_link": meet_link,
         "google_event_id": google_event_id,
-        "estado": "pendiente",
+        "estado": "programado",
     }
     result = _db_insert("turnos", data)
     return JSONResponse(content=result)

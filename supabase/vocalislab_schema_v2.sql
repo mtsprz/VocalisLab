@@ -138,6 +138,16 @@ ALTER TABLE turnos ADD COLUMN IF NOT EXISTS motivo TEXT DEFAULT 'Consulta de Voz
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS meet_link TEXT;
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS google_event_id TEXT;
 
+-- 6b. MIGRACIÓN v1 → v2 (la tabla pacientes del schema v1 no tiene estas columnas)
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS nombre_completo TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS sexo TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS ocupacion TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS demanda_vocal_horas INT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS notas_iniciales TEXT;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+
 -- 7. ÍNDICES (con IF NOT EXISTS)
 CREATE INDEX IF NOT EXISTS idx_pacientes_dni ON pacientes(dni);
 CREATE INDEX IF NOT EXISTS idx_pacientes_activo ON pacientes(activo);
@@ -157,6 +167,7 @@ ALTER TABLE evaluaciones_clinicas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE analisis_acusticos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cuadernillos_paciente ENABLE ROW LEVEL SECURITY;
 ALTER TABLE turnos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios_google ENABLE ROW LEVEL SECURITY;
 
 -- 9. POLÍTICAS RLS (Borrado preventivo antes de crear para evitar el error 42710)
 DO $$
@@ -184,6 +195,22 @@ CREATE POLICY "Allow access to authenticated users" ON evaluaciones_clinicas FOR
 CREATE POLICY "Allow access to authenticated users" ON analisis_acusticos FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow access to authenticated users" ON cuadernillos_paciente FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow access to authenticated users" ON turnos FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- 9b. ACCESO BACKEND (el backend usa la clave anon: sin estas policies los INSERT/UPDATE fallan con 500/401)
+DROP POLICY IF EXISTS "App backend full access" ON pacientes;
+DROP POLICY IF EXISTS "App backend full access" ON anamnesis;
+DROP POLICY IF EXISTS "App backend full access" ON evaluaciones_clinicas;
+DROP POLICY IF EXISTS "App backend full access" ON analisis_acusticos;
+DROP POLICY IF EXISTS "App backend full access" ON cuadernillos_paciente;
+DROP POLICY IF EXISTS "App backend full access" ON turnos;
+DROP POLICY IF EXISTS "App backend full access" ON usuarios_google;
+CREATE POLICY "App backend full access" ON pacientes FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON anamnesis FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON evaluaciones_clinicas FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON analisis_acusticos FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON cuadernillos_paciente FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON turnos FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON usuarios_google FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- 10. TRIGGER UPDATED_AT
 CREATE OR REPLACE FUNCTION update_updated_at()
