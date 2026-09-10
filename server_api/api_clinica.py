@@ -119,6 +119,8 @@ async def crear_paciente(
 ):
     data = {
         "nombre_completo": nombre_completo,
+        # Columna legacy del schema v1 (NOT NULL): se mantiene sincronizada
+        "nombre": nombre_completo,
         "dni": dni,
         "sexo": sexo,
         "telefono": telefono,
@@ -182,7 +184,9 @@ async def actualizar_paciente(
     notas_iniciales: str = Form(None),
 ):
     data = {}
-    if nombre_completo is not None: data["nombre_completo"] = nombre_completo
+    if nombre_completo is not None:
+        data["nombre_completo"] = nombre_completo
+        data["nombre"] = nombre_completo  # columna legacy v1, mantener sincronizada
     if dni is not None: data["dni"] = dni
     if fecha_nacimiento is not None: data["fecha_nacimiento"] = fecha_nacimiento
     if sexo is not None: data["sexo"] = sexo

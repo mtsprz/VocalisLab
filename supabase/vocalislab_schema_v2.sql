@@ -138,7 +138,8 @@ ALTER TABLE turnos ADD COLUMN IF NOT EXISTS motivo TEXT DEFAULT 'Consulta de Voz
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS meet_link TEXT;
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS google_event_id TEXT;
 
--- 6b. MIGRACIÓN v1 → v2 (la tabla pacientes del schema v1 no tiene estas columnas)
+-- 6b. MIGRACIÓN v1 → v2 (la tabla pacientes del schema v1 no tiene estas columnas
+-- y trae un NOT NULL legacy en "nombre" que bloquea los INSERT del backend)
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS nombre_completo TEXT;
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS sexo TEXT;
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE;
@@ -147,6 +148,7 @@ ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS demanda_vocal_horas INT;
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS notas_iniciales TEXT;
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT true;
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+ALTER TABLE pacientes ALTER COLUMN nombre DROP NOT NULL;
 
 -- 7. ÍNDICES (con IF NOT EXISTS)
 CREATE INDEX IF NOT EXISTS idx_pacientes_dni ON pacientes(dni);
