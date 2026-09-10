@@ -1,12 +1,12 @@
-﻿{
+{
   "metadata": {
-    "version": "1.0.0",
-    "description": "Banco de ejercicios terapéuticos vocales basado en Farías (2012, 2016), y práctica clínica fonoaudiológica",
+    "version": "2.1.0",
+    "description": "Banco de ejercicios y presets de patologias vocales basado en Farias (2012, 2016), Le Huche, Titze y evidencia clinica fonoaudiologica. Alineado con los IDs del frontend.",
     "references": [
-      "Farías, P. (2012). Ejercicios que restauran la función vocal.",
-      "Farías, P. (2016). Guía clínica para el especialista en laringe y voz.",
-      "Cuadernillo terapéutico vocal.",
-      "Le Huche, F. (1991). La voz: anatomía y fisiología."
+      "Farias, P. (2012). Ejercicios que restauran la funcion vocal.",
+      "Farias, P. (2016). Guia clinica para el especialista en laringe y voz.",
+      "Le Huche, F. (1991). La voz: anatomia y fisiologia.",
+      "Titze, I. (2000). Principles of Voice Production."
     ]
   },
   "sections": [
@@ -14,53 +14,34 @@
       "id": "corporal",
       "name": "Trabajo Corporal y Miofascial",
       "icon": "body",
-      "description": "Relajación muscular, técnica de Le Huche, digitopresión y liberación miofascial",
+      "description": "Relajacion muscular, tecnica de Le Huche, digitopresion y liberacion miofascial cervicofacial",
       "exercises": [
         {
           "id": "le_huche",
-          "name": "Técnica de Le Huche",
-          "description": "Secuencia de relajación respiratoria: inspiración por /f/, espiración por /sh/, apnea y relajación general.",
-          "steps": [
-            "Siéntese cómodamente con la espalda apoyada",
-            "Inspire lentamente por la nariz emitiendo /f/ suave (3 seg)",
-            "Espire por la boca emitiendo /sh/ prolongado (6 seg)",
-            "Contenga el aire 2-3 segundos (apnea)",
-            "Relaje todo el cuerpo al espirar completamente",
-            "Repita 10 veces"
-          ],
+          "name": "Tecnica de Relajacion Diferencial (Le Huche)",
+          "description": "Secuencia respiratoria: inspiracion nasal, espiracion en /f/ y /sh/, apnea y descenso tensional.",
+          "steps": ["Inspire nasal abdominal 3s", "Espire en /f/ 4s", "Espire en /sh/ prolongado 6s", "Pausa apneica 2-3s relajando hombros", "Repita 8 a 10 ciclos"],
           "duration_min": 5,
           "difficulty": "basico",
-          "indications": ["tension_muscular", "hiperfuncion", "pre_estreno"],
+          "indications": ["tension_muscular", "hiperfuncion", "dmt"],
           "contraindications": []
         },
         {
           "id": "shiatsu_cabeza",
-          "name": "Digitopresión Shiatsu — Cabeza y Cuello",
-          "description": "Puntos de presión para liberar tensión en vértex, sienes, ATM, maseteros y zona cervical.",
-          "steps": [
-            "Vértex (punto1): Presione con yemas 30 seg circular",
-            "Sienes (ambos lados): Presione 30 seg con movimientos circulares",
-            "ATM (junto a orejas): Abra y cierre la boca mientras presiona 30 seg",
-            "Maseteros (apretar mandíbula): Palpe y presione 30 seg cada lado",
-            "Cuello (trapecios): Presione hacia abajo 30 seg cada lado"
-          ],
+          "name": "Digitopresion Descontracturante Craneofacial y ATM",
+          "description": "Puntos de presion en vertex, sienes, ATM, maseteros y musculos suprahioideos.",
+          "steps": ["Vertex 30s circular", "Sienes 30s bilateral", "ATM con apertura mandibular 30s", "Maseteros 40s descendente", "Zona submandibular hacia hioides"],
           "duration_min": 5,
           "difficulty": "basico",
-          "indications": ["tension_muscular", "hiperfuncion", "bruxismo"],
+          "indications": ["tension_muscular", "hiperfuncion", "bruxismo", "dmt"],
           "contraindications": []
         },
         {
           "id": "rotacion_hombros",
-          "name": "Rotación de Hombros y Cuello",
-          "description": "Movilización articular suave de hombros y rotación cervical.",
-          "steps": [
-            "Círculos de hombros hacia atrás: 10 repeticiones lentas",
-            "Círculos de hombros hacia adelante: 10 repeticiones",
-            "Inclinación lateral de cuello: 10 seg cada lado",
-            "Rotación cervical lenta: 10 seg cada lado",
-            "Encogimiento de hombros y soltar: 5 veces"
-          ],
-          "duration_min": 3,
+          "name": "Movilizacion Articular Cervicoescapular",
+          "description": "Desbloqueo de cintura escapular y cuello para reducir el anclaje laringeo superior.",
+          "steps": ["Circulos de hombros hacia atras 10x", "Circulos hacia adelante 10x", "Inclinacion lateral 15s por lado", "Rotacion suave 10s por lado"],
+          "duration_min": 4,
           "difficulty": "basico",
           "indications": ["tension_muscular", "general"],
           "contraindications": []
@@ -69,262 +50,216 @@
     },
     {
       "id": "laringeo",
-      "name": "Flexibilización Laríngea y Apertura Oral",
+      "name": "Flexibilizacion y Descenso Laringeo",
       "icon": "throat",
-      "description": "Masaje laríngeo, descenso activo, emisión en báscula baja y moldeado vocálico",
+      "description": "Masaje circunlaringeo, descenso laringeo activo y liberacion del espacio tirohioideo",
       "exercises": [
         {
           "id": "masaje_laringeo",
-          "name": "Masaje Laríngeo Lateral",
-          "description": "Masaje suave sobre los músculos infrahioideos para flexibilizar la laringe.",
-          "steps": [
-            "Coloque yemas de dedosíndice y medio sobre el cuerpo hioides",
-            "Realice movimientos circulares suaves hacia abajo y afuera",
-            "Mantenga presión leve 30 seg en cada punto",
-            "Trabaje desde el hioides hasta el cartílago tiroides",
-            "Repita 5 veces cada lado"
-          ],
-          "duration_min": 3,
+          "name": "Masaje Circunlaringeo Manual",
+          "description": "Masaje circular en espacio tirohioideo y laminas tiroideas para descender la laringe elevada.",
+          "steps": ["Palpe espacio tirohioideo bilateral", "Movimientos circulares suaves de anterior a posterior", "Desplace la laringe lateralmente", "Fonacion simultanea en /u/ grave y relajada"],
+          "duration_min": 4,
           "difficulty": "basico",
-          "indications": ["tension_muscular", "nodo_cordial", "polipo"],
+          "indications": ["tension_muscular", "nodo_cordial", "dmt"],
           "contraindications": ["laringitis_aguda"]
         },
         {
           "id": "descenso_laringeo",
-          "name": "Descenso Laringeo Activo",
-          "description": "Ejercicio de descenso laríngeo mediante bostezo, succión y emisión grave.",
-          "steps": [
-            "Simule un bostezo grande 5 veces (sienta la laringe bajar)",
-            " succión con popote/cucharita 10 seg (laringe baja)",
-            "Emita /u/ grave en báscula baja 5 veces",
-            "Emita /hu hu hu/ grave y cortado 10 veces",
-            "Combinar: bostezo → /u/ grave → /hu/ × 5 ciclos"
-          ],
-          "duration_min": 5,
-          "difficulty": "intermedio",
-          "indications": ["nodo_cordial", "polipo", "tension_muscular"],
+          "name": "Bostezo-Suspiro Activo con Emision Grave",
+          "description": "Facilita la apertura faringea y el descenso fisiologico del hioides y laringe.",
+          "steps": ["Bostezo amplio sintiendo descenso laringeo", "Suspiro sonoro en /u/ o /o/ sin ataque duro", "8 repeticiones pausadas"],
+          "duration_min": 3,
+          "difficulty": "basico",
+          "indications": ["hiperfuncion", "dmt", "nodulo"],
           "contraindications": []
         },
         {
-          "id": "moldeado_vocalico",
-          "name": "Moldeado Vocálico Vertical",
-          "description": "Secuencia de vocales con cambio de forma oral para flexibilizar el tracto vocal.",
-          "steps": [
-            "Emita /o/ – /a/ alternando (10 veces)",
-            "Emita /o/ – /a/ – /o/ como secuencia (5 veces)",
-            "Emita /u/ – /i/ alternando (10 veces)",
-            "Emita /u/ – /a/ – /i/ – /o/ – /u/ (5 veces)",
-            "Todas las vocales con boca bien abierta y relajada"
-          ],
-          "duration_min": 4,
+          "id": "oclusion_succion",
+          "name": "Tecnica de Succion con Popote / Cucharita",
+          "description": "Estimula la ampliacion faringea y el descenso pasivo del complejo hio-laringeo.",
+          "steps": ["Selle labios en popote estrecho", "Succiones suaves de 5-10s", "Emision sostenida en tono comodo", "6 ciclos con descanso"],
+          "duration_min": 3,
           "difficulty": "basico",
-          "indications": ["nodo_cordial", "polipo", "general"],
+          "indications": ["dmt", "hiperfuncion"],
           "contraindications": []
         }
       ]
     },
     {
-      "id": "respiratoria",
-      "name": "Reorganización Respiratoria",
-      "icon": "lungs",
-      "description": "Respiración abdominal, costo-lateral, coordinación y series automáticas",
+      "id": "respiratorio",
+      "name": "Dinamica Respiratoria y Apoyo Costodiafragmatico",
+      "icon": "wind",
+      "description": "Coordinacion fonorrespiratoria, expansion costolateral y dosificacion del flujo subglotico",
       "exercises": [
         {
           "id": "respiracion_abdominal",
-          "name": "Respiración Abdominal",
-          "description": "Retracción abdominal activa durante la espiración para apoyo diafragmático.",
-          "steps": [
-            "Coloque una mano en el abdomen y otra en el pecho",
-            "Inspire por nariz: el abdomen se infla, el pecho no se mueve",
-            "Espire por boca: el abdomen se retrae suavemente",
-            "Espire 2 veces más de lo que inspiró",
-            "Repita 10 veces sin forzar"
-          ],
-          "duration_min": 4,
+          "name": "Respiracion Costodiafragmatica con Dosificacion en /s/",
+          "description": "Reeducacion ventilatoria baja para optimizar la presion subglotica sin tension escapular.",
+          "steps": ["Inspire diafragmatico", "Espire dosificando en fricativa /s/ constante", "Buscar mas de 15s sin temblor", "6 series con pausa"],
+          "duration_min": 5,
           "difficulty": "basico",
-          "indications": ["astenia", "tension_muscular", "general"],
+          "indications": ["general", "presbifonia", "paralisis", "fonastenia"],
           "contraindications": []
         },
         {
           "id": "expansion_costo_lateral",
-          "name": "Expansión Costo-Lateral",
-          "description": "Inspiración con expansión de las costillas laterales para aumentar capacidad pulmonar.",
-          "steps": [
-            "Manos en las costillas laterales",
-            "Inspire por nariz: sienta las costillas abrirse hacia los lados",
-            "Espire por boca con /sss/ prolongado (8-10 seg)",
-            "Repita 8 veces aumentando gradualmente la duración del /sss/"
-          ],
+          "name": "Expansion Costolateral y Apertura Toracica Baja",
+          "description": "Apertura de costillas flotantes para incrementar capacidad vital util.",
+          "steps": ["Manos en costillas laterales", "Inspire empujando manos hacia afuera", "Conteo 1 al 10 manteniendo costillas abiertas"],
           "duration_min": 4,
           "difficulty": "basico",
-          "indications": ["astenia", "tension_muscular"],
+          "indications": ["paralisis", "presbifonia", "general"],
           "contraindications": []
         },
         {
-          "id": "coordinacion_costo_abdominal",
-          "name": "Coordinación Costo-Abdominal",
-          "description": "Inspiración combinada costo-abdominal para optimizar el apoyo fonatorio.",
-          "steps": [
-            "Mano en abdomen, mano en costillas",
-            "Inspire: abdomen + costillas se expanden juntos",
-            "Espire con /sss/ manteniendo abdomen firme",
-            "Espire con /z/ 10 segundos",
-            "Espire contando del 1 al 20 sin inhalar"
-          ],
-          "duration_min": 5,
-          "difficulty": "intermedio",
-          "indications": ["astenia", "general"],
+          "id": "soplo_escalonado",
+          "name": "Soplo Escalonado y Ataques Suaves",
+          "description": "Transicion de flujo afono en /h/ a sonoridad suave para erradicar el golpe de glotis.",
+          "steps": ["Inicio con soplo en /h/", "Introducir sonoridad progresiva /ha, he, hi, ho, hu/", "Verificar ausencia de golpe glotico"],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["nodulo", "dmt", "general"],
           "contraindications": []
         },
         {
-          "id": "series_automaticas",
-          "name": "Series Automáticas Respiratorias",
-          "description": "Series de enumeración automática para coordinar respiración con habla.",
-          "steps": [
-            "Inspire y diga los días de la semana en una sola espiración",
-            "Inspire y diga los meses del año en una sola espiración",
-            "Inspire y conte del 1 al 30 en una sola espiración",
-            "Inspire y diga una lista de 20 frutas en una sola espiración",
-            "Aumente gradualmente la cantidad de palabras por espiración"
-          ],
+          "id": "empuje_glotico",
+          "name": "Tecnica de Cierre Aumentado / Empuje Glotico",
+          "description": "Aumento del adosamiento cordal en paralisis o incompetencia glotica.",
+          "steps": ["Sientese e incline el tronco apoyando las manos bajo la silla", "Traccione hacia arriba con los brazos mientras emite /a/ o /i/ firme y corta", "Sienta el firme adosamiento de pliegues vocales", "10 repeticiones con pausas"],
+          "duration_min": 4,
+          "difficulty": "avanzado",
+          "indications": ["paralisis", "presbifonia", "hipofuncion"],
+          "contraindications": ["hiperfuncion", "nodulo", "dmt"]
+        }
+      ]
+    },
+    {
+      "id": "sovte",
+      "name": "Tracto Vocal Semiocluido (SOVTE)",
+      "icon": "audio",
+      "description": "Tubo de resonancia sumergido en agua (Lax Vox), vibracion labial/lingual y popotes delgados",
+      "exercises": [
+        {
+          "id": "tubo_agua",
+          "name": "Lax Vox / Tubo Sumergido en Agua",
+          "description": "Fonacion en tubo de silicona sumergido 1.5 cm en agua. Masaje glotico por contrapresion acustica.",
+          "steps": ["Tubo a 1.5 cm en agua", "Selle labios emitiendo /u/ sostenido con burbujeo parejo", "Glissandos ascendentes y descendentes suaves", "Series de 1 min hasta 5 min"],
           "duration_min": 5,
           "difficulty": "intermedio",
-          "indications": ["astenia", "tension_muscular"],
+          "indications": ["nodulo", "edema_reinke", "dmt", "fonastenia", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "vibracion_labial",
+          "name": "Vibracion de Labios y Lengua (Trill)",
+          "description": "Oscilacion labial /brrr/ o lingual /rrr/ para equilibrar la impedancia acustica.",
+          "steps": ["Sostenga comisuras suavemente", "Vibracion labial /brrr/ sostenida", "Sirenas tonales de grave a agudo"],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["nodulo", "dmt", "fonastenia", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "popote_aire",
+          "name": "Fonacion en Popote Delgado al Aire (Titze)",
+          "description": "Fonacion en sorbete estrecho para elevar reactancia acustica y economia vocal.",
+          "steps": ["Popote estrecho entre labios", "Tonos sostenidos e intensidades variables", "Glissandos cubriendo tesitura modal"],
+          "duration_min": 4,
+          "difficulty": "intermedio",
+          "indications": ["paralisis", "presbifonia", "fonastenia"],
+          "contraindications": []
+        },
+        {
+          "id": "consonantes_fricativas",
+          "name": "Consonantes Sonoras Sostenidas /v/, /z/",
+          "description": "Fricativas anteriores para potenciar vibracion osea y colocacion en mascara.",
+          "steps": ["Emision de /v/ labiodental sostenida", "Transicion a vocal /vvv-aaaa/ sin corte", "Repetir con /z/"],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["paralisis", "presbifonia", "rlf"],
           "contraindications": []
         }
       ]
     },
     {
       "id": "resonancia",
-      "name": "Resonancia y Vocalizaciones",
-      "icon": "sound",
-      "description": "Glissandos, oclusión nasal, escalas, voz salmodiada y frases balanceadas",
+      "name": "Enfoque Resonancial y Proyeccion Vocal",
+      "icon": "volume",
+      "description": "Humming nasal /m/, escalas vocalicas y lectura con frases balanceadas",
       "exercises": [
         {
-          "id": "glissandos",
-          "name": "Glissandos Ascendentes y Descendentes",
-          "description": "Deslizamiento continuo de graves a agudos y viceversa para flexibilidad vocal.",
-          "steps": [
-            "Emita /i/ grave subiendo gradualmente a agudo (5 seg)",
-            "Emita /i/ agudo bajando gradualmente a grave (5 seg)",
-            "Repita con /a/, /u/, /o/, /e/",
-            "Glissandos completos de grave a agudo y vuelta: 10 veces",
-            "Glissandos cortos en rangos específicos: 5 veces cada uno"
-          ],
-          "duration_min": 5,
-          "difficulty": "intermedio",
-          "indications": ["nodo_cordial", "polipo", "presbifonia"],
-          "contraindications": []
-        },
-        {
-          "id": "oclusion_nasal",
-          "name": "Oclusión Nasal /m/ a Vocales",
-          "description": "Proyección de la resonancia nasal /m/ hacia cada vocal para equilibrar resonancia.",
-          "steps": [
-            "Emita /m/ sostenido 5 seg → proyecte a /a/ 5 seg",
-            "Emita /m/ → /u/, /m/ → /i/, /m/ → /e/, /m/ → /o/",
-            "Secuencia completa: /m/-a, /m/-u, /m/-i, /m/-e, /m/-o",
-            "Repita 5 veces cada secuencia",
-            "Emita /m/ con鼻音 resonante y proyecte a vocales fuertes"
-          ],
-          "duration_min": 5,
+          "id": "humming_m",
+          "name": "Resonancia Anterior con /m/ (Humming)",
+          "description": "Colocacion de la voz en mascara facial mediante oclusion bilabial relajada.",
+          "steps": ["Labios juntos sin apretar", "Emita /m/ conversacional sintiendo vibracion labionasal", "Masticacion sonora /mmmm-num-num/", "Palabras con nasal inicial"],
+          "duration_min": 4,
           "difficulty": "basico",
-          "indications": ["nodo_cordial", "general", "presbifonia"],
+          "indications": ["rlf", "fonastenia", "hiperfuncion", "general"],
           "contraindications": []
         },
         {
           "id": "escalas_vocalicas",
-          "name": "Escalas de 3ra, 5ta y 8va",
-          "description": "Vocalizaciones en intervalos musicales para trabajar rango y control.",
-          "steps": [
-            "Escala de 3ra: /mi/ – /ma/ ascendente y descendente (5 veces)",
-            "Escala de 5ta: /do/ – /sol/ con /a/ (5 veces)",
-            "Escala de 8va: /do/ grave – /do/ agudo con /a/ (5 veces)",
-            "Repita cada escala en diferentes vocales",
-            "Trabaje en el rango cómodo primero, luego amplíe"
-          ],
+          "name": "Escalas Vocalicas y Glissandos Controlados",
+          "description": "Flexibilidad cordal y balance cricotiroideo/tiroaritenoideo.",
+          "steps": ["Sirena de 5 notas ascendente y descendente", "Volumen moderado sin forzar", "Alternar vocales cerradas y abiertas"],
           "duration_min": 5,
           "difficulty": "intermedio",
-          "indications": ["nodo_cordial", "presbifonia", "general"],
+          "indications": ["paralisis", "presbifonia", "general"],
           "contraindications": []
         },
         {
           "id": "frases_balanceadas",
-          "name": "20 Frases Balanceadas",
-          "description": "Lectura de frases fonéticamente balanceadas para trabajo de habla fluida.",
-          "steps": [
-            "Lea cada frase en voz alta con buena respiración",
-            "Marque la pausa con /, y la frase con .",
-            "Repita cada frase 3 veces",
-            "Aumente la velocidad gradualmente",
-            "Grabe y escuche para autoevaluación"
-          ],
+          "name": "Frases Foneticamente Balanceadas para Transferencia",
+          "description": "Lectura proyectada para transferir los patrones funcionales al habla conversacional.",
+          "steps": ["Articulacion clara y apertura bucal", "Pausas respiratorias adecuadas", "Proyeccion a 3 metros sin esfuerzo"],
           "phrases": [
-            "La luna brillante iluminaba el camino.",
-            "Pedro compra pan fresco todos los días.",
-            "El gato negro saltó la valla verde.",
-            "María tiene una casa muy bonita.",
-            "Los pájaros cantan al amanecer.",
-            "El río fluye suavemente entre las rocas.",
-            "Mi hermano toca la guitarra非常 bien.",
-            "La flor roja crece en el jardín.",
-            "El perro corre rápido por el parque.",
-            "Hoy hace mucho sol y calor.",
-            "El avión vuela muy alto en el cielo.",
-            "La sopa de verduras está deliciosa.",
-            "Los niños juegan en el patio de la escuela.",
-            "El reloj marca las tres de la tarde.",
-            "La música suena alegre en la fiesta.",
-            "El tren llega puntualmente a la estación.",
-            "La lluvia cae suavemente sobre el techo.",
-            "El libro interesante está en la mesa.",
-            "Las estrellas brillan en la noche oscura.",
-            "El café caliente reconforta el alma."
+            "La manana luminosa renueva la energia de las personas.",
+            "Muchos musicos tocan melodias suaves junto al mar.",
+            "El rio transparente corre tranquilo entre las piedras.",
+            "Un vaso de agua fresca alivia la sensacion de fatiga."
           ],
-          "duration_min": 8,
+          "duration_min": 6,
           "difficulty": "basico",
-          "indications": ["general", "nodo_cordial", "tension_muscular"],
+          "indications": ["general", "nodulo", "fonastenia"],
           "contraindications": []
         }
       ]
     },
     {
       "id": "higiene",
-      "name": "Higiene Vocal",
+      "name": "Higiene y Pautas Preventivas",
       "icon": "shield",
-      "description": "Rutinas de calentamiento y enfriamiento vocal pre y post exigencia",
+      "description": "Calentamiento, enfriamiento, hidratacion y prevencion del reflujo laringofaringeo",
       "exercises": [
         {
           "id": "calentamiento",
-          "name": "Calentamiento Vocal (Pre-Exigencia)",
-          "description": "Rutina de 5 minutos antes de cualquier uso vocal intenso.",
-          "steps": [
-            "Respiración abdominal: 1 min",
-            "Masaje suave de cuello y mandíbula: 1 min",
-            "Bostezos activos 5 veces",
-            "Emisiones de /m/ suaves: 1 min",
-            "Glissandos cortos en rango cómodo: 1 min",
-            "Lectura de frases suaves: 1 min"
-          ],
-          "duration_min": 5,
+          "name": "Protocolo de Calentamiento Vocal Integral",
+          "description": "Rutina pre-exigencia de 6 minutos para preparar la viscosidad de la mucosa vocal.",
+          "steps": ["Respiracion y relajacion cervical 1 min", "Masaje laringeo y bostezos 1 min", "Vibracion labial /brrr/ con glissandos 2 min", "Humming /m/ y frases 2 min"],
+          "duration_min": 6,
           "difficulty": "basico",
-          "indications": ["general", "pre_estreno", "docentes", "cantantes"],
+          "indications": ["general", "pre_estreno", "docentes"],
           "contraindications": []
         },
         {
           "id": "enfriamiento",
-          "name": "Enfriamiento Vocal (Post-Exigencia)",
-          "description": "Rutina de 5 minutos después de uso vocal intenso para recuperación.",
-          "steps": [
-            "Respiración profunda con /sh/ prolongado: 2 min",
-            "Vocalizaciones graves suaves /u/: 1 min",
-            "Glissandos descendentes suaves: 1 min",
-            "Silencio vocal absoluto: 10 min",
-            "Hidratación abundante"
-          ],
+          "name": "Protocolo de Enfriamiento y Reposo",
+          "description": "Desaceleracion funcional post-exigencia para evitar edema reactivo.",
+          "steps": ["Respiracion diafragmatica lenta con /sh/ 2 min", "Bostezos y suspiros graves /u/ 1 min", "Masaje facial y cervical 1 min", "Hidratacion y reposo vocal"],
           "duration_min": 5,
           "difficulty": "basico",
-          "indications": ["general", "post_estreno", "docentes", "cantantes"],
+          "indications": ["general", "post_estreno"],
+          "contraindications": []
+        },
+        {
+          "id": "pautas_rlf",
+          "name": "Pautas Antirreflujo Laringofaringeo (RLF)",
+          "description": "Higiene digestiva para controlar la irritacion acida de la comisura posterior.",
+          "steps": ["No acostarse antes de 2.5h post-cena", "Elevar cabecera de la cama 10-15 cm", "Disminuir cafe, mate caliente, alcohol y picantes", "Hidratacion fraccionada en pequenos sorbos"],
+          "duration_min": 3,
+          "difficulty": "basico",
+          "indications": ["rlf"],
           "contraindications": []
         }
       ]
@@ -332,45 +267,76 @@
   ],
   "presets": [
     {
-      "id": "nodo_cordial",
-      "name": "Nódulo Cordal / Lesión Exofítica",
-      "description": "Enfoque en descenso laríngeo, SOVTE, reposo vocal y flexibilización",
-      "exercise_ids": ["le_huche", "masaje_laringeo", "descenso_laringeo", "respiracion_abdominal", "oclusion_nasal", "calentamiento", "enfriamiento"],
-      "sesiones_recomendadas": 12,
-      "frecuencia": "2-3 veces por semana"
-    },
-    {
-      "id": "hiperfuncion",
-      "name": "Hiperfunción / Disfonía por Tensión",
-      "description": "Enfoque en Le Huche, Shiatsu, /m/ y articulación suave",
-      "exercise_ids": ["le_huche", "shiatsu_cabeza", "rotacion_hombros", "respiracion_abdominal", "oclusion_nasal", "moldeado_vocalico", "calentamiento"],
+      "id": "dmt_1",
+      "name": "DMT Tipo I — Hiperfuncion Isometrica",
+      "description": "Isometria laringea con laringe elevada y tension. Foco en Le Huche, descontracturacion cervical y descenso laringeo.",
+      "exercise_ids": ["le_huche", "shiatsu_cabeza", "rotacion_hombros", "masaje_laringeo", "descenso_laringeo", "respiracion_abdominal", "tubo_agua", "calentamiento"],
       "sesiones_recomendadas": 10,
       "frecuencia": "2 veces por semana"
     },
     {
+      "id": "dmt_2",
+      "name": "DMT Tipo II — Contraccion Supraglotica",
+      "description": "Aproximacion excesiva de bandas ventriculares. Foco en ensanchamiento faringeo, SOVTE en tubo de agua y soplo aspirado.",
+      "exercise_ids": ["le_huche", "descenso_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "vibracion_labial", "enfriamiento"],
+      "sesiones_recomendadas": 12,
+      "frecuencia": "2 a 3 veces por semana"
+    },
+    {
+      "id": "nodo_cordial",
+      "name": "Nodulos Cordales / Lesiones Exofiticas",
+      "description": "Edema en punto nodular por microtrauma. Foco en reeducacion respiratoria, ataque suave, SOVTE y descontracturacion.",
+      "exercise_ids": ["le_huche", "masaje_laringeo", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 14,
+      "frecuencia": "2 a 3 veces por semana"
+    },
+    {
+      "id": "paralisis_cordal",
+      "name": "Paralisis Cordal / Incompetencia Glotica",
+      "description": "Deficit de cierre cordal. Foco en apoyo costodiafragmatico, consonantes fricativas sonoras y resonancia anterior.",
+      "exercise_ids": ["empuje_glotico", "respiracion_abdominal", "expansion_costo_lateral", "consonantes_fricativas", "popote_aire", "escalas_vocalicas", "humming_m"],
+      "sesiones_recomendadas": 16,
+      "frecuencia": "2 a 3 veces por semana"
+    },
+    {
       "id": "presbifonia",
-      "name": "Presbifonía / Incompetencia Glótica",
-      "description": "Enfoque en cierre glótico, apoyo respiratorio y vocalizaciones proyectadas",
-      "exercise_ids": ["expansion_costo_lateral", "coordinacion_costo_abdominal", "descenso_laringeo", "glissandos", "escalas_vocalicas", "frases_balanceadas", "calentamiento"],
-      "sesiones_recomendadas": 15,
+      "name": "Presbifonia / Atrofia Cordal",
+      "description": "Atrofia cordal senil con arqueamiento. Foco en incremento de tonicidad con popote estrecho y proyeccion vocal.",
+      "exercise_ids": ["expansion_costo_lateral", "popote_aire", "vibracion_labial", "consonantes_fricativas", "escalas_vocalicas", "frases_balanceadas", "calentamiento"],
+      "sesiones_recomendadas": 12,
       "frecuencia": "2 veces por semana"
     },
     {
-      "id": "pre_estreno",
-      "name": "Preparación para Exigencia Vocal",
-      "description": "Calentamiento integral antes de presentaciones, clases o eventos",
-      "exercise_ids": ["rotacion_hombros", "respiracion_abdominal", "expansion_costo_lateral", "oclusion_nasal", "glissandos", "calentamiento"],
-      "sesiones_recomendadas": 4,
-      "frecuencia": " antes de cada evento"
+      "id": "fonastenia",
+      "name": "Fonastenia / Fatiga Vocal Ocupacional",
+      "description": "Cansancio vocal en docentes y profesionales. Foco en economia vocal (SOVTE), resonancia y pausas vocales.",
+      "exercise_ids": ["rotacion_hombros", "respiracion_abdominal", "tubo_agua", "popote_aire", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 8,
+      "frecuencia": "2 veces por semana"
     },
     {
-      "id": "general",
-      "name": "Mantenimiento y Higiene Vocal General",
-      "description": "Rutina completa de mantenimiento para cualquier paciente",
-      "exercise_ids": ["le_huche", "rotacion_hombros", "respiracion_abdominal", "oclusion_nasal", "glissandos", "calentamiento", "enfriamiento"],
+      "id": "rlf",
+      "name": "Reflujo Laringofaringeo (RLF)",
+      "description": "Irritacion interaritenoidea con carraspeo cronico. Foco en higiene digestiva estricta, hidratacion y vibracion suave.",
+      "exercise_ids": ["pautas_rlf", "descenso_laringeo", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 8,
-      "frecuencia": "diario"
+      "frecuencia": "1 a 2 veces por semana"
+    },
+    {
+      "id": "edema_reinke",
+      "name": "Edema de Reinke / Degeneracion Polipoidea",
+      "description": "Aumento de masa y laxitud en espacio de Reinke. Foco en disminucion de impacto, resonancia y SOVTE.",
+      "exercise_ids": ["le_huche", "masaje_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 12,
+      "frecuencia": "2 veces por semana"
+    },
+    {
+      "id": "preparacion_vocal",
+      "name": "Acondicionamiento y Mantenimiento Vocal",
+      "description": "Rutina completa de preparacion y cuidado para profesionales de la voz hablada y cantada.",
+      "exercise_ids": ["rotacion_hombros", "le_huche", "respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 6,
+      "frecuencia": "diario o pre-jornada"
     }
   ]
 }
-

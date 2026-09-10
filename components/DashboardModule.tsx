@@ -71,9 +71,17 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
       </div>
 
       <div className="bg-white/70 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-white/10 p-5 shadow-sm transition-all duration-200">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-          <Calendar size={18} className="text-indigo-600 dark:text-indigo-400" /> Agenda de Hoy
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+            <Calendar size={18} className="text-indigo-600 dark:text-indigo-400" /> Agenda de Hoy
+          </h3>
+          <button
+            onClick={() => onNavigate('agenda')}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+          >
+            Ver agenda completa
+          </button>
+        </div>
         {turnos.length === 0 && calendarEvents.length === 0 ? (
           <div className="text-center py-8 text-gray-400 dark:text-gray-500">
             <Clock size={32} className="mx-auto mb-2 opacity-50" />

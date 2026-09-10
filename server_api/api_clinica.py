@@ -410,16 +410,62 @@ async def listar_cuadernillos(
 async def crear_turno(
     paciente_id: str = Form(...),
     fecha_hora: str = Form(...),
-    duracion_min: int = Form(30),
+    duracion_min: int = Form(45),
     tipo: str = Form("control"),
+    modalidad: str = Form("PRESENCIAL"),
+    motivo: str = Form("Consulta de Voz"),
     notas: str = Form(""),
+    user_id: Optional[str] = Form(None),
+    sincronizar_google: bool = Form(False),
 ):
+    meet_link = None
+    google_event_id = None
+
+    # Si se solicita sincronización con Google Calendar y se proporciona user_id
+    if sincronizar_google and user_id:
+        try:
+            # Obtener datos del paciente
+            paciente_nombre = "Paciente"
+            paciente_email = ""
+            if supabase:
+                p_res = supabase.table("pacientes").select("nombre_completo, email").eq("id", paciente_id).execute()
+                if p_res.data:
+                    paciente_nombre = p_res.data[0].get("nombre_completo", "Paciente")
+                    paciente_email = p_res.data[0].get("email", "")
+
+            # Calcular fecha fin
+            start_dt = datetime.fromisoformat(fecha_hora.replace("Z", "+00:00"))
+            end_dt = start_dt + timedelta(minutes=duracion_min)
+
+            from google_calendar import create_calendar_event
+            g_resp = await create_calendar_event(
+                user_id=user_id,
+                summary=f"Atención Vocal: {paciente_nombre}",
+                description=f"Consulta Fonoaudiológica - VocalisLab Pro.\nModalidad: {modalidad}\nMotivo: {motivo}\n{notas}".strip(),
+                start_datetime=start_dt.isoformat(),
+                end_datetime=end_dt.isoformat(),
+                attendee_email=paciente_email,
+                modalidad=modalidad,
+                motivo=motivo,
+            )
+            g_data = json.loads(g_resp.body.decode()) if hasattr(g_resp, "body") else {}
+            if g_data.get("ok"):
+                google_event_id = g_data.get("google_event_id")
+                meet_link = g_data.get("meet_link")
+        except Exception as e:
+            print(f"[api_clinica] No se pudo sincronizar turno con Google: {e}")
+
     data = {
         "paciente_id": paciente_id,
         "fecha_hora": fecha_hora,
         "duracion_min": duracion_min,
         "tipo": tipo,
+        "modalidad": modalidad.upper(),
+        "motivo": motivo,
         "notas": notas,
+        "meet_link": meet_link,
+        "google_event_id": google_event_id,
+        "estado": "pendiente",
     }
     result = _db_insert("turnos", data)
     return JSONResponse(content=result)
@@ -430,25 +476,54 @@ async def listar_turnos(
     fecha_desde: str = Query(None),
     fecha_hasta: str = Query(None),
     estado: str = Query(None),
-    limit: int = Query(100),
+    modalidad: str = Query(None),
+    paciente_id: str = Query(None),
+    limit: int = Query(200),
 ):
     if not supabase:
         return JSONResponse(content=[])
     try:
-        q = supabase.table("turnos").select("*, pacientes(nombre_completo, dni, telefono)")
+        # Intento con join relacional
+        q = supabase.table("turnos").select("*, pacientes(nombre_completo, dni, telefono, email)")
         if fecha_desde:
             q = q.gte("fecha_hora", fecha_desde)
         if fecha_hasta:
             q = q.lte("fecha_hora", fecha_hasta)
         if estado:
             q = q.eq("estado", estado)
+        if modalidad:
+            q = q.eq("modalidad", modalidad.upper())
+        if paciente_id:
+            q = q.eq("paciente_id", paciente_id)
         q = q.order("fecha_hora").limit(limit)
         result = q.execute()
         return JSONResponse(content=result.data or [])
     except Exception as e:
-        traceback.print_exc()
-        print(f"[api_clinica] Error en listar_turnos: {e}")
-        return JSONResponse(content=[])
+        print(f"[api_clinica] Error con join relacional en listar_turnos: {e}. Probando consulta simple...")
+        try:
+            # Fallback seguro sin join relacional en caso de que la FK no esté en Supabase
+            q2 = supabase.table("turnos").select("*")
+            if fecha_desde: q2 = q2.gte("fecha_hora", fecha_desde)
+            if fecha_hasta: q2 = q2.lte("fecha_hora", fecha_hasta)
+            if estado: q2 = q2.eq("estado", estado)
+            if modalidad: q2 = q2.eq("modalidad", modalidad.upper())
+            if paciente_id: q2 = q2.eq("paciente_id", paciente_id)
+            q2 = q2.order("fecha_hora").limit(limit)
+            turnos_data = q2.execute().data or []
+
+            # Mapear pacientes manualmente
+            p_ids = list({t.get("paciente_id") for t in turnos_data if t.get("paciente_id")})
+            if p_ids:
+                p_map = {}
+                p_rows = supabase.table("pacientes").select("id, nombre_completo, dni, telefono, email").in_("id", p_ids).execute().data or []
+                for p in p_rows:
+                    p_map[p["id"]] = p
+                for t in turnos_data:
+                    t["pacientes"] = p_map.get(t.get("paciente_id"))
+            return JSONResponse(content=turnos_data)
+        except Exception as e2:
+            print(f"[api_clinica] Error en fallback listar_turnos: {e2}")
+            return JSONResponse(content=[])
 
 
 @router.put("/api/turnos/{turno_id}")
@@ -456,12 +531,24 @@ async def actualizar_turno(
     turno_id: str,
     estado: str = Form(None),
     notas: str = Form(None),
+    modalidad: str = Form(None),
+    meet_link: str = Form(None),
+    motivo: str = Form(None),
 ):
     data = {}
     if estado is not None: data["estado"] = estado
     if notas is not None: data["notas"] = notas
+    if modalidad is not None: data["modalidad"] = modalidad.upper()
+    if meet_link is not None: data["meet_link"] = meet_link
+    if motivo is not None: data["motivo"] = motivo
     result = _db_update("turnos", turno_id, data)
     return JSONResponse(content=result)
+
+
+@router.delete("/api/turnos/{turno_id}")
+async def eliminar_turno(turno_id: str):
+    res = _db_delete("turnos", turno_id)
+    return JSONResponse(content={"ok": res})
 
 
 # ─── DASHBOARD / ESTADÍSTICAS ───────────────────────────────

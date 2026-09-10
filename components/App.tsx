@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Users, FileText, Mic, BarChart3, Music,
+  LayoutDashboard, Calendar, Users, FileText, Mic, BarChart3, Music,
   Stethoscope, Activity, ChevronRight, Menu, X, Sun, Moon, Sparkles, LogOut
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -8,6 +8,7 @@ import LoginScreen from './LoginScreen';
 import { ClinicalProvider } from './ClinicalContext';
 import ClinicalStepper from './ClinicalStepper';
 import DashboardModule from './DashboardModule';
+import AgendaView from './agenda/AgendaView';
 import PacientesModule from './PacientesModule';
 import AnamnesisModule from './AnamnesisModule';
 import EscalasModule from './EscalasModule';
@@ -16,10 +17,11 @@ import CuadernilloModule from './CuadernilloModule';
 import PitchMeterModule from './PitchMeterModule';
 import RecomendacionIAModule from './RecomendacionIAModule';
 
-type ActiveModule = 'dashboard' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo';
+type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo';
 
 const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+  { id: 'agenda', label: 'Agenda & Citas', icon: <Calendar size={20} /> },
   { id: 'pacientes', label: 'Pacientes', icon: <Users size={20} /> },
   { id: 'anamnesis', label: 'Anamnesis', icon: <Mic size={20} /> },
   { id: 'escalas', label: 'Riesgo & Escalas', icon: <BarChart3 size={20} /> },
@@ -60,6 +62,8 @@ function AppInner() {
     switch (activeModule) {
       case 'dashboard':
         return <DashboardModule onNavigate={setActiveModule} onSelectPaciente={setSelectedPacienteId} />;
+      case 'agenda':
+        return <AgendaView onNavigate={(m, pid) => { if (pid) setSelectedPacienteId(pid); setActiveModule(m as ActiveModule); }} onSelectPaciente={(id) => { setSelectedPacienteId(id); setActiveModule('anamnesis'); }} />;
       case 'pacientes':
         return <PacientesModule onSelectPaciente={(id) => { setSelectedPacienteId(id); setActiveModule('anamnesis'); }} />;
       case 'anamnesis':

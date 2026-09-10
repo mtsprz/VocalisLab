@@ -122,12 +122,21 @@ CREATE TABLE IF NOT EXISTS turnos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
     fecha_hora TIMESTAMP WITH TIME ZONE NOT NULL,
-    duracion_min INT DEFAULT 30,
+    duracion_min INT DEFAULT 45,
     tipo TEXT CHECK (tipo IN ('primera_vez', 'control', 'seguimiento', 'evaluacion', 'terapia')) DEFAULT 'control',
     estado TEXT CHECK (estado IN ('programado', 'confirmado', 'completado', 'cancelado', 'no_asistio')) DEFAULT 'programado',
+    modalidad TEXT DEFAULT 'PRESENCIAL',
+    motivo TEXT DEFAULT 'Consulta de Voz',
+    meet_link TEXT,
+    google_event_id TEXT,
     notas TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS modalidad TEXT DEFAULT 'PRESENCIAL';
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS motivo TEXT DEFAULT 'Consulta de Voz';
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS meet_link TEXT;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS google_event_id TEXT;
 
 -- 7. ÍNDICES (con IF NOT EXISTS)
 CREATE INDEX IF NOT EXISTS idx_pacientes_dni ON pacientes(dni);

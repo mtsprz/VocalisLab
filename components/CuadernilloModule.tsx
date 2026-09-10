@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Loader2, CheckCircle2, Settings } from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -9,22 +9,292 @@ interface Props {
 }
 
 interface Exercise {
-  id: string; name: string; description: string; steps: string[];
-  duration_min?: number; phrases?: string[];
+  id: string;
+  name: string;
+  description: string;
+  steps: string[];
+  duration_min?: number;
+  phrases?: string[];
 }
 
 interface Section {
-  id: string; name: string; description: string; exercises: Exercise[];
+  id: string;
+  name: string;
+  description: string;
+  exercises: Exercise[];
 }
 
 interface Preset {
-  id: string; name: string; description: string; exercise_ids: string[];
-  sesiones_recomendadas: number; frecuencia: string;
+  id: string;
+  name: string;
+  description: string;
+  exercise_ids: string[];
+  sesiones_recomendadas: number;
+  frecuencia: string;
 }
 
+const DEFAULT_PRESETS: Preset[] = [
+  {
+    id: "dmt_1",
+    name: "DMT Tipo I — Hiperfunción Isométrica",
+    description: "Isometría laríngea con laringe elevada y tensión. Foco en Le Huche, descontracturación cervical y descenso laríngeo.",
+    exercise_ids: ["le_huche", "shiatsu_cabeza", "rotacion_hombros", "masaje_laringeo", "descenso_laringeo", "respiracion_abdominal", "tubo_agua", "calentamiento"],
+    sesiones_recomendadas: 10,
+    frecuencia: "2 veces por semana"
+  },
+  {
+    id: "dmt_2",
+    name: "DMT Tipo II — Contracción Supraglótica",
+    description: "Aproximación excesiva de bandas ventriculares. Foco en ensanchamiento faríngeo, SOVTE en tubo de agua y soplo aspirado.",
+    exercise_ids: ["le_huche", "descenso_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "vibracion_labial", "enfriamiento"],
+    sesiones_recomendadas: 12,
+    frecuencia: "2 a 3 veces por semana"
+  },
+  {
+    id: "nodo_cordial",
+    name: "Nódulos Cordales / Lesiones Exofíticas",
+    description: "Edema en punto nodular por microtrauma. Foco en reeducación respiratoria, ataque suave, SOVTE y descontracturación.",
+    exercise_ids: ["le_huche", "masaje_laringeo", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+    sesiones_recomendadas: 14,
+    frecuencia: "2 a 3 veces por semana"
+  },
+  {
+    id: "paralisis_cordal",
+    name: "Parálisis Cordal / Incompetencia Glótica",
+    description: "Déficit de cierre cordal. Foco en apoyo costodiafragmático, consonantes fricativas sonoras y resonancia anterior.",
+    exercise_ids: ["respiracion_abdominal", "expansion_costo_lateral", "consonantes_fricativas", "popote_aire", "escalas_vocalicas", "humming_m"],
+    sesiones_recomendadas: 16,
+    frecuencia: "2 a 3 veces por semana"
+  },
+  {
+    id: "presbifonia",
+    name: "Presbifonía / Atrofia Cordal",
+    description: "Atrofia cordal senil con arqueamiento. Foco en incremento de tonicidad con popote estrecho y proyección vocal.",
+    exercise_ids: ["expansion_costo_lateral", "popote_aire", "vibracion_labial", "consonantes_fricativas", "escalas_vocalicas", "frases_balanceadas", "calentamiento"],
+    sesiones_recomendadas: 12,
+    frecuencia: "2 veces por semana"
+  },
+  {
+    id: "fonastenia",
+    name: "Fonastenia / Fatiga Vocal Ocupacional",
+    description: "Cansancio vocal en docentes y profesionales. Foco en economía vocal (SOVTE), resonancia y pausas vocales.",
+    exercise_ids: ["rotacion_hombros", "respiracion_abdominal", "tubo_agua", "popote_aire", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+    sesiones_recomendadas: 8,
+    frecuencia: "2 veces por semana"
+  },
+  {
+    id: "rlf",
+    name: "Reflujo Laringofaríngeo (RLF)",
+    description: "Irritación interaritenoidea con carraspeo crónico. Foco en higiene digestiva estricta, hidratación y vibración suave.",
+    exercise_ids: ["pautas_rlf", "descenso_laringeo", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
+    sesiones_recomendadas: 8,
+    frecuencia: "1 a 2 veces por semana"
+  },
+  {
+    id: "edema_reinke",
+    name: "Edema de Reinke / Degeneración Polipoidea",
+    description: "Aumento de masa y laxitud en espacio de Reinke. Foco en disminución de impacto, resonancia y SOVTE.",
+    exercise_ids: ["le_huche", "masaje_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "calentamiento", "enfriamiento"],
+    sesiones_recomendadas: 12,
+    frecuencia: "2 veces por semana"
+  },
+  {
+    id: "preparacion_vocal",
+    name: "Acondicionamiento y Mantenimiento Vocal",
+    description: "Rutina completa de preparación y cuidado para profesionales de la voz hablada y cantada.",
+    exercise_ids: ["rotacion_hombros", "le_huche", "respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+    sesiones_recomendadas: 6,
+    frecuencia: "diario o pre-jornada"
+  }
+];
+
+const DEFAULT_SECTIONS: Section[] = [
+  {
+    id: "corporal",
+    name: "Trabajo Corporal y Miofascial",
+    description: "Relajación muscular, técnica de Le Huche, digitopresión y liberación miofascial cervicofacial",
+    exercises: [
+      {
+        id: "le_huche",
+        name: "Técnica de Relajación Diferencial (Le Huche)",
+        description: "Secuencia respiratoria: inspiración nasal, espiración en /f/ y /sh/, apnea y descenso tensional.",
+        steps: ["Inspire nasal abdominal 3s", "Espire en /f/ 4s", "Espire en /sh/ prolongado 6s", "Pausa apneica 2-3s relajando hombros", "Repita 8 a 10 ciclos"],
+        duration_min: 5
+      },
+      {
+        id: "shiatsu_cabeza",
+        name: "Digitopresión Descontracturante Craneofacial y ATM",
+        description: "Puntos de presión en vértex, sienes, ATM, maseteros y músculos suprahioideos.",
+        steps: ["Vértex 30s circular", "Sienes 30s bilateral", "ATM con apertura mandibular 30s", "Maseteros 40s descendente", "Zona submandibular hacia hioides"],
+        duration_min: 5
+      },
+      {
+        id: "rotacion_hombros",
+        name: "Movilización Articular Cervicoescapular",
+        description: "Desbloqueo de cintura escapular y cuello para reducir el anclaje laríngeo superior.",
+        steps: ["Círculos de hombros hacia atrás 10x", "Círculos hacia adelante 10x", "Inclinación lateral 15s por lado", "Rotación suave 10s por lado"],
+        duration_min: 4
+      }
+    ]
+  },
+  {
+    id: "laringeo",
+    name: "Flexibilización y Descenso Laríngeo",
+    description: "Masaje circumlaríngeo de Aronson, descenso laríngeo activo y liberación del espacio tirohioideo",
+    exercises: [
+      {
+        id: "masaje_laringeo",
+        name: "Masaje Circumlaríngeo Manual (Aronson/Farías)",
+        description: "Masaje circular en espacio tirohioideo y láminas tiroideas para descender la laringe elevada.",
+        steps: ["Palpe espacio tirohioideo bilateral", "Movimientos circulares suaves de anterior a posterior", "Desplace la laringe lateralmente", "Fonación simultánea en /u/ grave y relajada"],
+        duration_min: 4
+      },
+      {
+        id: "descenso_laringeo",
+        name: "Bostezo-Suspiro Activo con Emisión Grave",
+        description: "Facilita la apertura faríngea y el descenso fisiológico del hioides y laringe.",
+        steps: ["Bostezo amplio sintiendo descenso laríngeo", "Suspiro sonoro en /u/ o /o/ sin ataque duro", "8 repeticiones pausadas"],
+        duration_min: 3
+      },
+      {
+        id: "oclusion_succion",
+        name: "Técnica de Succión con Popote / Cucharita",
+        description: "Estimula la ampliación faríngea y el descenso pasivo del complejo hio-laríngeo.",
+        steps: ["Selle labios en popote estrecho", "Succiones suaves de 5-10s", "Emisión sostenida en tono cómodo", "6 ciclos con descanso"],
+        duration_min: 3
+      }
+    ]
+  },
+  {
+    id: "respiratorio",
+    name: "Dinámica Respiratoria y Apoyo Costodiafragmático",
+    description: "Coordinación fonorrespiratoria, expansión costolateral y dosificación del flujo subglótico",
+    exercises: [
+      {
+        id: "respiracion_abdominal",
+        name: "Respiración Costodiafragmática con Dosificación en /s/",
+        description: "Reeducación ventilatoria baja para optimizar la presión subglótica sin tensión escapular.",
+        steps: ["Inspire diafragmático", "Espire dosificando en fricativa /s/ constante", "Buscar >15s sin temblor", "6 series con pausa"],
+        duration_min: 5
+      },
+      {
+        id: "expansion_costo_lateral",
+        name: "Expansión Costolateral y Apertura Torácica Baja",
+        description: "Apertura de costillas flotantes para incrementar capacidad vital útil.",
+        steps: ["Manos en costillas laterales", "Inspire empujando manos hacia afuera", "Conteo 1 al 10 manteniendo costillas abiertas"],
+        duration_min: 4
+      },
+      {
+        id: "soplo_escalonado",
+        name: "Soplo Escalonado y Ataques Suaves",
+        description: "Transición de flujo áfono en /h/ a sonoridad suave para erradicar el golpe de glotis.",
+        steps: ["Inicio con soplo en /h/", "Introducir sonoridad progresiva /ha, he, hi, ho, hu/", "Verificar ausencia de golpe glótico"],
+        duration_min: 4
+      }
+    ]
+  },
+  {
+    id: "sovte",
+    name: "Tracto Vocal Semiocluido (SOVTE)",
+    description: "Tubo de resonancia sumergido en agua (Lax Vox), vibración labial/lingual y popotes delgados",
+    exercises: [
+      {
+        id: "tubo_agua",
+        name: "Lax Vox / Tubo Sumergido en Agua",
+        description: "Fonación en tubo de silicona sumergido 1.5 cm en agua. Masaje glótico por contrapresión acústica.",
+        steps: ["Tubo a 1.5 cm en agua", "Selle labios emitiendo /u/ sostenido con burbujeo parejo", "Glissandos ascendentes y descendentes suaves", "Series de 1 min hasta 5 min"],
+        duration_min: 5
+      },
+      {
+        id: "vibracion_labial",
+        name: "Vibración de Labios y Lengua (Trill)",
+        description: "Oscilación labial /brrr/ o lingual /rrr/ para equilibrar la impedancia acústica.",
+        steps: ["Sostenga comisuras suavemente", "Vibración labial /brrr/ sostenida", "Sirenas tonales de grave a agudo"],
+        duration_min: 4
+      },
+      {
+        id: "popote_aire",
+        name: "Fonación en Popote Delgado al Aire (Titze)",
+        description: "Fonación en sorbete estrecho para elevar reactancia acústica y economía vocal.",
+        steps: ["Popote estrecho entre labios", "Tonos sostenidos e intensidades variables", "Glissandos cubriendo tesitura modal"],
+        duration_min: 4
+      },
+      {
+        id: "consonantes_fricativas",
+        name: "Consonantes Sonoras Sostenidas /v/, /z/, /j/",
+        description: "Fricativas anteriores para potenciar vibración ósea y colocación en máscara.",
+        steps: ["Emisión de /v/ labiodental sostenida", "Transición a vocal /vvv-aaaa/ sin corte", "Repetir con /z/ y /j/"],
+        duration_min: 4
+      }
+    ]
+  },
+  {
+    id: "resonancia",
+    name: "Enfoque Resonancial y Proyección Vocal",
+    description: "Humming nasal /m/, bostezo-vocal y lectura con frases balanceadas",
+    exercises: [
+      {
+        id: "humming_m",
+        name: "Resonancia Anterior con /m/ (Humming de Lessac)",
+        description: "Colocación de la voz en máscara facial mediante oclusión bilabial relajada.",
+        steps: ["Labios juntos sin apretar", "Emita /m/ conversacional sintiendo vibración labionasal", "Masticación sonora /mmmm-num-num/", "Palabras con nasal inicial"],
+        duration_min: 4
+      },
+      {
+        id: "escalas_vocalicas",
+        name: "Escalas Vocálicas y Glissandos Controlados",
+        description: "Flexibilidad cordal y balance cricotiroideo/tiroaritenoideo.",
+        steps: ["Sirena de 5 notas ascendente y descendente", "Volumen moderado sin forzar", "Alternar vocales cerradas y abiertas"],
+        duration_min: 5
+      },
+      {
+        id: "frases_balanceadas",
+        name: "Frases Fonéticamente Balanceadas para Transferencia",
+        description: "Lectura proyectada para transferir los patrones funcionales al habla conversacional.",
+        steps: ["Articulación clara y apertura bucal", "Pausas respiratorias adecuadas", "Proyección a 3 metros sin esfuerzo"],
+        phrases: [
+          "La mañana luminosa renueva la energía de las personas.",
+          "Muchos músicos tocan melodías suaves junto al mar.",
+          "El río transparente corre tranquilo entre las piedras.",
+          "Un vaso de agua fresca alivia la sensación de fatiga."
+        ],
+        duration_min: 6
+      }
+    ]
+  },
+  {
+    id: "higiene",
+    name: "Higiene y Pautas Preventivas",
+    description: "Calentamiento, enfriamiento, hidratación y prevención del reflujo laringofaríngeo",
+    exercises: [
+      {
+        id: "calentamiento",
+        name: "Protocolo de Calentamiento Vocal Integral",
+        description: "Rutina pre-exigencia de 6 minutos para preparar la viscosidad de la mucosa vocal.",
+        steps: ["Respiración y relajación cervical 1 min", "Masaje laríngeo y bostezos 1 min", "Vibración labial /brrr/ con glissandos 2 min", "Humming /m/ y frases 2 min"],
+        duration_min: 6
+      },
+      {
+        id: "enfriamiento",
+        name: "Protocolo de Enfriamiento y Reposo",
+        description: "Desaceleración funcional post-exigencia para evitar edema reactivo.",
+        steps: ["Respiración diafragmática lenta con /sh/ 2 min", "Bostezos y suspiros graves /u/ 1 min", "Masaje facial y cervical 1 min", "Hidratación y reposo vocal"],
+        duration_min: 5
+      },
+      {
+        id: "pautas_rlf",
+        name: "Pautas Antirreflujo Laringofaríngeo (RLF)",
+        description: "Higiene digestiva para controlar la irritación ácida/pepsínica de la comisura posterior.",
+        steps: ["No acostarse antes de 2.5h post-cena", "Elevar cabecera de la cama 10-15 cm", "Disminuir café, mate caliente, alcohol y picantes", "Hidratación fraccionada en pequeños sorbos"],
+        duration_min: 3
+      }
+    ]
+  }
+];
+
 export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Props) {
-  const [sections, setSections] = useState<Section[]>([]);
-  const [presets, setPresets] = useState<Preset[]>([]);
+  const [sections, setSections] = useState<Section[]>(DEFAULT_SECTIONS);
+  const [presets, setPresets] = useState<Preset[]>(DEFAULT_PRESETS);
   const [selectedPreset, setSelectedPreset] = useState('');
   const [selectedExercises, setSelectedExercises] = useState<string[]>(initialExerciseIds || []);
   const [titulo, setTitulo] = useState('Cuadernillo Terapéutico Vocal');
@@ -32,7 +302,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [notas, setNotas] = useState('');
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (initialExerciseIds && initialExerciseIds.length > 0) {
@@ -41,18 +311,21 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     }
   }, [initialExerciseIds]);
 
-  useEffect(() => { loadBank(); }, []);
+  useEffect(() => {
+    loadBank();
+  }, []);
 
   const loadBank = async () => {
     try {
       const r = await fetch(`${BACKEND_URL}/api/ejercicios`);
       if (r.ok) {
         const data = await r.json();
-        setSections(data.sections || []);
-        setPresets(data.presets || []);
+        if (data.sections && data.sections.length > 0) setSections(data.sections);
+        if (data.presets && data.presets.length > 0) setPresets(data.presets);
       }
-    } catch {}
-    setLoading(false);
+    } catch {
+      // DEFAULT_PRESETS and DEFAULT_SECTIONS are already present as fallbacks
+    }
   };
 
   const applyPreset = (presetId: string) => {
@@ -83,7 +356,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   };
 
   const handleGenerate = async () => {
-    if (!selectedExercises.length) { alert('Seleccioná al menos un ejercicio'); return; }
+    if (!selectedExercises.length) {
+      alert('Seleccioná al menos un ejercicio terapéutico.');
+      return;
+    }
     setGenerating(true);
     try {
       const selected = getSelectedDetails();
@@ -109,9 +385,11 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
         const blob = new Blob([arr], { type: 'application/pdf' });
         setPdfUrl(URL.createObjectURL(blob));
+      } else {
+        alert(data.error || 'Error generando el PDF del cuadernillo');
       }
     } catch (e) {
-      alert('Error generando cuadernillo');
+      alert('Error de conexión generando cuadernillo.');
     }
     setGenerating(false);
   };
@@ -124,107 +402,206 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     a.click();
   };
 
-  if (loading) {
-    return <div className="text-center py-16 text-gray-400"><Loader2 size={24} className="animate-spin mx-auto" /></div>;
-  }
-
   return (
-    <div className="max-w-5xl space-y-4">
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-          <Settings size={18} /> Presets por Patología
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {presets.map(p => (
-            <button
-              key={p.id}
-              onClick={() => applyPreset(p.id)}
-              className={`text-left p-3 rounded-lg border text-sm transition-colors ${
-                selectedPreset === p.id
-                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                  : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-              }`}
-            >
-              <p className="font-medium">{p.name}</p>
-              <p className="text-xs text-gray-500 mt-1">{p.description}</p>
-              <p className="text-xs text-gray-400 mt-1">{p.sesiones_recomendadas} sesiones — {p.frecuencia}</p>
-            </button>
-          ))}
+    <div className="max-w-6xl space-y-6">
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-indigo-900/60 via-purple-900/40 to-slate-900/80 backdrop-blur-xl border border-indigo-500/20 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <span className="text-[10px] font-bold tracking-widest uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-full">
+            Terapéutica Vocal Basada en Evidencia
+          </span>
+          <h2 className="text-2xl font-black text-white mt-2 flex items-center gap-2">
+            <FileText className="text-indigo-400" /> Prescripción de Cuadernillo Terapéutico
+          </h2>
+          <p className="text-xs text-gray-300 max-w-2xl mt-1">
+            Presets clínicos por patología cordal y biomecánica laríngea (DMT, Nódulos, Parálisis, Presbifonía, RLF, SOVTE) adaptados según Farías (2012, 2016) y Le Huche.
+          </p>
         </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="font-semibold text-gray-800 mb-3">Ejercicios Seleccionados ({selectedExercises.length})</h3>
-        {sections.map(section => (
-          <div key={section.id} className="mb-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{section.name}</p>
-            <div className="space-y-1">
-              {section.exercises.map(ex => (
-                <label
-                  key={ex.id}
-                  className={`flex items-start gap-3 p-2 rounded-lg cursor-pointer ${
-                    selectedExercises.includes(ex.id) ? 'bg-indigo-50' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedExercises.includes(ex.id)}
-                    onChange={() => toggleExercise(ex.id)}
-                    className="mt-1 rounded text-indigo-600"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">{ex.name}</p>
-                    <p className="text-xs text-gray-500">{ex.description}</p>
-                    {ex.duration_min && <p className="text-xs text-gray-400">{ex.duration_min} min</p>}
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="font-semibold text-gray-800 mb-3">Configuración del Cuadernillo</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-gray-500">Título</label>
-            <input value={titulo} onChange={e => setTitulo(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">Sesiones</label>
-            <input type="number" value={sesiones} onChange={e => setSesiones(parseInt(e.target.value) || 8)} className="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-        </div>
-        <div className="mt-3">
-          <label className="text-xs text-gray-500">Notas del profesional</label>
-          <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2} className="w-full px-3 py-2 border rounded-lg text-sm" />
-        </div>
-        <div className="mt-4 flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <button
             onClick={handleGenerate}
-            disabled={generating || !selectedExercises.length}
-            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+            disabled={generating || selectedExercises.length === 0}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {generating ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-            Generar PDF
+            {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {generating ? 'Generando PDF...' : `Generar Cuadernillo (${selectedExercises.length})`}
           </button>
           {pdfUrl && (
-            <button onClick={downloadPdf} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+            <button
+              onClick={downloadPdf}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
+            >
               <Download size={16} /> Descargar PDF
             </button>
           )}
         </div>
       </div>
 
-      {pdfUrl && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-            <CheckCircle2 size={18} className="text-green-500" /> Cuadernillo Generado
+      {/* Presets por Patología (Clinical Quick Pick) */}
+      <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+            <Settings size={16} className="text-indigo-500" /> Presets Clínicos por Patología Cordal ({presets.length})
           </h3>
-          <iframe src={pdfUrl} className="w-full h-[600px] rounded-lg border" title="Cuadernillo" />
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            Haz clic en un preset para cargar los ejercicios y dosificación recomendada
+          </span>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {presets.map(p => {
+            const isSelected = selectedPreset === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => applyPreset(p.id)}
+                className={`text-left p-3.5 rounded-xl border text-xs transition-all duration-200 flex flex-col justify-between ${
+                  isSelected
+                    ? 'bg-indigo-600/15 border-indigo-500 text-indigo-950 dark:text-white ring-2 ring-indigo-500/30 shadow-md'
+                    : 'bg-gray-50/70 dark:bg-white/[0.03] border-gray-200 dark:border-white/10 hover:border-indigo-400/50 hover:bg-indigo-50/50 dark:hover:bg-white/[0.06] text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <p className="font-bold text-gray-900 dark:text-white text-xs">{p.name}</p>
+                    {isSelected && <CheckCircle2 size={14} className="text-indigo-500 shrink-0" />}
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">{p.description}</p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-gray-200 dark:border-white/5 flex items-center justify-between text-[10px] text-gray-400">
+                  <span className="font-semibold text-indigo-600 dark:text-indigo-400">{p.exercise_ids.length} ejercicios</span>
+                  <span>{p.sesiones_recomendadas} ses. • {p.frecuencia}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Exercise Catalogue by Section */}
+      <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3">
+          <div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+              Catálogo de Técnicas & Ejercicios
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Personalizá la selección marcando o desmarcando los ejercicios para el paciente
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60">
+            <span>{selectedExercises.length} seleccionados</span>
+          </div>
+        </div>
+
+        {sections.map(section => (
+          <div key={section.id} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-500" />
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                {section.name}
+              </p>
+              <span className="text-[10px] text-gray-400">({section.exercises.length})</span>
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 -mt-1 mb-2 ml-4">
+              {section.description}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 ml-1">
+              {section.exercises.map(ex => {
+                const checked = selectedExercises.includes(ex.id);
+                return (
+                  <label
+                    key={ex.id}
+                    className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
+                      checked
+                        ? 'bg-indigo-500/10 border-indigo-500/50 text-gray-900 dark:text-white'
+                        : 'bg-gray-50/50 dark:bg-white/[0.02] border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/15'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleExercise(ex.id)}
+                      className="mt-1 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{ex.name}</p>
+                        {ex.duration_min && (
+                          <span className="text-[10px] font-medium text-gray-400 shrink-0">{ex.duration_min} min</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{ex.description}</p>
+                      {ex.steps && ex.steps.length > 0 && (
+                        <div className="mt-2 space-y-0.5 pt-1.5 border-t border-gray-100 dark:border-white/5">
+                          {ex.steps.slice(0, 3).map((st, i) => (
+                            <p key={i} className="text-[10px] text-gray-400 truncate">• {st}</p>
+                          ))}
+                          {ex.steps.length > 3 && (
+                            <p className="text-[9px] text-indigo-400 font-medium">+ {ex.steps.length - 3} pasos más</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Settings & Professional Contract Form */}
+      <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm space-y-4">
+        <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+          <FileText size={16} className="text-indigo-500" /> Parámetros de Prescripción & Contrato Terapéutico
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Título del Cuadernillo</label>
+            <input
+              value={titulo}
+              onChange={e => setTitulo(e.target.value)}
+              className="mt-1 w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Número de Sesiones Planificadas</label>
+            <input
+              type="number"
+              value={sesiones}
+              onChange={e => setSesiones(parseInt(e.target.value) || 8)}
+              min={1}
+              max={30}
+              className="mt-1 w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Pautas Particulares y Observaciones Clínicas</label>
+          <textarea
+            value={notas}
+            onChange={e => setNotas(e.target.value)}
+            rows={3}
+            placeholder="Indicaciones específicas para el paciente (p. ej., realizar la rutina SOVTE en agua 2 veces al día, suspender carraspeo, mantener hidratación de 2L/día)..."
+            className="mt-1 w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={handleGenerate}
+            disabled={generating || selectedExercises.length === 0}
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+          >
+            {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {generating ? 'Compilando Cuadernillo PDF...' : 'Generar y Descargar Cuadernillo Clínico'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
