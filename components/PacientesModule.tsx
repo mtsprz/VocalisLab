@@ -27,6 +27,22 @@ const EMPTY_FORM = {
   telefono: '', email: '', ocupacion: '', derivador: '', notas_iniciales: '',
 };
 
+function FormField({ label, value, onChange, type = 'text', required = false }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">{label}{required && ' *'}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+      />
+    </div>
+  );
+}
+
 export default function PacientesModule({ onSelectPaciente }: Props) {
   const clinical = useClinical();
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
@@ -87,17 +103,7 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
     loadPacientes();
   };
 
-  const FormField = ({ label, field, type = 'text', required = false }: any) => (
-    <div>
-      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">{label}{required && ' *'}</label>
-      <input
-        type={type}
-        value={(form as any)[field]}
-        onChange={e => setForm({ ...form, [field]: e.target.value })}
-        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-      />
-    </div>
-  );
+  const set = (field: string) => (v: string) => setForm(prev => ({ ...prev, [field]: v }));
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -137,9 +143,9 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Nombre completo" field="nombre_completo" required />
-            <FormField label="DNI / Cédula" field="dni" required />
-            <FormField label="Fecha de nacimiento" field="fecha_nacimiento" type="date" />
+            <FormField label="Nombre completo" value={form.nombre_completo} onChange={set('nombre_completo')} required />
+            <FormField label="DNI / Cédula" value={form.dni} onChange={set('dni')} required />
+            <FormField label="Fecha de nacimiento" value={form.fecha_nacimiento} onChange={set('fecha_nacimiento')} type="date" />
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
                 Sexo Biológico
@@ -154,10 +160,10 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                 <option className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" value="Otro">Otro</option>
               </select>
             </div>
-            <FormField label="Teléfono / WhatsApp" field="telefono" />
-            <FormField label="Correo electrónico" field="email" type="email" />
-            <FormField label="Ocupación / Uso vocal" field="ocupacion" />
-            <FormField label="Profesional derivador" field="derivador" />
+            <FormField label="Teléfono / WhatsApp" value={form.telefono} onChange={set('telefono')} />
+            <FormField label="Correo electrónico" value={form.email} onChange={set('email')} type="email" />
+            <FormField label="Ocupación / Uso vocal" value={form.ocupacion} onChange={set('ocupacion')} />
+            <FormField label="Profesional derivador" value={form.derivador} onChange={set('derivador')} />
           </div>
 
           <div className="mt-4">
