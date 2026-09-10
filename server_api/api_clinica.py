@@ -585,3 +585,24 @@ async def dashboard():
             "total_pacientes": 0, "turnos_hoy": 0,
             "evaluaciones_mes": 0, "analisis_mes": 0,
         })
+
+
+# ─── DIAGNÓSTICO (sin secretos) ─────────────────────────────
+@router.get("/api/debug/status")
+async def debug_status():
+    """Indica si Supabase está configurado y qué tablas existen. No expone secretos."""
+    info: dict = {
+        "supabase_configured": bool(supabase),
+        "supabase_error": _supabase_error,
+        "tables": {},
+    }
+    if not supabase:
+        return JSONResponse(content=info)
+    for tbl in ["pacientes", "turnos", "anamnesis", "evaluaciones_clinicas",
+                "analisis_acusticos", "cuadernillos_paciente", "usuarios_google"]:
+        try:
+            r = supabase.table(tbl).select("id", count="exact").limit(1).execute()
+            info["tables"][tbl] = {"exists": True, "count": r.count}
+        except Exception as e:
+            info["tables"][tbl] = {"exists": False, "error": str(e)[:200]}
+    return JSONResponse(content=info)
