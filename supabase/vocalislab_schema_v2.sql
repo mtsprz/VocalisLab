@@ -174,6 +174,8 @@ BEGIN
     DROP POLICY IF EXISTS "Service role full access" ON analisis_acusticos;
     DROP POLICY IF EXISTS "Service role full access" ON cuadernillos_paciente;
     DROP POLICY IF EXISTS "Service role full access" ON turnos;
+    DROP POLICY IF EXISTS "Allow access to authenticated users" ON usuarios_google;
+    DROP POLICY IF EXISTS "Service role full access" ON usuarios_google;
 END $$;
 
 CREATE POLICY "Allow access to authenticated users" ON pacientes FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -213,4 +215,5 @@ CREATE TABLE IF NOT EXISTS usuarios_google (
 
 CREATE INDEX IF NOT EXISTS idx_usuarios_google_email ON usuarios_google(email);
 
+DROP POLICY IF EXISTS "Allow access to authenticated users" ON usuarios_google;
 CREATE POLICY "Allow access to authenticated users" ON usuarios_google FOR ALL TO authenticated USING (true) WITH CHECK (true);
