@@ -588,11 +588,27 @@ async def dashboard():
 
 
 # ─── DIAGNÓSTICO (sin secretos) ─────────────────────────────
+def _supabase_key_role() -> str:
+    """Devuelve el rol ('anon' o 'service_role') de la key configurada, sin exponerla."""
+    try:
+        import base64
+        import json as _json
+        key = os.environ.get("SUPABASE_SERVICE_KEY", "") or os.environ.get("SUPABASE_ANON_KEY", "")
+        parts = key.split(".")
+        if len(parts) != 3:
+            return "desconocido"
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        return _json.loads(base64.urlsafe_b64decode(payload).decode()).get("role", "desconocido")
+    except Exception:
+        return "desconocido"
+
+
 @router.get("/api/debug/status")
 async def debug_status():
     """Indica si Supabase está configurado y qué tablas existen. No expone secretos."""
     info: dict = {
         "supabase_configured": bool(supabase),
+        "supabase_key_role": _supabase_key_role(),
         "supabase_error": _supabase_error,
         "tables": {},
     }
@@ -605,4 +621,20 @@ async def debug_status():
             info["tables"][tbl] = {"exists": True, "count": r.count}
         except Exception as e:
             info["tables"][tbl] = {"exists": False, "error": str(e)[:200]}
+    # Prueba de escritura autolimpiante: inserta y borra una fila centinela.
+    # Detecta RLS bloqueando writes aunque los reads pasen.
+    probe: dict = {"insert_ok": False, "delete_ok": False}
+    try:
+        ins = supabase.table("pacientes").insert(
+            {"nombre_completo": "DEBUG_PROBE", "dni": "DEBUG_PROBE_TMP"}
+        ).execute()
+        probe["insert_ok"] = bool(ins.data)
+        try:
+            supabase.table("pacientes").delete().eq("dni", "DEBUG_PROBE_TMP").execute()
+            probe["delete_ok"] = True
+        except Exception as e_del:
+            probe["delete_error"] = str(e_del)[:200]
+    except Exception as e_ins:
+        probe["insert_error"] = str(e_ins)[:300]
+    info["write_probe"] = probe
     return JSONResponse(content=info)
