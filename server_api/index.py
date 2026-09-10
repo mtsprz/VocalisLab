@@ -752,13 +752,12 @@ async def analizar_y_reportar(
                 f"5. Formato: 3-4 párrafos, tono formal técnico fonoaudiológico latinoamericano.\n"
                 f"6. Incluye al final: 'Interpretación generada por IA — Requiere correlación clínica del profesional tratante.'\n"
             )
-            chat_completion = client.chat.completions.create(
+            from llm_client import groq_chat
+            sintesis_ia, _model = groq_chat(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
                 temperature=0.15,
                 max_tokens=600,
             )
-            sintesis_ia = chat_completion.choices[0].message.content
         except Exception as e:
             traceback.print_exc()
             sintesis_ia = "Síntesis descriptiva no disponible temporalmente. Los resultados bioacústicos fueron calculados correctamente."

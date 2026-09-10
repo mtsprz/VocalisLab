@@ -95,8 +95,8 @@ def estructurar_anamnesis_llm(transcripcion: str) -> dict:
         return {"error": "Groq no configurado"}
 
     try:
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        from llm_client import groq_chat
+        raw, _model = groq_chat(
             messages=[
                 {"role": "system", "content": ANAMNESIS_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Transcripción de anamnesis vocal:\n\n{transcripcion}"},
@@ -105,8 +105,7 @@ def estructurar_anamnesis_llm(transcripcion: str) -> dict:
             max_tokens=1500,
             response_format={"type": "json_object"},
         )
-
-        raw = response.choices[0].message.content.strip()
+        raw = raw.strip()
         parsed = json.loads(raw)
         return parsed
 

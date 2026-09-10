@@ -64,8 +64,7 @@ def generar_recomendacion_terapeutica(
 
     if groq_key:
         try:
-            from groq import Groq
-            client = Groq(api_key=groq_key, timeout=25.0)
+            from llm_client import groq_chat
 
             system_prompt = (
                 "Eres el 'Motor de Recomendación Clínica y Terapéutica Vocal' de VocalisLab Pro, "
@@ -119,8 +118,7 @@ DATOS DEL CASO CLÍNICO:
 
 Genera la recomendación terapéutica precisa.
 """
-            resp = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+            raw, _model = groq_chat(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
@@ -129,7 +127,7 @@ Genera la recomendación terapéutica precisa.
                 max_tokens=2200,
                 response_format={"type": "json_object"}
             )
-            raw = resp.choices[0].message.content.strip()
+            raw = raw.strip()
             return json.loads(raw)
         except Exception as e:
             traceback.print_exc()

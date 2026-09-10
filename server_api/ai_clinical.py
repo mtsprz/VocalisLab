@@ -99,13 +99,8 @@ async def _call_gemini(prompt: str) -> str:
 
 
 async def _call_groq(prompt: str) -> str:
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    if not groq_key:
-        raise RuntimeError("GROQ_API_KEY no configurada")
-    from groq import Groq
-    client = Groq(api_key=groq_key, timeout=30.0)
-    resp = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    from llm_client import groq_chat
+    texto, _model = groq_chat(
         messages=[
             {"role": "system", "content": "Sos un asistente fonoaudiologico experto en voz. Respondes en español rioplatense, con rigor clinico."},
             {"role": "user", "content": prompt},
@@ -113,7 +108,7 @@ async def _call_groq(prompt: str) -> str:
         temperature=0.4,
         max_tokens=2048,
     )
-    return resp.choices[0].message.content or ""
+    return texto
 
 
 @router.get("/api/ai/kb/patologias")
