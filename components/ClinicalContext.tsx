@@ -29,26 +29,73 @@ export function useClinical() {
   return ctx;
 }
 
+const DEFAULT_DATA: ClinicalData = {
+  paciente: {
+    id: null,
+    nombre_completo: '',
+    dni: '',
+    fecha_nacimiento: '',
+    sexo: 'Femenino',
+    ocupacion: '',
+    demanda_vocal_horas: 4,
+  },
+  anamnesis: {
+    motivo_consulta: '',
+    diagnostico_orl: '',
+    metodo_exploracion: '',
+    sintomas: {},
+    factores_riesgo: {},
+    resumen_clinico: '',
+    transcripcion: '',
+  },
+  riesgoVocal: {
+    puntaje_total: 0,
+    grupo: '',
+    subtotales: {},
+    alertas: [],
+  },
+  escalas: {
+    grbas: { G: 0, R: 0, B: 0, A: 0, S: 0 },
+    rasati: { R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 },
+    vhi10_total: 0,
+    vhi10_score: 0,
+    tme_segundos: 0,
+    tme_o: 0,
+    tme_s: 0,
+  },
+  acustica: {
+    f0_mean: null,
+    f0_min: null,
+    f0_max: null,
+    f0_sd: null,
+    jitter_local_pct: null,
+    shimmer_local_pct: null,
+    hnr_db: null,
+    cpps_db: null,
+    nhr: null,
+    avqi: null,
+  },
+  recomendacion: null,
+};
+
+function mergeState(prev: any, next: any) {
+  if (!next || typeof next !== 'object') return next ?? prev ?? {};
+  return { ...(prev || {}), ...next };
+}
+
 export function ClinicalProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<ClinicalData>({
-    paciente: null,
-    anamnesis: null,
-    riesgoVocal: null,
-    escalas: null,
-    acustica: null,
-    recomendacion: null,
-  });
+  const [data, setData] = useState<ClinicalData>(DEFAULT_DATA);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
 
   const markStep = (step: string) => {
     setCompletedSteps(prev => prev.includes(step) ? prev : [...prev, step]);
   };
 
-  const setPaciente = (d: any) => setData(prev => ({ ...prev, paciente: d }));
-  const setAnamnesis = (d: any) => setData(prev => ({ ...prev, anamnesis: d }));
-  const setRiesgoVocal = (d: any) => setData(prev => ({ ...prev, riesgoVocal: d }));
-  const setEscalas = (d: any) => setData(prev => ({ ...prev, escalas: d }));
-  const setAcustica = (d: any) => setData(prev => ({ ...prev, acustica: d }));
+  const setPaciente = (d: any) => setData(prev => ({ ...prev, paciente: mergeState(prev.paciente, d) }));
+  const setAnamnesis = (d: any) => setData(prev => ({ ...prev, anamnesis: mergeState(prev.anamnesis, d) }));
+  const setRiesgoVocal = (d: any) => setData(prev => ({ ...prev, riesgoVocal: mergeState(prev.riesgoVocal, d) }));
+  const setEscalas = (d: any) => setData(prev => ({ ...prev, escalas: mergeState(prev.escalas, d) }));
+  const setAcustica = (d: any) => setData(prev => ({ ...prev, acustica: mergeState(prev.acustica, d) }));
   const setRecomendacion = (d: any) => setData(prev => ({ ...prev, recomendacion: d }));
 
   return (

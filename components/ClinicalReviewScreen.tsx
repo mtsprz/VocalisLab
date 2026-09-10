@@ -26,6 +26,10 @@ interface ToolStatus {
 }
 
 interface ClinicalReviewProps {
+  grbas?: any;
+  rasati?: any;
+  vhi10?: number;
+  tme?: number;
   audioInfo: AudioInfo;
   metrics: any;
   avqiComponents: any;
@@ -86,6 +90,7 @@ const METRIC_CLINICAL_NOTES: Record<string, string> = {
 };
 
 export default function ClinicalReviewScreen({
+  grbas, rasati, vhi10, tme,
   audioInfo, metrics, avqiComponents, tools, timestamp, engineVersion, scriptVersion,
   fileHash, harmonics, formants, ltas, spectral, waveform, spectrogram, glottalPulses = [],
   formantTracks, f0Contour, intensityContour, classifications, voxplot, charts = {}, avqiStatus = 'ok', crossCheck, modo,
@@ -129,6 +134,81 @@ export default function ClinicalReviewScreen({
           </span>
           <span className="text-[10px] text-slate-500 font-mono">{timestamp}</span>
         </div>
+      </div>
+
+      {/* Clinical Triangulation Panel */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+        <h3 className="text-xs font-extrabold uppercase tracking-widest text-sky-400 flex items-center gap-2">
+          <Cpu className="w-4 h-4 text-sky-400" />
+          Triangulación Clínica Integrada (Percepción + Acústica + Autopercepción)
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Perceptual */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">1. Impresión Perceptual (G-R-B-A-S)</span>
+            <div className="flex items-center gap-2 font-mono text-sm font-black text-indigo-400">
+              <span>G{grbas?.G ?? '—'}</span>
+              <span>R{grbas?.R ?? '—'}</span>
+              <span>B{grbas?.B ?? '—'}</span>
+              <span>A{grbas?.A ?? '—'}</span>
+              <span>S{grbas?.S ?? '—'}</span>
+            </div>
+            {rasati && (
+              <div className="flex items-center gap-1.5 font-mono text-[11px] text-purple-400 pt-1">
+                <span>R:{rasati.R}</span>
+                <span>A:{rasati.A}</span>
+                <span>S:{rasati.S}</span>
+                <span>A:{rasati.A2}</span>
+                <span>T:{rasati.T}</span>
+                <span>I:{rasati.I}</span>
+              </div>
+            )}
+            <p className="text-[10px] text-slate-500">Evaluación subjetiva fonoaudiológica del patrón respiratorio y glótico.</p>
+          </div>
+
+          {/* Instrumental Praat */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">2. Acústica Objetiva (Praat)</span>
+            <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-300">
+              <div>F0 Media: <strong className="text-emerald-400">{metrics?.f0_mean ? `${Math.round(metrics.f0_mean)} Hz` : '—'}</strong></div>
+              <div>CPPs: <strong className="text-cyan-400">{metrics?.cpps_db ? `${metrics.cpps_db.toFixed(1)} dB` : '—'}</strong></div>
+              <div>Jitter: <strong className="text-amber-400">{metrics?.jitter_pct ? `${metrics.jitter_pct.toFixed(2)}%` : '—'}</strong></div>
+              <div>HNR: <strong className="text-sky-400">{metrics?.hnr_db ? `${metrics.hnr_db.toFixed(1)} dB` : '—'}</strong></div>
+            </div>
+            <p className="text-[10px] text-slate-500">Lámina acústica instrumental objetiva de regularidad y ruido.</p>
+          </div>
+
+          {/* Patient Autoperception & Aerodynamics */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">3. Autopercepción & Aerodinámica</span>
+            <div className="flex justify-between text-xs font-bold text-slate-300">
+              <span>VHI-10 Total: <strong className="text-amber-400">{vhi10 !== undefined ? `${vhi10}/40` : '—'}</strong></span>
+              <span>TME: <strong className="text-cyan-400">{tme !== undefined ? `${tme}s` : '—'}</strong></span>
+            </div>
+            <div className="text-[10px] text-slate-400 pt-1">
+              {vhi10 && vhi10 > 11 ? (
+                <span className="text-red-400 font-semibold">• Discapacidad vocal autopercibida moderada/severa</span>
+              ) : (
+                <span className="text-emerald-400 font-semibold">• Sin impacto severo percibido por el paciente</span>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500">Índice de Incapacidad Vocal y Tiempo Máximo de Fonación.</p>
+          </div>
+        </div>
+
+        {/* Cross-Check Triangulation Badge */}
+        {crossCheck && (
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+            <span className="text-slate-400 font-medium">Consistencia Multidimensional:</span>
+            <span className={`px-2.5 py-0.5 rounded-full font-bold border ${
+              crossCheck.perceptual_acoustic_consistency === 'Consistente'
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                : 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400'
+            }`}>
+              {crossCheck.perceptual_acoustic_consistency || 'Evaluando...'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* BLOCK A: Audio Validity */}

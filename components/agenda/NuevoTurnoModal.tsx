@@ -145,11 +145,11 @@ export default function NuevoTurnoModal({
               value={pacienteId}
               onChange={e => setPacienteId(e.target.value)}
               required
-              className="w-full px-3 py-2.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2.5 bg-white dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">-- Seleccionar Paciente --</option>
+              <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="">-- Seleccionar Paciente --</option>
               {pacientes.map(p => (
-                <option key={p.id} value={p.id}>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" key={p.id} value={p.id}>
                   {p.nombre_completo} {p.dni ? `(DNI: ${p.dni})` : ''}
                 </option>
               ))}
@@ -233,13 +233,13 @@ export default function NuevoTurnoModal({
               <select
                 value={motivo}
                 onChange={e => setMotivo(e.target.value)}
-                className="w-full px-2.5 py-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-900 dark:text-white"
+                className="w-full px-2.5 py-2 bg-white dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               >
-                <option value="Evaluación y Diagnóstico Bioacústico">Evaluación Bioacústica</option>
-                <option value="Sesión de Terapia Vocal / SOVTE">Terapia Vocal / SOVTE</option>
-                <option value="Control Evolutivo / Praat">Control Evolutivo</option>
-                <option value="Entrenamiento Profesional de la Voz">Entrenamiento de Voz</option>
-                <option value="Entrega de Cuadernillo Terapéutico">Entrega Cuadernillo</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="Evaluación y Diagnóstico Bioacústico">Evaluación Bioacústica</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="Sesión de Terapia Vocal / SOVTE">Terapia Vocal / SOVTE</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="Control Evolutivo / Praat">Control Evolutivo</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="Entrenamiento Profesional de la Voz">Entrenamiento de Voz</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="Entrega de Cuadernillo Terapéutico">Entrega Cuadernillo</option>
               </select>
             </div>
             <div>
@@ -247,13 +247,13 @@ export default function NuevoTurnoModal({
               <select
                 value={tipo}
                 onChange={e => setTipo(e.target.value)}
-                className="w-full px-2.5 py-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-900 dark:text-white"
+                className="w-full px-2.5 py-2 bg-white dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               >
-                <option value="primera_vez">Primera Vez</option>
-                <option value="control">Control</option>
-                <option value="terapia">Terapia</option>
-                <option value="evaluacion">Evaluación</option>
-                <option value="seguimiento">Seguimiento</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="primera_vez">Primera Vez</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="control">Control</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="terapia">Terapia</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="evaluacion">Evaluación</option>
+                <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="seguimiento">Seguimiento</option>
               </select>
             </div>
           </div>
