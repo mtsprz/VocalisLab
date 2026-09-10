@@ -207,21 +207,39 @@ async def eliminar_paciente(paciente_id: str):
 
 # ─── EVALUACIONES CLÍNICAS ──────────────────────────────────
 
+def _to_int(v):
+    try:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return int(float(v))
+    except Exception:
+        return None
+
+
+def _to_float(v):
+    try:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+
 @router.post("/api/evaluaciones")
 async def crear_evaluacion(
     paciente_id: str = Form(...),
     grbas: str = Form("{}"),
     rasati: str = Form("{}"),
-    vhi10_score: int = Form(None),
+    vhi10_score: str = Form(None),
     vhi10_detalle: str = Form("{}"),
-    riesgo_vocal_score: int = Form(None),
+    riesgo_vocal_score: str = Form(None),
     riesgo_vocal_detalle: str = Form("{}"),
-    tme_o: float = Form(None),
-    tme_s: float = Form(None),
-    f0_conversacional_hz: float = Form(None),
+    tme_o: str = Form(None),
+    tme_s: str = Form(None),
+    f0_conversacional_hz: str = Form(None),
     extension_vocal_min: str = Form(""),
     extension_vocal_max: str = Form(""),
-    autopercepcion_vocal: int = Form(None),
+    autopercepcion_vocal: str = Form(None),
     autopercepcion_momentos: str = Form("{}"),
     observaciones: str = Form(""),
 ):
@@ -230,24 +248,41 @@ async def crear_evaluacion(
         r = json.loads(rasati) if rasati.startswith("{") else {}
     except Exception:
         g, r = {}, {}
+    try:
+        vhi_det = json.loads(vhi10_detalle) if vhi10_detalle.startswith("{") else {}
+    except Exception:
+        vhi_det = {}
+    try:
+        rv_det = json.loads(riesgo_vocal_detalle) if riesgo_vocal_detalle.startswith("{") else {}
+    except Exception:
+        rv_det = {}
+    try:
+        ap_mom = json.loads(autopercepcion_momentos) if autopercepcion_momentos.startswith("{") else {}
+    except Exception:
+        ap_mom = {}
 
+    tme_o_f = _to_float(tme_o)
+    tme_s_f = _to_float(tme_s)
     indice_so = None
-    if tme_o and tme_s and tme_o > 0:
-        indice_so = round(tme_s / tme_o, 2)
+    if tme_o_f and tme_s_f and tme_o_f > 0:
+        indice_so = round(tme_s_f / tme_o_f, 2)
 
     data = {
         "paciente_id": paciente_id,
         "grbas": g,
         "rasati": r,
-        "vhi10_score": vhi10_score,
-        "riesgo_vocal_score": riesgo_vocal_score,
-        "tme_o": tme_o,
-        "tme_s": tme_s,
+        "vhi10_score": _to_int(vhi10_score),
+        "vhi10_detalle": vhi_det,
+        "riesgo_vocal_score": _to_int(riesgo_vocal_score),
+        "riesgo_vocal_detalle": rv_det,
+        "tme_o": tme_o_f,
+        "tme_s": tme_s_f,
         "indice_so": indice_so,
-        "f0_conversacional_hz": f0_conversacional_hz,
+        "f0_conversacional_hz": _to_float(f0_conversacional_hz),
         "extension_vocal_min": extension_vocal_min,
         "extension_vocal_max": extension_vocal_max,
-        "autopercepcion_vocal": autopercepcion_vocal,
+        "autopercepcion_vocal": _to_int(autopercepcion_vocal),
+        "autopercepcion_momentos": ap_mom,
         "observaciones": observaciones,
     }
     result = _db_insert("evaluaciones_clinicas", data)

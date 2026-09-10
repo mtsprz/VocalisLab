@@ -467,7 +467,8 @@ def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:
 
 @app.post("/api/analizar")
 async def analizar(
-    audio_vocal: UploadFile = File(...),
+    audio_vocal: UploadFile = File(None),
+    audio: UploadFile = File(None),
     audio_habla: UploadFile = File(None),
     modo: str = Form("clinico"),
     sexo: str = Form(""),
@@ -478,12 +479,16 @@ async def analizar(
     tmp_dir = "/tmp"
     os.makedirs(tmp_dir, exist_ok=True)
 
-    tmp_vocal = os.path.join(tmp_dir, f"vocal_{audio_vocal.filename or 'a.wav'}")
+    vocal_file = audio_vocal or audio
+    if vocal_file is None or not getattr(vocal_file, "filename", None):
+        raise HTTPException(status_code=422, detail="Falta el archivo de audio vocal (campo audio_vocal)")
+
+    tmp_vocal = os.path.join(tmp_dir, f"vocal_{vocal_file.filename or 'a.wav'}")
     tmp_habla = os.path.join(tmp_dir, f"habla_{audio_habla.filename}") if audio_habla and audio_habla.filename else None
 
     try:
         with open(tmp_vocal, "wb") as buffer:
-            shutil.copyfileobj(audio_vocal.file, buffer)
+            shutil.copyfileobj(vocal_file.file, buffer)
         if tmp_habla and audio_habla:
             with open(tmp_habla, "wb") as buffer:
                 shutil.copyfileobj(audio_habla.file, buffer)
