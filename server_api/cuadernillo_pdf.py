@@ -1,21 +1,27 @@
 """
-VocalisLab Pro — Generador de Cuadernillo Terapéutico PDF
-Genera PDFs profesionales de ejercicios vocales para el paciente.
+VocalisLab Pro — Motor de Impresión de Cuadernillos (guía visual pedagógica).
+
+Salida accesible para todas las edades (incluye adultos mayores):
+- Curva melódica vectorial en CADA ejercicio (ascendente, sirena, sostenido, descendente).
+- Pictogramas esquemáticos (cavidad oral, vaso LaxVox, postura corporal).
+- Grilla semanal de horarios, registro diario de TME y autoevaluación pre/post.
+- Tipografía grande (cuerpo 13pt, pasos 16pt) y lenguaje cotidiano sin jerga.
 """
 import os
+import re
 import json
 import tempfile
+from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm, cm
-from reportlab.lib.colors import HexColor, white, black
+from reportlab.lib.units import mm
+from reportlab.lib.colors import HexColor, white
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, KeepTogether, HRFlowable
+    PageBreak, HRFlowable
 )
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.graphics.shapes import Drawing, Line, String, PolyLine, Circle, Rect, Polygon
 
 
 PRIMARY = HexColor("#1a237e")
@@ -25,95 +31,297 @@ LIGHT_BG = HexColor("#f5f5f5")
 DARK_TEXT = HexColor("#212121")
 GRAY_TEXT = HexColor("#616161")
 LIGHT_GRAY = HexColor("#e0e0e0")
+CARD_BG = HexColor("#fafaff")
+CURVE_COLOR = HexColor("#1a237e")
+ARROW_COLOR = HexColor("#00c853")
+
+# ─── Lenguaje cotidiano: jerga técnica → palabras simples ──────────
+_JERGA = [
+    ("presión subglótica", "control del aire al soplar"),
+    ("presión subglotica", "control del aire al soplar"),
+    ("subglótico", "del aire"),
+    ("subglotico", "del aire"),
+    ("supraglótico", "de arriba de las cuerdas"),
+    ("supraglotico", "de arriba de las cuerdas"),
+    ("glótico", "de las cuerdas"),
+    ("glotico", "de las cuerdas"),
+    ("mucosa cordal", "la capita que recubre las cuerdas"),
+    ("pliegues vocales", "cuerdas vocales"),
+    ("impedancia acústica", "ayuda del aire para vibrar mejor"),
+    ("impedancia acustica", "ayuda del aire para vibrar mejor"),
+    ("reactancia acústica", "ayuda del aire"),
+    ("reactancia acustica", "ayuda del aire"),
+    ("contrapresión acústica", "empuje suave del aire"),
+    ("contrapresion acustica", "empuje suave del aire"),
+    ("contrapresión", "empuje suave del aire"),
+    ("contrapresion", "empuje suave del aire"),
+    ("aducción", "cierre suave de las cuerdas"),
+    ("aduccion", "cierre suave de las cuerdas"),
+    ("abducción", "apertura de las cuerdas"),
+    ("abduccion", "apertura de las cuerdas"),
+    ("fonación", "emisión de la voz"),
+    ("fonacion", "emisión de la voz"),
+    ("tesitura modal", "su tono habitual"),
+    ("cricotiroideo/tiroaritenoideo", "músculos de la voz"),
+    ("costodiafragmático", "respiración con panza y costillas"),
+    ("costodiafragmatico", "respiración con panza y costillas"),
+    ("costodiafragmática", "respiración con panza y costillas"),
+    ("costodiafragmatica", "respiración con panza y costillas"),
+    ("tirohioideo", "del cuello"),
+    ("tirohioidea", "del cuello"),
+    ("hioides", "huesito del cuello"),
+    ("maseteros", "músculos de masticar"),
+    ("vértex", "coronilla"),
+    ("vertex", "coronilla"),
+    ("trapecios", "hombros"),
+    ("trapecio", "hombro"),
+    ("clavicular", "del pecho"),
+    ("diafragmático", "con la panza"),
+    ("diafragmatico", "con la panza"),
+    ("diafragmática", "con la panza"),
+    ("diafragmatica", "con la panza"),
+    ("costillas flotantes", "costillas bajas"),
+    ("capacidad vital", "cantidad de aire"),
+    ("apnea", "pausa sin respirar"),
+    ("fricativa", "sonido con aire (como la s)"),
+    ("báscula", "escala"),
+    ("bascula", "escala"),
+    ("ATM", "mandíbula"),
+]
+
+
+def _simplificar(texto: str) -> str:
+    """Reemplaza jerga técnica por lenguaje cotidiano (insensible a mayúsculas)."""
+    if not texto:
+        return ""
+    out = str(texto)
+    for src, dst in _JERGA:
+        out = re.sub(re.escape(src), dst, out, flags=re.IGNORECASE)
+    return out
+
+
+# ─── Clasificación de curva melódica por ejercicio ─────────────────
+_CURVA_SIRENA = ("sirena", "vibraci", "trill", "fluctu", "tubo_agua", "popote_aire",
+                 "escalas_vocalicas", "lax", "laxvox")
+_CURVA_DESCENSO = ("descenso", "bostezo", "enfriamiento", "suspiro", "le_huche",
+                   "shiatsu", "masaje_laringeo", "rotacion", "relaj", "pautas_rlf",
+                   "calentamiento")
+_CURVA_SOSTENIDO = ("humming", "frases_balanceadas", "respiracion_abdominal",
+                    "soplo_escalonado", "consonantes_fricativas", "oclusion_succion",
+                    "expansion_costo", "sostenid", "mantener", "lectura")
+
+
+def _tipo_curva(ex: dict) -> str:
+    blob = f"{ex.get('id', '')} {ex.get('name', '')} {ex.get('description', '')}".lower()
+    if any(k in blob for k in _CURVA_SIRENA):
+        return "sirena"
+    if any(k in blob for k in _CURVA_DESCENSO):
+        return "descendente"
+    if any(k in blob for k in _CURVA_SOSTENIDO):
+        return "sostenido"
+    return "ascendente"
+
+
+_CURVA_TITULO = {
+    "ascendente": "Suba suave de grave a agudo",
+    "sirena": "Sirena: suba y baje varias veces",
+    "sostenido": "Mantenga el sonido parejo",
+    "descendente": "Baje suave de agudo a grave",
+}
+
+
+def _curva_melodica(tipo: str, segundos: str = "") -> Drawing:
+    """Gráfico vectorial de la curva melódica (140 x 64 pt)."""
+    W, H = 150, 66
+    d = Drawing(W, H)
+    # Ejes tenues
+    d.add(Line(8, 8, 8, H - 8, strokeColor=LIGHT_GRAY, strokeWidth=0.5))
+    d.add(Line(8, 8, W - 6, 8, strokeColor=LIGHT_GRAY, strokeWidth=0.5))
+    d.add(String(2, H - 12, "agudo", fontName="Helvetica", fontSize=6, fillColor=GRAY_TEXT))
+    d.add(String(2, 6, "grave", fontName="Helvetica", fontSize=6, fillColor=GRAY_TEXT))
+
+    if tipo == "ascendente":
+        pts = []
+        for i in range(21):
+            x = 14 + i * (W - 28) / 20
+            y = 14 + (W - 28) / 20 * 0 + (i / 20) ** 1.2 * (H - 30)
+            pts += [x, y]
+        d.add(PolyLine(pts, strokeColor=CURVE_COLOR, strokeWidth=2.2))
+        x1, y1 = pts[-2], pts[-1]
+        d.add(Polygon([x1, y1 - 5, x1, y1 + 5, x1 + 9, y1],
+                      fillColor=ARROW_COLOR, strokeColor=ARROW_COLOR))
+    elif tipo == "sirena":
+        import math
+        pts = []
+        n = 80
+        for i in range(n + 1):
+            x = 14 + i * (W - 28) / n
+            y = (H / 2) + math.sin(i / n * math.pi * 2 * 4) * (H / 2 - 14)
+            pts += [x, y]
+        d.add(PolyLine(pts, strokeColor=CURVE_COLOR, strokeWidth=2.0))
+    elif tipo == "sostenido":
+        y = H / 2
+        d.add(Line(14, y, W - 14, y, strokeColor=CURVE_COLOR, strokeWidth=2.4))
+        d.add(Line(14, y - 6, 14, y + 6, strokeColor=CURVE_COLOR, strokeWidth=1.4))
+        d.add(Line(W - 14, y - 6, W - 14, y + 6, strokeColor=CURVE_COLOR, strokeWidth=1.4))
+        if segundos:
+            d.add(String(W / 2 - 14, y + 8, segundos, fontName="Helvetica-Bold",
+                         fontSize=7, fillColor=CURVE_COLOR))
+    else:  # descendente
+        pts = []
+        for i in range(21):
+            x = 14 + i * (W - 28) / 20
+            y = (H - 16) - (i / 20) ** 1.2 * (H - 30)
+            pts += [x, y]
+        d.add(PolyLine(pts, strokeColor=CURVE_COLOR, strokeWidth=2.2))
+        x1, y1 = pts[-2], pts[-1]
+        d.add(Polygon([x1, y1 - 5, x1, y1 + 5, x1 + 9, y1],
+                      fillColor=ARROW_COLOR, strokeColor=ARROW_COLOR))
+    return d
+
+
+# ─── Banco de pictogramas esquemáticos ────────────────────────────
+def _picto_oral() -> Drawing:
+    """Esquema de cavidad oral: boca abierta, lengua plana, velo del paladar."""
+    W, H = 150, 92
+    d = Drawing(W, H)
+    d.add(String(8, H - 10, "Boca abierta y relajada", fontName="Helvetica-Bold",
+                 fontSize=7, fillColor=PRIMARY))
+    # Óvalo de boca abierta
+    d.add(Circle(W / 2, H / 2 - 4, 30, strokeColor=CURVE_COLOR, strokeWidth=2,
+                 fillColor=None))
+    # Lengua plana (polígono inferior)
+    d.add(Polygon([W / 2 - 24, H / 2 - 12, W / 2 + 24, H / 2 - 12,
+                   W / 2 + 10, H / 2 - 28, W / 2 - 10, H / 2 - 28],
+                  fillColor=HexColor("#ffccbc"), strokeColor=CURVE_COLOR, strokeWidth=1))
+    # Velo del paladar (arco superior)
+    d.add(PolyLine([W / 2 - 26, H / 2 + 18, W / 2, H / 2 + 28, W / 2 + 26, H / 2 + 18],
+                   strokeColor=CURVE_COLOR, strokeWidth=1.6))
+    d.add(String(8, 8, "Lengua plana al piso de la boca", fontName="Helvetica",
+                 fontSize=6.5, fillColor=GRAY_TEXT))
+    d.add(String(W - 78, H / 2 + 30, "velo del paladar", fontName="Helvetica",
+                 fontSize=6, fillColor=GRAY_TEXT))
+    return d
+
+
+def _picto_vaso() -> Drawing:
+    """Vaso con agua, marca de 1,5 cm y sorbete (LaxVox / SOVT)."""
+    W, H = 150, 92
+    d = Drawing(W, H)
+    d.add(String(8, H - 10, "Vaso con agua (LaxVox)", fontName="Helvetica-Bold",
+                 fontSize=7, fillColor=PRIMARY))
+    gx, gy, gw, gh = 45, 10, 60, 58
+    # Vaso
+    d.add(Rect(gx, gy, gw, gh, strokeColor=CURVE_COLOR, strokeWidth=2, fillColor=None))
+    # Agua (mitad inferior)
+    d.add(Rect(gx + 2, gy + 2, gw - 4, 26, strokeColor=None,
+               fillColor=HexColor("#4fc3f7")))
+    d.add(String(gx + 6, gy + 10, "agua", fontName="Helvetica-Bold",
+                 fontSize=7, fillColor=white))
+    # Sorbete diagonal
+    d.add(Line(gx + 38, gy + gh + 12, gx + 22, gy + 4,
+               strokeColor=HexColor("#e91e63"), strokeWidth=3))
+    # Marca de profundidad 1,5 cm
+    d.add(Line(gx + gw + 4, gy + 4, gx + gw + 4, gy + 16,
+               strokeColor=ARROW_COLOR, strokeWidth=1.2))
+    d.add(String(gx + gw + 8, gy + 8, "1,5 cm", fontName="Helvetica-Bold",
+                 fontSize=7, fillColor=ARROW_COLOR))
+    d.add(String(8, 2, "Sople suave y parejo por el sorbete", fontName="Helvetica",
+                 fontSize=6, fillColor=GRAY_TEXT))
+    return d
+
+
+def _picto_postura() -> Drawing:
+    """Pictograma de postura corporal erguida y relajada."""
+    W, H = 150, 92
+    d = Drawing(W, H)
+    d.add(String(8, H - 10, "Postura erguida y relajada", fontName="Helvetica-Bold",
+                 fontSize=7, fillColor=PRIMARY))
+    cx, top = W / 2, H - 20
+    # Cabeza
+    d.add(Circle(cx, top - 8, 9, strokeColor=CURVE_COLOR, strokeWidth=2, fillColor=None))
+    # Tronco
+    d.add(Line(cx, top - 17, cx, top - 48, strokeColor=CURVE_COLOR, strokeWidth=2.4))
+    # Hombros relajados (línea horizontal baja)
+    d.add(Line(cx - 20, top - 22, cx + 20, top - 22, strokeColor=ARROW_COLOR, strokeWidth=2))
+    # Brazos caídos
+    d.add(Line(cx - 20, top - 22, cx - 24, top - 44, strokeColor=CURVE_COLOR, strokeWidth=1.6))
+    d.add(Line(cx + 20, top - 22, cx + 24, top - 44, strokeColor=CURVE_COLOR, strokeWidth=1.6))
+    # Piernas
+    d.add(Line(cx, top - 48, cx - 12, top - 68, strokeColor=CURVE_COLOR, strokeWidth=2))
+    d.add(Line(cx, top - 48, cx + 12, top - 68, strokeColor=CURVE_COLOR, strokeWidth=2))
+    # Base
+    d.add(Line(cx - 22, top - 68, cx + 22, top - 68, strokeColor=GRAY_TEXT, strokeWidth=1))
+    d.add(String(8, 2, "Espalda derecha, hombros sueltos", fontName="Helvetica",
+                 fontSize=6, fillColor=GRAY_TEXT))
+    return d
+
+
+_PICTO_ORAL = ("frases_balanceadas", "consonantes_fricativas", "escalas_vocalicas",
+               "soplo_escalonado", "apertura", "moldeado", "vocalico", "articul")
+_PICTO_VASO = ("tubo_agua", "popote_aire", "oclusion_succion", "lax", "sorbete",
+               "sovt", "semioclu")
+
+
+def _pictograma(ex: dict):
+    blob = f"{ex.get('id', '')} {ex.get('name', '')} {ex.get('description', '')}".lower()
+    if any(k in blob for k in _PICTO_VASO):
+        return _picto_vaso(), "Vaso con agua y sorbete"
+    if any(k in blob for k in _PICTO_ORAL):
+        return _picto_oral(), "Cómo poner la boca"
+    return None, ""
+
+
+# ─── Propósitos en lenguaje cotidiano por sección ─────────────────
+_PROPOSITO_SECCION = {
+    "corporal": "Para aflojar el cuello, los hombros y la mandíbula, así la voz sale sin esfuerzo.",
+    "laringeo": "Para bajar y soltar la laringe y hablar sin apretar la garganta.",
+    "respiratorio": "Para aprender a usar bien el aire al hablar, sin quedarse sin aire.",
+    "sovte": "Ejercicios con la boca casi cerrada que masajean y cuidan las cuerdas vocales.",
+    "resonancia": "Para llevar la voz hacia adelante y que suene clara sin gritar.",
+    "higiene": "Para cuidar la voz todos los días, como el calentamiento de un deportista.",
+}
+
+_ICONO_SECCION = {
+    "corporal": "C", "laringeo": "L", "respiratorio": "R",
+    "sovte": "S", "resonancia": "V", "higiene": "H",
+}
 
 
 def _get_styles():
     styles = getSampleStyleSheet()
 
-    styles.add(ParagraphStyle(
-        'CoverTitle',
-        parent=styles['Title'],
-        fontSize=28,
-        textColor=PRIMARY,
-        spaceAfter=6 * mm,
-        alignment=TA_CENTER,
-        leading=34,
-    ))
-    styles.add(ParagraphStyle(
-        'CoverSubtitle',
-        parent=styles['Normal'],
-        fontSize=14,
-        textColor=SECONDARY,
-        alignment=TA_CENTER,
-        spaceAfter=4 * mm,
-    ))
-    styles.add(ParagraphStyle(
-        'SectionTitle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        textColor=PRIMARY,
-        spaceBefore=8 * mm,
-        spaceAfter=4 * mm,
-        leading=20,
-    ))
-    styles.add(ParagraphStyle(
-        'ExerciseTitle',
-        parent=styles['Heading2'],
-        fontSize=13,
-        textColor=SECONDARY,
-        spaceBefore=4 * mm,
-        spaceAfter=2 * mm,
-        leading=16,
-    ))
-    styles.add(ParagraphStyle(
-        'CuadBody',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=DARK_TEXT,
-        alignment=TA_JUSTIFY,
-        leading=14,
-        spaceAfter=2 * mm,
-    ))
-    styles.add(ParagraphStyle(
-        'StepText',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=DARK_TEXT,
-        leftIndent=8 * mm,
-        leading=14,
-        spaceAfter=1 * mm,
-    ))
-    styles.add(ParagraphStyle(
-        'ContractTitle',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=PRIMARY,
-        spaceBefore=4 * mm,
-        spaceAfter=3 * mm,
-    ))
-    styles.add(ParagraphStyle(
-        'ContractText',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=DARK_TEXT,
-        leading=14,
-        spaceAfter=2 * mm,
-    ))
-    styles.add(ParagraphStyle(
-        'FooterText',
-        parent=styles['Normal'],
-        fontSize=8,
-        textColor=GRAY_TEXT,
-        alignment=TA_CENTER,
-    ))
-    styles.add(ParagraphStyle(
-        'PageNumber',
-        parent=styles['Normal'],
-        fontSize=9,
-        textColor=GRAY_TEXT,
-        alignment=TA_CENTER,
-    ))
+    def _add(name, **kw):
+        if name in styles:
+            return
+        styles.add(ParagraphStyle(name, **kw))
 
+    _add('CoverTitle', parent=styles['Title'], fontSize=28, textColor=PRIMARY,
+         spaceAfter=6 * mm, alignment=TA_CENTER, leading=34)
+    _add('CoverSubtitle', parent=styles['Normal'], fontSize=14, textColor=SECONDARY,
+         alignment=TA_CENTER, spaceAfter=4 * mm)
+    _add('SectionTitle', parent=styles['Heading1'], fontSize=18, textColor=PRIMARY,
+         spaceBefore=8 * mm, spaceAfter=4 * mm, leading=22)
+    _add('ExerciseTitle', parent=styles['Heading2'], fontSize=18, textColor=SECONDARY,
+         spaceBefore=2 * mm, spaceAfter=1 * mm, leading=22)
+    _add('CuadBody', parent=styles['Normal'], fontSize=13, textColor=DARK_TEXT,
+         alignment=TA_JUSTIFY, leading=17, spaceAfter=2 * mm)
+    _add('PropositoText', parent=styles['Normal'], fontSize=13, textColor=PRIMARY,
+         alignment=TA_LEFT, leading=17, spaceAfter=2 * mm)
+    _add('StepText', parent=styles['Normal'], fontSize=16, textColor=DARK_TEXT,
+         leading=21, spaceAfter=2 * mm)
+    _add('CaptionText', parent=styles['Normal'], fontSize=10, textColor=GRAY_TEXT,
+         alignment=TA_CENTER, leading=12)
+    _add('GridText', parent=styles['Normal'], fontSize=8, textColor=DARK_TEXT,
+         alignment=TA_CENTER, leading=10)
+    _add('ContractTitle', parent=styles['Heading2'], fontSize=16, textColor=PRIMARY,
+         spaceBefore=8 * mm, spaceAfter=3 * mm)
+    _add('ContractText', parent=styles['Normal'], fontSize=12, textColor=DARK_TEXT,
+         leading=16, spaceAfter=2 * mm)
+    _add('FooterText', parent=styles['Normal'], fontSize=9, textColor=GRAY_TEXT,
+         alignment=TA_CENTER)
+    _add('PageNumber', parent=styles['Normal'], fontSize=9, textColor=GRAY_TEXT,
+         alignment=TA_CENTER)
     return styles
 
 
@@ -121,7 +329,7 @@ def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha):
     elements = []
     elements.append(Spacer(1, 40 * mm))
     elements.append(Paragraph("VOCALISLAB PRO", styles['CoverTitle']))
-    elements.append(Paragraph(titulo, styles['CoverSubtitle']))
+    elements.append(Paragraph(escape(titulo or ""), styles['CoverSubtitle']))
     elements.append(Spacer(1, 15 * mm))
 
     info_data = [
@@ -134,7 +342,7 @@ def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha):
     info_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
         ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
         ('TEXTCOLOR', (0, 0), (0, -1), PRIMARY),
         ('TEXTCOLOR', (1, 0), (1, -1), DARK_TEXT),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -162,25 +370,25 @@ def _build_contract(styles, contrato):
 
     if contrato.get("frecuencia"):
         elements.append(Paragraph(
-            f"<b>Frecuencia de las sesiones:</b> {contrato['frecuencia']}",
+            f"<b>Frecuencia de las sesiones:</b> {escape(str(contrato['frecuencia']))}",
             styles['ContractText']
         ))
     if contrato.get("duracion_sesion"):
         elements.append(Paragraph(
-            f"<b>Duración aproximada:</b> {contrato['duracion_sesion']}",
+            f"<b>Duración aproximada:</b> {escape(str(contrato['duracion_sesion']))}",
             styles['ContractText']
         ))
     if contrato.get("pautas_ausencias"):
         elements.append(Paragraph(
-            f"<b>Pautas de asistencia:</b> {contrato['pautas_ausencias']}",
+            f"<b>Pautas de asistencia:</b> {escape(str(contrato['pautas_ausencias']))}",
             styles['ContractText']
         ))
 
     elements.append(Spacer(1, 6 * mm))
     elements.append(Paragraph(
-        "Este cuadernillo ha sido diseñado por su fonoaudiólogo/a de acuerdo a su evaluación clínica. "
-        "Los ejercicios deben realizarse con regularidad y sin forzar. En caso de dolor o molestia, "
-        "suspender el ejercicio y consultar a su profesional de referencia.",
+        "Este cuadernillo lo preparó su fonoaudiólogo/a según su evaluación. "
+        "Haga los ejercicios con regularidad y sin forzar. Si siente dolor o "
+        "molestia, pare y consulte a su profesional.",
         styles['ContractText']
     ))
 
@@ -194,66 +402,288 @@ def _build_contract(styles, contrato):
     return elements
 
 
-def _build_exercise(styles, exercise, idx):
+def _build_exercise_card(styles, exercise, idx, seccion_id=""):
+    """Tarjeta pedagógica: encabezado + propósito + curva + pictograma + pasos con casillas."""
     elements = []
-    title = f"{idx}. {exercise.get('name', 'Ejercicio sin nombre')}"
-    elements.append(Paragraph(title, styles['ExerciseTitle']))
 
-    desc = exercise.get("description", "")
+    name = _simplificar(exercise.get("name", "Ejercicio sin nombre"))
+    desc = _simplificar(exercise.get("description", ""))
+    proposito = _PROPOSITO_SECCION.get(
+        seccion_id, "Para entrenar y cuidar su voz todos los días.")
+    icono = _ICONO_SECCION.get(seccion_id, "V")
+
+    # Encabezado de tarjeta: ícono + título + propósito
+    header_data = [[
+        Paragraph(f"<font size=22 color='#ffffff'><b>{icono}</b></font>",
+                  ParagraphStyle('IconCell', parent=styles['Normal'],
+                                 alignment=TA_CENTER, textColor=white)),
+        [
+            Paragraph(f"{idx}. {escape(name)}", styles['ExerciseTitle']),
+            Paragraph(f"<i>¿Para qué sirve? {escape(proposito)}</i>",
+                      styles['PropositoText']),
+        ],
+    ]]
+    header_table = Table(header_data, colWidths=[18 * mm, 140 * mm])
+    header_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), SECONDARY),
+        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 3 * mm))
+
     if desc:
-        elements.append(Paragraph(desc, styles['CuadBody']))
+        elements.append(Paragraph(escape(desc), styles['CuadBody']))
 
-    steps = exercise.get("steps", [])
+    # Fila visual: curva melódica (+ pictograma o duración)
+    tipo = _tipo_curva(exercise)
+    curva = _curva_melodica(tipo)
+    picto, picto_cap = _pictograma(exercise)
+    duration = exercise.get("duration_min", "")
+    if picto is not None:
+        visual = Table(
+            [[curva, picto]],
+            colWidths=[80 * mm, 80 * mm],
+        )
+        visual.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOX', (0, 0), (0, 0), 0.5, LIGHT_GRAY),
+            ('BOX', (1, 0), (1, 0), 0.5, LIGHT_GRAY),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        elements.append(visual)
+        elements.append(Paragraph(
+            f"Curva: {_CURVA_TITULO[tipo]} &nbsp;&nbsp;|&nbsp;&nbsp; Dibujo: {picto_cap}",
+            styles['CaptionText']))
+    else:
+        visual = Table([[curva]], colWidths=[160 * mm])
+        visual.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('BOX', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
+        ]))
+        elements.append(visual)
+        elements.append(Paragraph(f"Curva: {_CURVA_TITULO[tipo]}", styles['CaptionText']))
+    if duration:
+        elements.append(Paragraph(
+            f"<b>Tiempo estimado: {duration} minutos por día</b>",
+            styles['CuadBody']))
+    elements.append(Spacer(1, 3 * mm))
+
+    # Pasos numerados con casillas grandes para tildar
+    steps = exercise.get("steps", []) or []
     if steps:
+        rows = []
         for i, step in enumerate(steps, 1):
-            step_text = f"<b>Paso {i}:</b> {step}"
-            elements.append(Paragraph(step_text, styles['StepText']))
+            txt = _simplificar(step)
+            rows.append([
+                Paragraph("<b>[ &nbsp; ]</b>",
+                          ParagraphStyle('CheckCell', parent=styles['Normal'],
+                                         fontSize=16, alignment=TA_CENTER,
+                                         textColor=SECONDARY)),
+                Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText']),
+            ])
+        step_table = Table(rows, colWidths=[14 * mm, 146 * mm])
+        step_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LINEBELOW', (0, 0), (-1, -2), 0.4, LIGHT_GRAY),
+        ]))
+        elements.append(step_table)
 
-    phrases = exercise.get("phrases", [])
+    phrases = exercise.get("phrases", []) or []
     if phrases:
         elements.append(Spacer(1, 2 * mm))
-        elements.append(Paragraph("<b>Frases:</b>", styles['CuadBody']))
+        elements.append(Paragraph("<b>Frases para practicar (lea en voz alta y clara):</b>",
+                                  styles['CuadBody']))
         for phrase in phrases:
-            elements.append(Paragraph(f"• {phrase}", styles['StepText']))
+            elements.append(Paragraph(f"[ &nbsp; ] &nbsp;{escape(_simplificar(str(phrase)))}",
+                                      styles['StepText']))
 
-    duration = exercise.get("duration_min", "")
-    if duration:
-        elements.append(Spacer(1, 2 * mm))
-        elements.append(Paragraph(
-            f"<i>Duración estimada: {duration} minutos</i>",
-            styles['CuadBody']
-        ))
+    elements.append(Spacer(1, 4 * mm))
+    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
+    elements.append(Spacer(1, 4 * mm))
+    return elements
 
-    elements.append(Spacer(1, 3 * mm))
-    elements.append(HRFlowable(width="100%", color=LIGHT_GRAY, thickness=0.5))
+
+def _build_weekly_grid(styles):
+    """Grilla de horarios semanales Lun-Vie de 7 a 22 h."""
+    elements = []
+    elements.append(Paragraph("Mi Horario Semanal de Ejercicios", styles['SectionTitle']))
+    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(
+        "Marque con una <b>X dos turnos por día</b> para hacer sus ejercicios "
+        "(por ejemplo, a la mañana y a la tarde). Trate de cumplirlos toda la semana.",
+        styles['CuadBody']))
 
-    return KeepTogether(elements) if len(elements) <= 8 else elements
+    header = ["Hora", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+    data = [header]
+    for h in range(7, 23):
+        data.append([f"{h:02d}:00", "", "", "", "", ""])
+
+    col_w = [16 * mm, 28 * mm, 28 * mm, 28 * mm, 28 * mm, 28 * mm]
+    table = Table(data, colWidths=col_w, repeatRows=1)
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
+    ]
+    table.setStyle(TableStyle(style_cmds))
+    elements.append(table)
+    elements.append(Spacer(1, 3 * mm))
+    return elements
+
+
+def _build_tme_log(styles):
+    """Tabla de registro diario de TME en segundos."""
+    elements = []
+    elements.append(Paragraph("Mi Registro Diario de Aire (TME en segundos)",
+                              styles['SectionTitle']))
+    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
+    elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(
+        "Una vez por día, tome aire y largue el aire con una <b>S</b> suave "
+        "todo lo que pueda. Anote cuántos segundos duró. Así vemos cómo mejora "
+        "su control del aire.",
+        styles['CuadBody']))
+
+    data = [["Fecha", "TME con S fuerte (seg)", "TME con S suave (seg)", "Iniciales"]]
+    for _ in range(10):
+        data.append(["", "", "", ""])
+    table = Table(data, colWidths=[36 * mm, 44 * mm, 44 * mm, 36 * mm],
+                  repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 3 * mm))
+    return elements
+
+
+_VHI_SIMPLE = [
+    "Mi voz me dificulta que me entiendan.",
+    "Siento que tengo que esforzarme para hablar.",
+    "Mi voz me limita en mi vida personal y social.",
+    "Pierdo el control de mi voz o se me corta.",
+    "Mi voz se cansa cuando hablo mucho.",
+]
+
+
+def _build_self_assessment(styles):
+    """Autoevaluación vocal 0-10 + VHI simplificado antes/después."""
+    elements = []
+    elements.append(Paragraph("¿Cómo Va Mi Voz? (autoevaluación)",
+                              styles['SectionTitle']))
+    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
+    elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(
+        "Complete esta página <b>antes de empezar</b> y otra vez <b>al terminar "
+        "las 8 sesiones</b>. Así vemos juntos si el tratamiento está funcionando.",
+        styles['CuadBody']))
+
+    elements.append(Paragraph(
+        "<b>1) Del 0 al 10, ¿qué puntaje le da hoy a su voz?</b> "
+        "(0 = sin voz / muy mala, 10 = voz óptima). Marque con una X:",
+        styles['CuadBody']))
+    scale_row = ["Antes:"] + [f"[ {n} ]" for n in range(11)]
+    scale_row2 = ["Después:"] + [f"[ {n} ]" for n in range(11)]
+    scale_table = Table([scale_row, scale_row2],
+                        colWidths=[22 * mm] + [12 * mm] * 11)
+    scale_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(scale_table)
+    elements.append(Spacer(1, 4 * mm))
+
+    elements.append(Paragraph(
+        "<b>2) ¿Con qué frecuencia le pasan estas cosas?</b> "
+        "0 = Nunca &nbsp;&nbsp; 1 = Casi nunca &nbsp;&nbsp; 2 = A veces &nbsp;&nbsp; "
+        "3 = Casi siempre &nbsp;&nbsp; 4 = Siempre",
+        styles['CuadBody']))
+    vhi_data = [["Situación", "Antes (0-4)", "Después (0-4)"]]
+    for item in _VHI_SIMPLE:
+        vhi_data.append([item, "[0] [1] [2] [3] [4]", "[0] [1] [2] [3] [4]"])
+    vhi_table = Table(vhi_data, colWidths=[80 * mm, 40 * mm, 40 * mm],
+                      repeatRows=1)
+    vhi_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
+    ]))
+    elements.append(vhi_table)
+    elements.append(Spacer(1, 3 * mm))
+    elements.append(Paragraph(
+        "<b>¿Mejoró su puntaje?</b> Si su nota del 0 al 10 subió 2 o más puntos, "
+        "o si estas frases le pasan menos seguido, el tratamiento está funcionando bien. "
+        "Felicitaciones por su constancia.",
+        styles['CuadBody']))
+    return elements
 
 
 def _build_sessions_calendar(styles, sesiones, ejercicios):
     elements = []
-    elements.append(Paragraph("Calendario de Sesiones", styles['SectionTitle']))
+    elements.append(Paragraph("Calendario de Sesiones con su Profesional",
+                              styles['SectionTitle']))
     elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     elements.append(Spacer(1, 4 * mm))
 
-    header = ["Sesión", "Ejercicios", "Estado"]
+    header = ["Sesión", "Ejercicios que tocan", "¿Asistí?"]
     data = [header]
 
     ej_por_sesion = max(1, len(ejercicios) // max(1, sesiones))
     for s in range(1, sesiones + 1):
         inicio = (s - 1) * ej_por_sesion
         fin = min(inicio + ej_por_sesion + 1, len(ejercicios))
-        ej_nombres = "\n".join([f"• {e.get('name', '')}" for e in ejercicios[inicio:fin]])
-        data.append([str(s), ej_nombres or "Revisión", "Pendiente"])
+        ej_nombres = "\n".join([f"• {_simplificar(e.get('name', ''))}"
+                                for e in ejercicios[inicio:fin]])
+        data.append([str(s), ej_nombres or "Revisión", "[ ] Sí   [ ] No"])
 
-    table = Table(data, colWidths=[18 * mm, 120 * mm, 28 * mm])
+    table = Table(data, colWidths=[18 * mm, 100 * mm, 42 * mm])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 1), (-1, -1), 12),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -295,10 +725,10 @@ def generar_cuadernillo_pdf(
     doc = SimpleDocTemplate(
         pdf_path,
         pagesize=A4,
-        topMargin=20 * mm,
+        topMargin=18 * mm,
         bottomMargin=25 * mm,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
+        leftMargin=16 * mm,
+        rightMargin=16 * mm,
     )
 
     styles = _get_styles()
@@ -307,26 +737,34 @@ def generar_cuadernillo_pdf(
     story.extend(_build_cover(styles, titulo, paciente_nombre, sesiones, fecha))
     story.extend(_build_contract(styles, contrato))
 
-    story.append(Paragraph("Ejercicios", styles['SectionTitle']))
+    story.append(Paragraph("Mis Ejercicios de Voz", styles['SectionTitle']))
     story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
-    story.append(Spacer(1, 4 * mm))
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph(
+        "Cada ejercicio trae su dibujo de cómo debe sonar su voz. "
+        "Siga los pasos en orden y tilde cada casilla cuando lo complete.",
+        styles['CuadBody']))
 
     for idx, ex in enumerate(ejercicios, 1):
-        result = _build_exercise(styles, ex, idx)
-        if isinstance(result, list):
-            story.extend(result)
-        else:
-            story.append(result)
+        ex = dict(ex or {})
+        story.extend(_build_exercise_card(styles, ex, idx,
+                                          seccion_id=str(ex.get("seccion_id", ""))))
 
+    story.append(PageBreak())
+    story.extend(_build_weekly_grid(styles))
+    story.append(PageBreak())
+    story.extend(_build_tme_log(styles))
+    story.append(PageBreak())
+    story.extend(_build_self_assessment(styles))
     story.append(PageBreak())
     story.extend(_build_sessions_calendar(styles, sesiones, ejercicios))
 
     if notas:
         story.append(Spacer(1, 8 * mm))
-        story.append(Paragraph("Notas del Profesional", styles['SectionTitle']))
+        story.append(Paragraph("Notas de su Profesional", styles['SectionTitle']))
         story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
         story.append(Spacer(1, 4 * mm))
-        story.append(Paragraph(notas, styles['CuadBody']))
+        story.append(Paragraph(escape(_simplificar(notas)), styles['CuadBody']))
 
     story.append(Spacer(1, 15 * mm))
     story.append(Paragraph(

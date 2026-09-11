@@ -355,7 +355,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
 
   const getAllExercises = (): Exercise[] => {
     const all: Exercise[] = [];
-    sections.forEach(s => s.exercises.forEach(e => all.push({ ...e })));
+    sections.forEach(s => s.exercises.forEach(e => all.push({ ...e, seccion_id: s.id } as Exercise)));
     return all;
   };
 
