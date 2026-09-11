@@ -21,6 +21,7 @@ from recomendar_motor import generar_recomendacion_terapeutica
 from google_auth import router as google_auth_router
 from google_calendar import router as google_calendar_router
 from ai_clinical import router as ai_clinical_router
+from externo_ocr import router as externo_ocr_router
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "vocal_pathology_db.json")
 
@@ -361,6 +362,7 @@ app.include_router(clinica_router)
 app.include_router(google_auth_router)
 app.include_router(google_calendar_router)
 app.include_router(ai_clinical_router)
+app.include_router(externo_ocr_router)
 
 
 @app.get("/api/health")

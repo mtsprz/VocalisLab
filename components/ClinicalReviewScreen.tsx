@@ -828,6 +828,12 @@ function VoxplotProfileView({ voxplot, spectrogram, waveform, metrics }: any) {
             <span className="text-xs font-bold text-emerald-700 uppercase">Norma</span>
           </div>
           <div className="space-y-1 text-xs">
+            {table.length === 0 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-[11px] font-semibold">
+                Tabla VOXplot no calculable con esta muestra
+                {voxplot?.error ? `: ${voxplot.error}` : '. Verificá duración (≥1 s), nivel de señal y ausencia de clipping.'}
+              </div>
+            )}
             {table.map((row: any) => (
               <div key={row.parameter} className={`flex items-center justify-between px-2 py-1 rounded border ${
                 row.highlight ? 'bg-amber-100/80 border-amber-300 font-bold' : row.is_normal ? 'bg-white border-slate-200' : 'bg-red-50 border-red-200'

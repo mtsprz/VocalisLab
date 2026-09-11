@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import ClinicalReviewScreen from './ClinicalReviewScreen';
 import ReportEditor from './ReportEditor';
+import ExternalAnalysisUpload from './ExternalAnalysisUpload';
 import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -25,6 +26,7 @@ export default function AnalisisModule({ pacienteId }: Props) {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
+  const [downloading, setDownloading] = useState(false);
 
   // Auto-inherit GRBAS, RASATI, Sexo, Edad from ClinicalContext (End of redundancy!)
   const [grbas, setGrbas] = useState(clinical.data.escalas.grbas || { G: 0, R: 0, B: 0, A: 0, S: 0 });
@@ -190,9 +192,57 @@ export default function AnalisisModule({ pacienteId }: Props) {
     }
   };
 
+  const descargarInformePDF = async () => {
+    if (!audioBlobVocal || downloading) return;
+    setDownloading(true);
+    setError('');
+    try {
+      const esc = clinical.data.escalas || {};
+      const tmeVal = esc.tme_s ?? esc.tme_segundos ?? esc.tme_o ?? '';
+      const fd = new FormData();
+      fd.append('audio_vocal', audioBlobVocal, 'vocal_a.webm');
+      if (audioBlobHabla) fd.append('audio_habla', audioBlobHabla, 'habla_continua.webm');
+      fd.append('nombre', clinical.data.paciente?.nombre_completo || 'Paciente');
+      fd.append('dni', clinical.data.paciente?.dni || '');
+      fd.append('edad', edad || '');
+      fd.append('sexo', sexo || '');
+      fd.append('motivo', clinical.data.anamnesis?.motivo_consulta || '');
+      fd.append('derivador', '');
+      fd.append('grbas', JSON.stringify(grbas));
+      fd.append('rasati', JSON.stringify(rasati));
+      if (tmeVal !== '' && tmeVal != null && !isNaN(Number(tmeVal))) {
+        fd.append('tmf', String(Number(tmeVal)));
+      }
+      fd.append('profesional_nombre', profNombre || '');
+      fd.append('profesional_titulo', profTitulo || '');
+      fd.append('profesional_matricula', profMatricula || '');
+      fd.append('modo', 'clinico');
+
+      const r = await fetch(`${BACKEND_URL}/api/analizar-y-reportar`, { method: 'POST', body: fd });
+      const ctype = r.headers.get('content-type') || '';
+      if (!r.ok || !ctype.includes('pdf')) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `Error del servidor (${r.status})`);
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `informe_bioacustico_${(clinical.data.paciente?.nombre_completo || 'paciente').replace(/\s+/g, '_')}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e: any) {
+      setError(e.message || 'No se pudo generar el informe PDF');
+    }
+    setDownloading(false);
+  };
+
   if (step === 'capture') {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
+        {/* 0. ANÁLISIS EXTERNO PREVIO (opcional: evita repetir Praat) */}
+        <ExternalAnalysisUpload pacienteId={pacienteId} />
+
         {/* Header Banner */}
         <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
           <div className="flex items-center gap-3">
@@ -454,6 +504,8 @@ export default function AnalisisModule({ pacienteId }: Props) {
           rasati={rasati}
           vhi10={vhi10}
           tme={tmeSec}
+          onApprove={() => setStep('editor')}
+          onDownloadPreliminar={() => descargarInformePDF()}
           audioInfo={result.audio}
           metrics={result.metrics}
           avqiComponents={result.avqiComponents}
@@ -495,11 +547,22 @@ export default function AnalisisModule({ pacienteId }: Props) {
             <FileText size={16} /> Editar y Generar Reporte Clínico PDF
           </button>
         </div>
+        {error && (
+          <p className="text-xs text-red-600 dark:text-red-400 font-semibold flex items-center gap-1">
+            <AlertCircle size={14} /> {error}
+          </p>
+        )}
+        {downloading && (
+          <p className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1">
+            <Loader2 size={14} className="animate-spin" /> Generando informe PDF…
+          </p>
+        )}
       </div>
     );
   }
 
   if (step === 'editor' && result) {
+    const m = result.metrics || {};
     return (
       <div className="space-y-4">
         <button
@@ -509,12 +572,31 @@ export default function AnalisisModule({ pacienteId }: Props) {
           ← Volver al Panel de Control de Auditoría
         </button>
         <ReportEditor
-          result={result}
-          grbas={grbas}
-          rasati={rasati}
-          profNombre={profNombre}
-          profTitulo={profTitulo}
-          profMatricula={profMatricula}
+          patientData={{
+            nombre: clinical.data.paciente?.nombre_completo || '',
+            dni: clinical.data.paciente?.dni || '',
+            edad,
+            sexo,
+            motivo: clinical.data.anamnesis?.motivo_consulta || '',
+            derivador: '',
+          }}
+          metrics={{
+            f0_mean: m.f0_mean, f0_min: m.f0_min, f0_max: m.f0_max,
+            jitter_pct: m.jitter_pct, shimmer_pct: m.shimmer_pct,
+            shimmer_db: m.shimmer_db, hnr_db: m.hnr_db,
+            cpps_db: m.cpps_db, avqi: result.avqiComponents?.avqi,
+          }}
+          aiText=""
+          voxPlotData={result.voxplot || {}}
+          onSave={(fields, author) => {
+            try {
+              localStorage.setItem(
+                `vocalislab_borrador_${clinical.data.paciente?.id || 'sin_paciente'}`,
+                JSON.stringify({ fields, author, ts: new Date().toISOString() })
+              );
+            } catch {}
+          }}
+          onExport={() => descargarInformePDF()}
         />
       </div>
     );
