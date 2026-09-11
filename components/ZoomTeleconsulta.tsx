@@ -4,6 +4,8 @@ import {
   Mic, Headphones, Settings, ClipboardList, Save, KeyRound, Link2
 } from 'lucide-react';
 
+import ZoomEmbedded from './ZoomEmbedded';
+
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 interface Props {
@@ -37,6 +39,7 @@ export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSal
   const [mostrarGuia, setMostrarGuia] = useState(false);
   const [notas, setNotas] = useState(turno?.notas || '');
   const [notaGuardada, setNotaGuardada] = useState(false);
+  const [modoEmbebido, setModoEmbebido] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -163,6 +166,15 @@ export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSal
                   >
                     <ExternalLink size={13} /> Unirse a la teleconsulta
                   </button>
+                  {sala.zoom_meeting_id && (
+                    <button
+                      onClick={() => setModoEmbebido(v => !v)}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-600/25"
+                      title="Video embebido dentro de VocalisLab (Meeting SDK Component View)"
+                    >
+                      <Video size={13} /> {modoEmbebido ? 'Ocultar video embebido' : 'Atender aquí embebido'}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       const msg = `Hola ${pacienteNombre}, te comparto el enlace de tu teleconsulta fonoaudiológica: ${sala.zoom_join_url}${sala.zoom_password ? ` (clave: ${sala.zoom_password})` : ''}. Entrá unos minutos antes con auriculares.`;
@@ -199,6 +211,42 @@ export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSal
                       className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300"
                     >
                       Cerrar guía
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {modoEmbebido && sala.zoom_meeting_id && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  <div className="lg:col-span-2">
+                    <ZoomEmbedded
+                      meetingNumber={sala.zoom_meeting_id}
+                      password={sala.zoom_password || ''}
+                      userName="Fonoaudiólogo/a"
+                      role={1}
+                      onLeave={() => setModoEmbebido(false)}
+                    />
+                  </div>
+                  <div className="p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+                    <p className="text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Notas durante la llamada
+                    </p>
+                    <p className="text-[10px] text-gray-400 mb-2">
+                      Anamnesis, F0 observada y respuesta del paciente — se guardan en el turno.
+                    </p>
+                    <textarea
+                      value={notas}
+                      onChange={e => setNotas(e.target.value)}
+                      rows={10}
+                      placeholder="Notas en vivo…"
+                      className="w-full px-3 py-2 bg-white dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      onClick={guardarNotas}
+                      disabled={guardandoNota}
+                      className="mt-2 w-full px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs disabled:opacity-50"
+                    >
+                      {guardandoNota ? 'Guardando…' : 'Guardar notas'}
                     </button>
                   </div>
                 </div>
