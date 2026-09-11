@@ -1,11 +1,16 @@
 # Zoom en VocalisLab Pro — Guía de configuración
 
-La teleconsulta usa dos piezas de Zoom (ambas se crean en
-**Zoom App Marketplace** con la misma cuenta de Zoom del consultorio):
+> **Importante (2026):** Zoom deprecó el SDK Key/Secret legacy (migración
+> enforced desde el 27/06/2026). La firma del Meeting SDK ahora usa
+> **Client ID + Client Secret** de una **General App** con Meeting SDK habilitado.
+> El código ya firma así: `ZOOM_SDK_KEY` = Client ID, `ZOOM_SDK_SECRET` = Client Secret.
 
-## 1. App Server-to-Server OAuth (crear salas desde la agenda)
+La teleconsulta usa dos piezas (dos apps distintas en
+**Zoom App Marketplace**, misma cuenta del consultorio):
 
-1. Entrá a https://marketplace.zoom.us → **Develop** → **Build App** → **Server-to-Server OAuth** → Create.
+## 1. App Server-to-Server OAuth (crear salas desde la agenda) — la que ya tenés
+
+1. Marketplace → **Develop** → **Build App** → **Server-to-Server OAuth** → Create.
 2. Nombre: `VocalisLab Pro`. Copiá **Account ID**, **Client ID**, **Client Secret**.
 3. En **Scopes** agregá: `meeting:write`, `meeting:read`, `user:read`.
 4. **Activate** la app.
@@ -15,20 +20,22 @@ En **Render → Environment** del backend:
 - `ZOOM_CLIENT_ID`
 - `ZOOM_CLIENT_SECRET`
 
-Con esto, el botón **“Crear sala Zoom”** de cada turno genera la reunión
-(waiting room, video host/participante, audio bidireccional) y guarda
-ID/clave/enlace en el turno.
+## 2. App General App + Meeting SDK (video embebido “Atender aquí embebido”)
 
-## 2. App Meeting SDK (video embebido “Atender aquí embebido”)
+Elegí **General App** en tu pantalla (es la opción correcta: el tipo
+“Meeting SDK” separado ya no aparece; ahora vive dentro de General App):
 
-1. En Marketplace → **Build App** → **Meeting SDK** → Create.
-2. Copiá **SDK Key** y **SDK Secret**.
-3. En **Render → Environment**:
-   - `ZOOM_SDK_KEY`
-   - `ZOOM_SDK_SECRET`
-4. El frontend ya trae `@zoom/meetingsdk` (Component View, patrón oficial
-   `zoom/meetingsdk-web-sample` → `Components/`). La firma se genera en
-   `POST /api/teleconsulta/zoom-signature` (terapeuta role 1).
+1. Marketplace → **Develop** → **Build App** → **General App** → Create
+   (nombre: `VocalisLab Embedded`).
+2. En la app, andá a **Features → Embed** y activá **Meeting SDK** (toggle ON).
+3. En **Basic Information → App Credentials** copiá el **Client ID** y el
+   **Client Secret** (usá las credenciales de *development* mientras probás;
+   las de *production* cuando publiques).
+4. En **Render → Environment**:
+   - `ZOOM_SDK_KEY` = Client ID de esta General App
+   - `ZOOM_SDK_SECRET` = Client Secret de esta General App
+5. **NO** pegues acá las credenciales de la app Server-to-Server (eso da el
+   error 3712 “Signature is invalid”). Cada app tiene sus propias credenciales.
 
 Sin estas variables, la app **no se rompe**: muestra la guía de setup y
 permite igual agendar + compartir enlaces.

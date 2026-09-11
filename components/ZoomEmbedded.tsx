@@ -41,9 +41,9 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLe
         ev.preventDefault();
         if (!cancelled) {
           setErrorMsg(
-            'Firma Zoom inválida (error 3712): las credenciales no corresponden a una app Meeting SDK. ' +
-            'En Render, ZOOM_SDK_KEY y ZOOM_SDK_SECRET deben ser el SDK Key y SDK Secret de la app “Meeting SDK” ' +
-            '(Marketplace → Build App → Meeting SDK), NO el Client ID/Secret de la app Server-to-Server.'
+            'Firma Zoom inválida (error 3712): las credenciales no corresponden a una app con Meeting SDK habilitado. ' +
+            'En Render, ZOOM_SDK_KEY y ZOOM_SDK_SECRET deben ser el Client ID y Client Secret de una app “General App” ' +
+            '(Marketplace → Build App → General App → Features → Embed → Meeting SDK ON), NO las de la app Server-to-Server.'
           );
           setStatus('error');
         }

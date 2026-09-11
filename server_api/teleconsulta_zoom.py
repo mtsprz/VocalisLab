@@ -146,7 +146,8 @@ async def zoom_config():
     if sdk_key and client_id and sdk_key == client_id:
         advertencias.append(
             "ZOOM_SDK_KEY es idéntico al Client ID Server-to-Server: la firma del Meeting SDK "
-            "será rechazada (error 3712). Creá una app 'Meeting SDK' en el Marketplace y usá su SDK Key/SDK Secret."
+            "será rechazada (error 3712). En Marketplace creá una app 'General App' con Meeting SDK "
+            "habilitado (Features → Embed) y usá SU Client ID / Client Secret."
         )
     if sdk_secret and client_secret and sdk_secret == client_secret:
         advertencias.append(
