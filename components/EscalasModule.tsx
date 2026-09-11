@@ -176,6 +176,24 @@ export default function EscalasModule({ pacienteId }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [evolucion, setEvolucion] = useState<any[]>([]);
+
+  // Historial de evaluaciones para comparar basal vs. reevaluación (sesión 8)
+  useEffect(() => {
+    if (!pacienteId) { setEvolucion([]); return; }
+    (async () => {
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/evaluaciones?paciente_id=${pacienteId}&limit=50`);
+        if (r.ok) {
+          const arr = await r.json();
+          if (Array.isArray(arr)) {
+            setEvolucion([...arr].sort((a, b) =>
+              new Date(a.fecha).getTime() - new Date(b.fecha).getTime()));
+          }
+        }
+      } catch {}
+    })();
+  }, [pacienteId, saved]);
 
   // Sync escalas data to global clinical context
   useEffect(() => {
@@ -270,6 +288,8 @@ export default function EscalasModule({ pacienteId }: Props) {
       fd.append('observaciones', observaciones);
       const f0conv = clinical.data.acustica?.f0_mean;
       fd.append('f0_conversacional_hz', f0conv != null ? String(f0conv) : '');
+      const autoVoz = clinical.data.anamnesis?.autopercepcion_voz;
+      fd.append('autopercepcion_vocal', autoVoz != null ? String(autoVoz) : '');
       const r = await fetch(`${BACKEND_URL}/api/evaluaciones`, { method: 'POST', body: fd });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -292,6 +312,103 @@ export default function EscalasModule({ pacienteId }: Props) {
       total: 69,
       pct: Math.round((answered / 69) * 100)
     };
+  };
+
+  const renderEvolucion = () => {
+    if (evolucion.length === 0) return null;
+    const basal = evolucion[0];
+    const actual = evolucion[evolucion.length - 1];
+    const esReevaluacion = evolucion.length >= 2;
+    const num = (v: any) => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
+    const rows = [
+      {
+        metrica: 'Autopercepción voz (0-10)',
+        b: num(basal.autopercepcion_vocal), a: num(actual.autopercepcion_vocal),
+        mejorSiSube: true,
+      },
+      {
+        metrica: 'VHI-10 (0-40)',
+        b: num(basal.vhi10_score), a: num(actual.vhi10_score),
+        mejorSiSube: false,
+      },
+      {
+        metrica: 'Riesgo vocal (/207)',
+        b: num(basal.riesgo_vocal_score), a: num(actual.riesgo_vocal_score),
+        mejorSiSube: false,
+      },
+      {
+        metrica: 'F0 conversacional (Hz)',
+        b: num(basal.f0_conversacional_hz), a: num(actual.f0_conversacional_hz),
+        mejorSiSube: null,
+      },
+    ];
+    const conDatos = rows.filter(r => r.b != null || r.a != null);
+    if (conDatos.length === 0) return null;
+
+    // Pronóstico: autopercepción manda, VHI acompaña
+    const dAuto = (rows[0].a != null && rows[0].b != null) ? rows[0].a! - rows[0].b! : null;
+    const dVhi = (rows[1].a != null && rows[1].b != null) ? rows[1].b! - rows[1].a! : null;
+    let pronostico = null;
+    if (esReevaluacion) {
+      if ((dAuto != null && dAuto >= 2) || (dVhi != null && dVhi >= 6)) {
+        pronostico = {
+          label: 'Buen pronóstico: respuesta terapéutica favorable',
+          cls: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
+        };
+      } else if ((dAuto != null && dAuto <= -2) || (dVhi != null && dVhi <= -6)) {
+        pronostico = {
+          label: 'Revisar plan terapéutico: sin mejoría o empeoramiento',
+          cls: 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300',
+        };
+      } else {
+        pronostico = {
+          label: 'Cuadro estable: sostener plan y reevaluar',
+          cls: 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300',
+        };
+      }
+    }
+
+    const fmtDelta = (r: any) => {
+      if (r.a == null || r.b == null) return '—';
+      const d = Math.round((r.a - r.b) * 10) / 10;
+      if (d === 0) return '±0';
+      const signo = d > 0 ? '+' : '';
+      const bueno = r.mejorSiSube == null ? null : (r.mejorSiSube ? d > 0 : d < 0);
+      const color = bueno == null ? 'text-gray-500' : bueno ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+      return <span className={`font-bold ${color}`}>{signo}{d}</span>;
+    };
+
+    return (
+      <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-bold text-indigo-800 dark:text-indigo-200">
+            Evolución terapéutica: basal vs. actual ({evolucion.length} evaluación{evolucion.length > 1 ? 'es' : ''})
+          </span>
+          {!esReevaluacion && (
+            <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 rounded-full">
+              Basal registrado — reevaluar en sesión 8
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 pb-1">
+          <span>Métrica</span><span className="text-right">Basal</span>
+          <span className="text-right">Actual</span><span className="text-right">Δ</span>
+        </div>
+        {conDatos.map(r => (
+          <div key={r.metrica} className="grid grid-cols-4 gap-2 text-xs py-1 border-t border-indigo-100 dark:border-indigo-900/50">
+            <span className="font-medium text-gray-700 dark:text-gray-300">{r.metrica}</span>
+            <span className="text-right font-mono text-gray-600 dark:text-gray-400">{r.b ?? '—'}</span>
+            <span className="text-right font-mono font-bold text-gray-900 dark:text-white">{r.a ?? '—'}</span>
+            <span className="text-right font-mono">{fmtDelta(r)}</span>
+          </div>
+        ))}
+        {pronostico && (
+          <div className={`mt-2 p-2.5 rounded-lg border text-xs font-bold ${pronostico.cls}`}>
+            {pronostico.label}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderRiesgoVocal = () => {
@@ -454,6 +571,9 @@ export default function EscalasModule({ pacienteId }: Props) {
           Riesgo Vocal
         </button>
       </div>
+
+      {/* Evolución terapéutica basal vs. actual (todas las pestañas) */}
+      {renderEvolucion()}
 
       {activeScale === 'RiesgoVocal' ? (
         renderRiesgoVocal()

@@ -32,6 +32,9 @@ export default function AnamnesisModule({ pacienteId }: Props) {
   const [antecedentesSalud, setAntecedentesSalud] = useState(
     clinical.data.anamnesis.antecedentes_salud || ''
   );
+  const [autopercepcionVoz, setAutopercepcionVoz] = useState<number | null>(
+    clinical.data.anamnesis.autopercepcion_voz ?? null
+  );
   const [resumenClinico, setResumenClinico] = useState(clinical.data.anamnesis.resumen_clinico || '');
 
   // Symptoms & Risk Factors toggles
@@ -124,6 +127,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
     if (clinical.data.anamnesis.sintomas) setSintomas(prev => ({ ...prev, ...clinical.data.anamnesis.sintomas }));
     if (clinical.data.anamnesis.factores_riesgo) setFactoresRiesgo(prev => ({ ...prev, ...clinical.data.anamnesis.factores_riesgo }));
     if (clinical.data.anamnesis.antecedentes_salud) setAntecedentesSalud(clinical.data.anamnesis.antecedentes_salud);
+    if (clinical.data.anamnesis.autopercepcion_voz != null) setAutopercepcionVoz(clinical.data.anamnesis.autopercepcion_voz);
   }, [clinical.data.anamnesis]);
 
   // Audio recording timer
@@ -362,6 +366,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
       factores_riesgo: overrideData?.factores_riesgo || factoresRiesgo,
       resumen_clinico: overrideData?.resumen_clinico || resumenClinico,
       antecedentes_salud: antecedentesSalud,
+      autopercepcion_voz: autopercepcionVoz,
       transcripcion: transcripcion,
     };
 
@@ -560,6 +565,35 @@ export default function AnamnesisModule({ pacienteId }: Props) {
                 placeholder="Ej: hipotiroidismo, RGE, alergias estacionales, asma... (la IA los autocompleta desde la entrevista)"
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
+            </div>
+
+            <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-200">
+                  Autopercepción: ¿qué puntaje del 0 al 10 le darías a tu calidad de voz actualmente?
+                </label>
+                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400 min-w-[2.5rem] text-center">
+                  {autopercepcionVoz != null ? autopercepcionVoz : '—'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={1}
+                value={autopercepcionVoz ?? 5}
+                onChange={e => { setAutopercepcionVoz(Number(e.target.value)); }}
+                onMouseUp={() => guardarContextoClinico()}
+                onTouchEnd={() => guardarContextoClinico()}
+                className="w-full accent-indigo-600"
+              />
+              <div className="flex justify-between text-[10px] text-gray-400 font-semibold">
+                <span>0 = Sin voz / muy mala</span>
+                <span>10 = Voz óptima</span>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Valor basal para comparar en la reevaluación de la sesión 8 (pronóstico terapéutico).
+              </p>
             </div>
           </div>
 
