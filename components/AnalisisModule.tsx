@@ -152,6 +152,35 @@ export default function AnalisisModule({ pacienteId }: Props) {
           spectral: data.metrics.spectral,
         });
         clinical.markStep('analisis');
+
+        // Persistir análisis en backend (fire-and-forget, mapeando claves al schema)
+        if (pacienteId) {
+          try {
+            const m = data.metrics;
+            const flat = {
+              f0_mean: m.f0_mean, f0_min: m.f0_min, f0_max: m.f0_max,
+              f0_sd: m.f0_sd, f0_range: m.f0_range,
+              jitter_local_pct: m.jitter_pct ?? m.jitter_local_pct,
+              jitter_rap_pct: m.jitter_rap_pct,
+              jitter_ppq5_pct: m.jitter_ppq5_pct,
+              shimmer_local_pct: m.shimmer_pct ?? m.shimmer_local_pct,
+              shimmer_apq3_pct: m.shimmer_apq3_pct,
+              shimmer_apq5_pct: m.shimmer_apq5_pct,
+              hnr_db: m.hnr_db, cpps_db: m.cpps_db,
+              nhr: m.nhr, nne_db: m.nne_db,
+              avqi: data.avqiComponents?.avqi,
+              f1_hz: m.f1_hz, f2_hz: m.f2_hz, f3_hz: m.f3_hz, f4_hz: m.f4_hz,
+              intensity_mean_db: m.intensity_mean_db,
+            };
+            const fd = new FormData();
+            fd.append('paciente_id', pacienteId);
+            fd.append('metrics_json', JSON.stringify(flat));
+            fd.append('cross_check_json', JSON.stringify(data.crossCheck || {}));
+            fd.append('charts_json', '{}');
+            fd.append('modo', 'clinico');
+            fetch(`${BACKEND_URL}/api/analisis_acusticos`, { method: 'POST', body: fd }).catch(() => {});
+          } catch {}
+        }
       }
     } catch (e: any) {
       setError(e.message || 'Error durante el análisis bioacústico.');

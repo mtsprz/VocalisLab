@@ -33,11 +33,14 @@ CREATE TABLE IF NOT EXISTS anamnesis (
     metodo_exploracion TEXT,
     sintomas JSONB DEFAULT '{}',
     factores_riesgo JSONB DEFAULT '{}',
+    resumen_clinico TEXT,
     transcripcion_audio TEXT,
     muestra_vocal_url TEXT,
     duracion_consulta_s FLOAT,
     audio_url TEXT
 );
+
+ALTER TABLE anamnesis ADD COLUMN IF NOT EXISTS resumen_clinico TEXT;
 
 -- 3. TABLA EVALUACIONES CLÍNICAS
 CREATE TABLE IF NOT EXISTS evaluaciones_clinicas (

@@ -289,6 +289,98 @@ async def crear_evaluacion(
     return JSONResponse(content=result)
 
 
+# ─── ANAMNESIS (una ficha vigente por paciente: actualiza la última o crea) ──
+
+def _parse_json_field(v, default):
+    try:
+        if isinstance(v, (dict, list)):
+            return v
+        if isinstance(v, str) and v.strip().startswith(("{", "[")):
+            return json.loads(v)
+    except Exception:
+        pass
+    return default
+
+
+@router.post("/api/anamnesis")
+async def guardar_anamnesis(
+    paciente_id: str = Form(...),
+    motivo_consulta: str = Form(""),
+    diagnostico_orl: str = Form(""),
+    metodo_exploracion: str = Form(""),
+    sintomas: str = Form("{}"),
+    factores_riesgo: str = Form("{}"),
+    resumen_clinico: str = Form(""),
+    transcripcion_audio: str = Form(""),
+    demanda_vocal_horas: str = Form(""),
+):
+    data = {
+        "paciente_id": paciente_id,
+        "motivo_consulta": motivo_consulta,
+        "diagnostico_orl": diagnostico_orl,
+        "metodo_exploracion": metodo_exploracion,
+        "sintomas": _parse_json_field(sintomas, {}),
+        "factores_riesgo": _parse_json_field(factores_riesgo, {}),
+        "resumen_clinico": resumen_clinico,
+        "transcripcion_audio": transcripcion_audio,
+    }
+    if not supabase:
+        return JSONResponse(content={"id": "local", **data})
+    # Upsert manual: actualizar la ficha más reciente del paciente, o insertar
+    try:
+        existing = supabase.table("anamnesis").select("id").eq("paciente_id", paciente_id)\
+            .order("fecha", desc=True).limit(1).execute()
+        if existing.data:
+            rid = existing.data[0]["id"]
+            # Reintento tolerante: si alguna columna no existe en la DB, quitarla y reintentar
+            for _ in range(4):
+                try:
+                    upd = supabase.table("anamnesis").update(data).eq("id", rid).execute()
+                    return JSONResponse(content=(upd.data[0] if upd.data else {"id": rid, **data}))
+                except Exception as e:
+                    col = _missing_column(str(e))
+                    if col and col in data:
+                        data.pop(col, None)
+                        continue
+                    raise
+        for _ in range(4):
+            try:
+                return JSONResponse(content=_db_insert("anamnesis", data))
+            except Exception as e:
+                col = _missing_column(str(e))
+                if col and col in data:
+                    data.pop(col, None)
+                    continue
+                raise
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error guardando anamnesis: {str(e)[:300]}")
+
+
+def _missing_column(err_msg: str):
+    """Extrae la columna faltante de un error PGRST204, o None."""
+    import re
+    m = re.search(r"Could not find the '([^']+)' column", err_msg)
+    return m.group(1) if m else None
+
+
+@router.get("/api/anamnesis")
+async def obtener_anamnesis(paciente_id: str = Query(...)):
+    if not supabase:
+        return JSONResponse(content={})
+    try:
+        result = supabase.table("anamnesis").select("*").eq("paciente_id", paciente_id)\
+            .order("fecha", desc=True).limit(1).execute()
+        if result.data:
+            return JSONResponse(content=result.data[0])
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[api_clinica] Error en obtener_anamnesis: {e}")
+    return JSONResponse(content={})
+
+
 @router.get("/api/evaluaciones")
 async def listar_evaluaciones(
     paciente_id: str = Query(None),

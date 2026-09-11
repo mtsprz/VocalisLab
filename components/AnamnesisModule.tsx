@@ -252,6 +252,23 @@ export default function AnamnesisModule({ pacienteId }: Props) {
       demanda_vocal_horas: demandaVocalHoras,
     });
     clinical.markStep('anamnesis');
+
+    // Persistir en backend (fire-and-forget: no bloquea la UI)
+    if (pacienteId) {
+      try {
+        const fd = new FormData();
+        fd.append('paciente_id', pacienteId);
+        fd.append('motivo_consulta', anamnesisObj.motivo_consulta || '');
+        fd.append('diagnostico_orl', anamnesisObj.diagnostico_orl || '');
+        fd.append('metodo_exploracion', anamnesisObj.metodo_exploracion || '');
+        fd.append('sintomas', JSON.stringify(anamnesisObj.sintomas || {}));
+        fd.append('factores_riesgo', JSON.stringify(anamnesisObj.factores_riesgo || {}));
+        fd.append('resumen_clinico', anamnesisObj.resumen_clinico || '');
+        fd.append('transcripcion_audio', anamnesisObj.transcripcion || '');
+        fd.append('demanda_vocal_horas', String(demandaVocalHoras || ''));
+        fetch(`${BACKEND_URL}/api/anamnesis`, { method: 'POST', body: fd }).catch(() => {});
+      } catch {}
+    }
   };
 
   return (

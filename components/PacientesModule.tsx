@@ -232,6 +232,8 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                           demanda_vocal_horas: 4,
                         });
                         clinical.markStep('pacientes');
+                        // Hidratar anamnesis + escalas + acústica desde el backend
+                        clinical.cargarPaciente(p.id).catch(() => {});
                         onSelectPaciente(p.id);
                       }}
                       className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-left text-xs block"

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginScreen from './LoginScreen';
-import { ClinicalProvider } from './ClinicalContext';
+import { ClinicalProvider, useClinical } from './ClinicalContext';
 import ClinicalStepper from './ClinicalStepper';
 import DashboardModule from './DashboardModule';
 import AgendaView from './agenda/AgendaView';
@@ -33,10 +33,23 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
 
 function AppInner() {
   const { user, logout } = useAuth();
+  const clinical = useClinical();
   const [activeModule, setActiveModule] = useState<ActiveModule>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
   const [initialExerciseIds, setInitialExerciseIds] = useState<string[]>([]);
+
+  // Restaurar último paciente tras refresh e hidratar desde backend
+  useEffect(() => {
+    try {
+      const lastId = localStorage.getItem('vocalislab_last_paciente');
+      if (lastId && !selectedPacienteId) {
+        setSelectedPacienteId(lastId);
+        clinical.cargarPaciente(lastId).catch(() => {});
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
