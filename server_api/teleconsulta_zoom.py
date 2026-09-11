@@ -111,9 +111,9 @@ def _marcar_error_sync(turno_id: str, mensaje: str):
 
 def _s2s_creds():
     return (
-        os.environ.get("ZOOM_ACCOUNT_ID", ""),
-        os.environ.get("ZOOM_CLIENT_ID", ""),
-        os.environ.get("ZOOM_CLIENT_SECRET", ""),
+        os.environ.get("ZOOM_ACCOUNT_ID", "").strip(),
+        os.environ.get("ZOOM_CLIENT_ID", "").strip(),
+        os.environ.get("ZOOM_CLIENT_SECRET", "").strip(),
     )
 
 
@@ -140,8 +140,8 @@ async def _s2s_token() -> str:
 @router.get("/api/teleconsulta/config")
 async def zoom_config():
     account_id, client_id, client_secret = _s2s_creds()
-    sdk_key = os.environ.get("ZOOM_SDK_KEY", "")
-    sdk_secret = os.environ.get("ZOOM_SDK_SECRET", "")
+    sdk_key = os.environ.get("ZOOM_SDK_KEY", "").strip()
+    sdk_secret = os.environ.get("ZOOM_SDK_SECRET", "").strip()
     advertencias = []
     if sdk_key and client_id and sdk_key == client_id:
         advertencias.append(
@@ -268,8 +268,8 @@ async def zoom_signature(request: Request):
         body = {}
     meeting_number = str(body.get("meeting_number", "")).strip()
     role = int(body.get("role", 0))
-    sdk_key = os.environ.get("ZOOM_SDK_KEY", "")
-    sdk_secret = os.environ.get("ZOOM_SDK_SECRET", "")
+    sdk_key = os.environ.get("ZOOM_SDK_KEY", "").strip()
+    sdk_secret = os.environ.get("ZOOM_SDK_SECRET", "").strip()
     if not (sdk_key and sdk_secret):
         raise HTTPException(status_code=503, detail="Zoom SDK no configurado: faltan ZOOM_SDK_KEY / ZOOM_SDK_SECRET")
     if not meeting_number:
