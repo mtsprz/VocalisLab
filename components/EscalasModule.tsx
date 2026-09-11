@@ -268,6 +268,8 @@ export default function EscalasModule({ pacienteId }: Props) {
       fd.append('tme_o', String(scores.TME.TME_O || ''));
       fd.append('tme_s', String(scores.TME.TME_S || ''));
       fd.append('observaciones', observaciones);
+      const f0conv = clinical.data.acustica?.f0_mean;
+      fd.append('f0_conversacional_hz', f0conv != null ? String(f0conv) : '');
       const r = await fetch(`${BACKEND_URL}/api/evaluaciones`, { method: 'POST', body: fd });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));

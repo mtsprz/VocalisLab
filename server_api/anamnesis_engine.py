@@ -83,7 +83,11 @@ Responde ÚNICAMENTE con JSON válido con esta estructura exacta:
     "medicamentos": "",
     "otros": ""
   },
-  "resumen_clinico": "resumen de 2-3 líneas para el historial clínico"
+  "resumen_clinico": "resumen de 2-3 líneas para el historial clínico",
+  "edad_anos": "edad del paciente en años si se menciona (número) o null",
+  "ocupacion": "ocupación o profesión si se menciona (string) o null",
+  "demanda_vocal_horas": "horas de uso vocal por día si se mencionan (número) o null",
+  "comorbilidades": ["lista de comorbilidades/antecedentes relevantes: hipotiroidismo, RGE, alergias, asma, diabetes, hipertensión, etc."]
 }
 
 Si no hay información suficiente para un campo, usa false para booleanos y null para strings.

@@ -29,7 +29,9 @@ export default function AnamnesisModule({ pacienteId }: Props) {
   const [diagnosticoOrl, setDiagnosticoOrl] = useState(clinical.data.anamnesis.diagnostico_orl || '');
   const [metodoExploracion, setMetodoExploracion] = useState(clinical.data.anamnesis.metodo_exploracion || 'Nasal');
   const [demandaVocalHoras, setDemandaVocalHoras] = useState<number>(clinical.data.paciente.demanda_vocal_horas || 4);
-  const [antecedentesSalud, setAntecedentesSalud] = useState('');
+  const [antecedentesSalud, setAntecedentesSalud] = useState(
+    clinical.data.anamnesis.antecedentes_salud || ''
+  );
   const [resumenClinico, setResumenClinico] = useState(clinical.data.anamnesis.resumen_clinico || '');
 
   // Symptoms & Risk Factors toggles
@@ -59,6 +61,60 @@ export default function AnamnesisModule({ pacienteId }: Props) {
   const animFrameRef = useRef<number>(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const f0SamplesRef = useRef<number[]>([]);
+  const pitchTimerRef = useRef<any>(null);
+  const [f0Stats, setF0Stats] = useState<{ mean: number; min: number; max: number; count: number } | null>(
+    null
+  );
+
+  // YIN pitch detection (compacta, apta para muestreo conversacional)
+  const yinDetect = (buffer: Float32Array, sampleRate: number): number | null => {
+    const threshold = 0.15;
+    const minLag = Math.floor(sampleRate / 500);
+    const maxLag = Math.floor(sampleRate / 60);
+    const half = Math.floor(buffer.length / 2);
+    const yinBuffer = new Float32Array(half);
+    for (let tau = 0; tau < half; tau++) {
+      let sum = 0;
+      for (let j = 0; j < half; j++) {
+        const delta = buffer[j] - buffer[j + tau];
+        sum += delta * delta;
+      }
+      yinBuffer[tau] = sum;
+    }
+    yinBuffer[0] = 1;
+    let runningSum = 0;
+    for (let tau = 1; tau < half; tau++) {
+      runningSum += yinBuffer[tau];
+      yinBuffer[tau] *= tau / runningSum;
+    }
+    let bestTau = -1;
+    for (let tau = minLag; tau < Math.min(maxLag, half); tau++) {
+      if (yinBuffer[tau] < threshold) {
+        while (tau + 1 < half && yinBuffer[tau + 1] < yinBuffer[tau]) tau++;
+        bestTau = tau;
+        break;
+      }
+    }
+    if (bestTau <= 0) return null;
+    const freq = sampleRate / bestTau;
+    return freq >= 60 && freq <= 600 ? freq : null;
+  };
+
+  const samplePitch = () => {
+    const analyser = analyserRef.current;
+    const audioCtx = audioCtxRef.current;
+    if (!analyser || !audioCtx) return;
+    try {
+      const buf = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(buf);
+      const f0 = yinDetect(buf, audioCtx.sampleRate);
+      if (f0) {
+        f0SamplesRef.current.push(f0);
+        if (f0SamplesRef.current.length > 2000) f0SamplesRef.current.shift();
+      }
+    } catch {}
+  };
 
   // Sync state if clinical context changes externally
   useEffect(() => {
@@ -67,6 +123,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
     if (clinical.data.anamnesis.resumen_clinico) setResumenClinico(clinical.data.anamnesis.resumen_clinico);
     if (clinical.data.anamnesis.sintomas) setSintomas(prev => ({ ...prev, ...clinical.data.anamnesis.sintomas }));
     if (clinical.data.anamnesis.factores_riesgo) setFactoresRiesgo(prev => ({ ...prev, ...clinical.data.anamnesis.factores_riesgo }));
+    if (clinical.data.anamnesis.antecedentes_salud) setAntecedentesSalud(clinical.data.anamnesis.antecedentes_salud);
   }, [clinical.data.anamnesis]);
 
   // Audio recording timer
@@ -133,14 +190,17 @@ export default function AnamnesisModule({ pacienteId }: Props) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // AudioContext setup for visualizer
+      // AudioContext setup for visualizer + live F0 tracking
       const audioCtx = new AudioContext();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 128;
+      analyser.fftSize = 2048;
       source.connect(analyser);
       audioCtxRef.current = audioCtx;
       analyserRef.current = analyser;
+      f0SamplesRef.current = [];
+      setF0Stats(null);
+      pitchTimerRef.current = setInterval(samplePitch, 120);
 
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       chunksRef.current = [];
@@ -168,15 +228,43 @@ export default function AnamnesisModule({ pacienteId }: Props) {
     if (paused) {
       mediaRecorderRef.current.resume();
       setPaused(false);
+      if (!pitchTimerRef.current) pitchTimerRef.current = setInterval(samplePitch, 120);
     } else {
       mediaRecorderRef.current.pause();
       setPaused(true);
+      if (pitchTimerRef.current) {
+        clearInterval(pitchTimerRef.current);
+        pitchTimerRef.current = null;
+      }
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
+    }
+    if (pitchTimerRef.current) {
+      clearInterval(pitchTimerRef.current);
+      pitchTimerRef.current = null;
+    }
+    // Consolidar F0 conversacional de la propia voz del paciente
+    const samples = f0SamplesRef.current.filter(f => f >= 60 && f <= 600);
+    if (samples.length >= 5) {
+      const sorted = [...samples].sort((a, b) => a - b);
+      const mean = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+      const stats = {
+        mean: Math.round(mean * 10) / 10,
+        min: Math.round(sorted[0] * 10) / 10,
+        max: Math.round(sorted[sorted.length - 1] * 10) / 10,
+        count: sorted.length,
+      };
+      setF0Stats(stats);
+      clinical.setAcustica({
+        ...clinical.data.acustica,
+        f0_mean: stats.mean,
+        f0_min: stats.min,
+        f0_max: stats.max,
+      });
     }
     setRecording(false);
     setPaused(false);
@@ -228,6 +316,36 @@ export default function AnamnesisModule({ pacienteId }: Props) {
         setFactoresRiesgo(prev => ({ ...prev, ...data.factores_riesgo }));
       }
 
+      // Auto-complete: ocupación, demanda vocal, comorbilidades y edad estimada
+      const extraPaciente: any = {};
+      if (data.ocupacion) extraPaciente.ocupacion = data.ocupacion;
+      if (data.demanda_vocal_horas != null && !isNaN(Number(data.demanda_vocal_horas))) {
+        const dvh = Number(data.demanda_vocal_horas);
+        setDemandaVocalHoras(dvh);
+        extraPaciente.demanda_vocal_horas = dvh;
+      }
+      if (data.edad_anos != null && !isNaN(Number(data.edad_anos)) && !clinical.data.paciente.fecha_nacimiento) {
+        const birthYear = new Date().getFullYear() - Math.round(Number(data.edad_anos));
+        extraPaciente.fecha_nacimiento = `${birthYear}-01-01`;
+      }
+      if (Object.keys(extraPaciente).length > 0) {
+        clinical.setPaciente({ ...clinical.data.paciente, ...extraPaciente });
+      }
+      if (Array.isArray(data.comorbilidades) && data.comorbilidades.length > 0) {
+        const nuevas = data.comorbilidades.filter((c: any) => c && String(c).trim());
+        if (nuevas.length > 0) {
+          setAntecedentesSalud(prev => {
+            const base = prev ? prev.split('\n').map((l: string) => l.trim()).filter(Boolean) : [];
+            const merged = [...base];
+            nuevas.forEach((c: any) => {
+              const t = String(c).trim();
+              if (t && !merged.some(m => m.toLowerCase() === t.toLowerCase())) merged.push(t);
+            });
+            return merged.join('\n');
+          });
+        }
+      }
+
       guardarContextoClinico(data);
     } catch {
       setError('Error al procesar la anamnesis con IA.');
@@ -243,6 +361,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
       sintomas: overrideData?.sintomas || sintomas,
       factores_riesgo: overrideData?.factores_riesgo || factoresRiesgo,
       resumen_clinico: overrideData?.resumen_clinico || resumenClinico,
+      antecedentes_salud: antecedentesSalud,
       transcripcion: transcripcion,
     };
 
@@ -428,6 +547,20 @@ export default function AnamnesisModule({ pacienteId }: Props) {
                 />
               </div>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                Antecedentes de Salud y Comorbilidades
+              </label>
+              <textarea
+                value={antecedentesSalud}
+                onChange={e => setAntecedentesSalud(e.target.value)}
+                onBlur={() => guardarContextoClinico()}
+                rows={2}
+                placeholder="Ej: hipotiroidismo, RGE, alergias estacionales, asma... (la IA los autocompleta desde la entrevista)"
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+            </div>
           </div>
 
           {/* Síntomas Vocales Específicos */}
@@ -528,6 +661,23 @@ export default function AnamnesisModule({ pacienteId }: Props) {
             <div className="bg-slate-900 rounded-xl p-2 border border-slate-800 h-20 flex items-center justify-center overflow-hidden">
               <canvas ref={canvasRef} width={300} height={60} className="w-full h-full" />
             </div>
+
+            {/* F0 conversacional capturada de la propia voz del paciente */}
+            {f0Stats && (
+              <div className="mt-2 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                  F0 conversacional: {f0Stats.mean} Hz
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
+                  mín {f0Stats.min} · máx {f0Stats.max} · n={f0Stats.count}
+                </span>
+              </div>
+            )}
+            {recording && (
+              <p className="mt-1.5 text-[10px] text-gray-400">
+                Midiendo F0 conversacional en vivo con la voz del paciente…
+              </p>
+            )}
 
             {audioBlob && (
               <div className="mt-3 pt-2 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs">

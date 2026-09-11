@@ -473,6 +473,8 @@ async def analizar(
     modo: str = Form("clinico"),
     sexo: str = Form(""),
     edad: str = Form(""),
+    grbas: str = Form("{}"),
+    rasati: str = Form("{}"),
     pitch_floor: Optional[float] = Form(None),
     pitch_ceiling: Optional[float] = Form(None),
 ):
@@ -533,10 +535,18 @@ async def analizar(
     json_export = resultado.get("json_export", {})
     csv_export = resultado.get("csv_export", [])
 
-    # --- Cross-check acoustics vs GRBAS/RASATI ---
+    # --- Cross-check acoustics vs GRBAS/RASATI (heredados del módulo clínico) ---
     try:
         pathology_db = _load_pathology_db()
-        cross_check = _cross_check_acoustics_vs_perceptual(metrics_raw, {}, {}, pathology_db, edad=edad, sexo=sexo)
+        try:
+            g_dict = json.loads(grbas) if isinstance(grbas, str) and grbas.startswith("{") else {}
+        except Exception:
+            g_dict = {}
+        try:
+            r_dict = json.loads(rasati) if isinstance(rasati, str) and rasati.startswith("{") else {}
+        except Exception:
+            r_dict = {}
+        cross_check = _cross_check_acoustics_vs_perceptual(metrics_raw, g_dict, r_dict, pathology_db, edad=edad, sexo=sexo)
     except Exception as e:
         traceback.print_exc()
         cross_check = {"perceptual_acoustic_consistency": "N/D", "acoustic_indicators": [], "pathology_matches": [], "clinical_observations": [], "alerts": []}
