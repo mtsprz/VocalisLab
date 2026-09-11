@@ -6,6 +6,7 @@ import {
 import FiltroModalidad, { ModalidadFiltro } from './FiltroModalidad';
 import TargetPacienteCard from './TargetPacienteCard';
 import NuevoTurnoModal from './NuevoTurnoModal';
+import ZoomTeleconsulta from '../ZoomTeleconsulta';
 import { useAuth } from '../AuthContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -23,6 +24,8 @@ export default function AgendaView({ onNavigate, onSelectPaciente }: Props) {
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalNuevoAbierto, setModalNuevoAbierto] = useState(false);
+  const [turnoEditar, setTurnoEditar] = useState<any | null>(null);
+  const [turnoZoom, setTurnoZoom] = useState<any | null>(null);
   const [formato, setFormato] = useState<VistaFormato>('semana');
   const [filtroModalidad, setFiltroModalidad] = useState<ModalidadFiltro>('TODAS');
   const [fechaActual, setFechaActual] = useState(new Date());
@@ -262,6 +265,8 @@ export default function AgendaView({ onNavigate, onSelectPaciente }: Props) {
                 onSelectPaciente={onSelectPaciente}
                 onActualizarEstado={handleActualizarEstado}
                 onEliminarTurno={handleEliminarTurno}
+                onEditarTurno={(t) => { setTurnoEditar(t); setModalNuevoAbierto(true); }}
+                onZoom={(t) => setTurnoZoom(t)}
               />
             ))}
           </div>
@@ -313,12 +318,23 @@ export default function AgendaView({ onNavigate, onSelectPaciente }: Props) {
         </div>
       )}
 
-      {/* Modal Nuevo Turno */}
+      {/* Modal Nuevo / Editar Turno */}
       <NuevoTurnoModal
         isOpen={modalNuevoAbierto}
-        onClose={() => setModalNuevoAbierto(false)}
-        onTurnoCreado={() => cargarAgenda()}
+        onClose={() => { setModalNuevoAbierto(false); setTurnoEditar(null); }}
+        onTurnoCreado={() => { cargarAgenda(); setTurnoEditar(null); }}
+        turnoEditar={turnoEditar}
       />
+
+      {/* Modal Teleconsulta Zoom */}
+      {turnoZoom && (
+        <ZoomTeleconsulta
+          turno={turnoZoom}
+          pacienteNombre={turnoZoom.pacientes?.nombre_completo || 'Paciente'}
+          onClose={() => setTurnoZoom(null)}
+          onSalaActualizada={() => cargarAgenda()}
+        />
+      )}
     </div>
   );
 }

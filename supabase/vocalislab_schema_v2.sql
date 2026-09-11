@@ -140,6 +140,9 @@ ALTER TABLE turnos ADD COLUMN IF NOT EXISTS modalidad TEXT DEFAULT 'PRESENCIAL';
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS motivo TEXT DEFAULT 'Consulta de Voz';
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS meet_link TEXT;
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS google_event_id TEXT;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_meeting_id TEXT;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_password TEXT;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_join_url TEXT;
 
 -- 6b. MIGRACIÓN v1 → v2 (la tabla pacientes del schema v1 no tiene estas columnas
 -- y trae un NOT NULL legacy en "nombre" que bloquea los INSERT del backend)

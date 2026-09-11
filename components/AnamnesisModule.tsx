@@ -23,6 +23,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [transcripcion, setTranscripcion] = useState('');
   const [error, setError] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // Guided Clinical Fields
   const [motivoConsulta, setMotivoConsulta] = useState(clinical.data.anamnesis.motivo_consulta || '');
@@ -405,6 +406,10 @@ export default function AnamnesisModule({ pacienteId }: Props) {
   };
 
   const guardarContextoClinico = (overrideData?: any) => {
+    const dvh = overrideData?.demanda_vocal_horas != null && !isNaN(Number(overrideData.demanda_vocal_horas))
+      ? Number(overrideData.demanda_vocal_horas)
+      : demandaVocalHoras;
+    const ocup = overrideData?.ocupacion || clinical.data.paciente?.ocupacion || '';
     const anamnesisObj = {
       motivo_consulta: overrideData?.motivo_consulta || motivoConsulta,
       diagnostico_orl: overrideData?.diagnostico_orl || diagnosticoOrl,
@@ -420,25 +425,49 @@ export default function AnamnesisModule({ pacienteId }: Props) {
     clinical.setAnamnesis(anamnesisObj);
     clinical.setPaciente({
       ...clinical.data.paciente,
-      demanda_vocal_horas: demandaVocalHoras,
+      demanda_vocal_horas: dvh,
+      ...(ocup ? { ocupacion: ocup } : {}),
     });
     clinical.markStep('anamnesis');
 
-    // Persistir en backend (fire-and-forget: no bloquea la UI)
+    // Persistir en backend con feedback (anamnesis + demanda/ocupación del paciente)
     if (pacienteId) {
-      try {
-        const fd = new FormData();
-        fd.append('paciente_id', pacienteId);
-        fd.append('motivo_consulta', anamnesisObj.motivo_consulta || '');
-        fd.append('diagnostico_orl', anamnesisObj.diagnostico_orl || '');
-        fd.append('metodo_exploracion', anamnesisObj.metodo_exploracion || '');
-        fd.append('sintomas', JSON.stringify(anamnesisObj.sintomas || {}));
-        fd.append('factores_riesgo', JSON.stringify(anamnesisObj.factores_riesgo || {}));
-        fd.append('resumen_clinico', anamnesisObj.resumen_clinico || '');
-        fd.append('transcripcion_audio', anamnesisObj.transcripcion || '');
-        fd.append('demanda_vocal_horas', String(demandaVocalHoras || ''));
-        fetch(`${BACKEND_URL}/api/anamnesis`, { method: 'POST', body: fd }).catch(() => {});
-      } catch {}
+      setSaveState('saving');
+      (async () => {
+        try {
+          const fd = new FormData();
+          fd.append('paciente_id', pacienteId);
+          fd.append('motivo_consulta', anamnesisObj.motivo_consulta || '');
+          fd.append('diagnostico_orl', anamnesisObj.diagnostico_orl || '');
+          fd.append('metodo_exploracion', anamnesisObj.metodo_exploracion || '');
+          fd.append('sintomas', JSON.stringify(anamnesisObj.sintomas || {}));
+          fd.append('factores_riesgo', JSON.stringify(anamnesisObj.factores_riesgo || {}));
+          fd.append('resumen_clinico', anamnesisObj.resumen_clinico || '');
+          fd.append('transcripcion_audio', anamnesisObj.transcripcion || '');
+          const r1 = await fetch(`${BACKEND_URL}/api/anamnesis`, { method: 'POST', body: fd });
+          if (!r1.ok) {
+            const err = await r1.json().catch(() => ({}));
+            throw new Error(err.detail || `Anamnesis: error ${r1.status}`);
+          }
+          const fp = new FormData();
+          if (dvh != null) fp.append('demanda_vocal_horas', String(dvh));
+          if (ocup) fp.append('ocupacion', ocup);
+          if ([...fp.keys()].length > 0) {
+            const r2 = await fetch(`${BACKEND_URL}/api/pacientes/${pacienteId}`, {
+              method: 'PUT', body: fp,
+            });
+            if (!r2.ok) {
+              const err = await r2.json().catch(() => ({}));
+              throw new Error(err.detail || `Paciente: error ${r2.status}`);
+            }
+          }
+          setSaveState('saved');
+          setTimeout(() => setSaveState(prev => prev === 'saved' ? 'idle' : prev), 3500);
+        } catch (e: any) {
+          setSaveState('error');
+          setError(e.message || 'No se pudo guardar la anamnesis');
+        }
+      })();
     }
   };
 
@@ -815,10 +844,20 @@ export default function AnamnesisModule({ pacienteId }: Props) {
             />
             <button
               onClick={() => guardarContextoClinico()}
-              className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20"
+              disabled={saveState === 'saving'}
+              className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 disabled:opacity-60"
             >
-              <Save size={14} /> Guardar Anamnesis en Historia Clínica
+              {saveState === 'saving'
+                ? <><Loader2 size={14} className="animate-spin" /> Guardando…</>
+                : saveState === 'saved'
+                  ? <><CheckCircle2 size={14} /> Guardado en historia clínica</>
+                  : <><Save size={14} /> Guardar Anamnesis en Historia Clínica</>}
             </button>
+            {saveState === 'error' && (
+              <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold">
+                No se pudo guardar en el servidor. Revisá tu conexión e intentá de nuevo.
+              </p>
+            )}
           </div>
         </div>
       </div>

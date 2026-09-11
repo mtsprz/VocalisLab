@@ -17,6 +17,7 @@ interface Props {
   onClose: () => void;
   onTurnoCreado: () => void;
   pacientePreseleccionadoId?: string | null;
+  turnoEditar?: any | null;
 }
 
 export default function NuevoTurnoModal({
@@ -24,6 +25,7 @@ export default function NuevoTurnoModal({
   onClose,
   onTurnoCreado,
   pacientePreseleccionadoId,
+  turnoEditar,
 }: Props) {
   const { user } = useAuth();
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
@@ -42,9 +44,24 @@ export default function NuevoTurnoModal({
   useEffect(() => {
     if (isOpen) {
       cargarPacientes();
-      if (pacientePreseleccionadoId) setPacienteId(pacientePreseleccionadoId);
+      if (turnoEditar) {
+        // Modo edición: precargar valores del turno
+        if (turnoEditar.paciente_id) setPacienteId(turnoEditar.paciente_id);
+        if (turnoEditar.fecha_hora) {
+          const d = new Date(turnoEditar.fecha_hora);
+          setFecha(d.toISOString().split('T')[0]);
+          setHoraInicio(d.toTimeString().slice(0, 5));
+        }
+        if (turnoEditar.duracion_min) setDuracionMin(turnoEditar.duracion_min);
+        if (turnoEditar.modalidad) setModalidad(turnoEditar.modalidad.toUpperCase() === 'VIRTUAL' ? 'VIRTUAL' : 'PRESENCIAL');
+        if (turnoEditar.motivo) setMotivo(turnoEditar.motivo);
+        if (turnoEditar.tipo) setTipo(turnoEditar.tipo);
+        if (turnoEditar.notas) setNotas(turnoEditar.notas);
+      } else if (pacientePreseleccionadoId) {
+        setPacienteId(pacientePreseleccionadoId);
+      }
     }
-  }, [isOpen, pacientePreseleccionadoId]);
+  }, [isOpen, pacientePreseleccionadoId, turnoEditar]);
 
   const cargarPacientes = async () => {
     try {
@@ -62,7 +79,7 @@ export default function NuevoTurnoModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pacienteId) {
+    if (!pacienteId && !turnoEditar) {
       setErrorMsg('Seleccioná un paciente para agendar el turno.');
       return;
     }
@@ -73,7 +90,7 @@ export default function NuevoTurnoModal({
       const fechaHoraIso = `${fecha}T${horaInicio}:00`;
 
       const fd = new FormData();
-      fd.append('paciente_id', pacienteId);
+      if (!turnoEditar) fd.append('paciente_id', pacienteId);
       fd.append('fecha_hora', fechaHoraIso);
       fd.append('duracion_min', String(duracionMin));
       fd.append('tipo', tipo);
@@ -83,14 +100,17 @@ export default function NuevoTurnoModal({
       if (user?.id) fd.append('user_id', user.id);
       fd.append('sincronizar_google', String(syncGoogle && Boolean(user?.id)));
 
-      const resp = await fetch(`${BACKEND_URL}/api/turnos`, {
-        method: 'POST',
+      const url = turnoEditar
+        ? `${BACKEND_URL}/api/turnos/${turnoEditar.id}`
+        : `${BACKEND_URL}/api/turnos`;
+      const resp = await fetch(url, {
+        method: turnoEditar ? 'PUT' : 'POST',
         body: fd,
       });
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err.detail || 'Error creando turno en el servidor');
+        throw new Error(err.detail || 'Error guardando turno en el servidor');
       }
 
       onTurnoCreado();
@@ -113,7 +133,7 @@ export default function NuevoTurnoModal({
             </div>
             <div>
               <h3 className="font-bold text-base text-gray-900 dark:text-white">
-                Agendar Nueva Cita Vocal
+                {turnoEditar ? 'Editar Cita (sincroniza Google Calendar)' : 'Agendar Nueva Cita Vocal'}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Programá consultas presenciales o virtuales con Google Meet
@@ -301,7 +321,7 @@ export default function NuevoTurnoModal({
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
             >
               {guardando ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {guardando ? 'Agendando...' : 'Confirmar Cita'}
+              {guardando ? (turnoEditar ? 'Guardando…' : 'Agendando...') : (turnoEditar ? 'Guardar Cambios' : 'Confirmar Cita')}
             </button>
           </div>
         </form>

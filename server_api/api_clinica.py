@@ -30,6 +30,11 @@ router = APIRouter()
 
 EXERCISE_BANK_PATH = os.path.join(os.path.dirname(__file__), "exercise_bank.json")
 
+
+def _get_supabase():
+    """Devuelve el cliente Supabase compartido (o None si no está configurado)."""
+    return supabase
+
 def _load_exercise_bank():
     try:
         with open(EXERCISE_BANK_PATH, "r", encoding="utf-8") as f:
@@ -182,6 +187,7 @@ async def actualizar_paciente(
     ocupacion: str = Form(None),
     derivador: str = Form(None),
     notas_iniciales: str = Form(None),
+    demanda_vocal_horas: str = Form(None),
 ):
     data = {}
     if nombre_completo is not None:
@@ -195,6 +201,11 @@ async def actualizar_paciente(
     if ocupacion is not None: data["ocupacion"] = ocupacion
     if derivador is not None: data["derivador"] = derivador
     if notas_iniciales is not None: data["notas_iniciales"] = notas_iniciales
+    if demanda_vocal_horas is not None and str(demanda_vocal_horas).strip() != "":
+        try:
+            data["demanda_vocal_horas"] = int(float(demanda_vocal_horas))
+        except Exception:
+            pass
     result = _db_update("pacientes", paciente_id, data)
     return JSONResponse(content=result)
 
@@ -665,6 +676,14 @@ async def actualizar_turno(
     modalidad: str = Form(None),
     meet_link: str = Form(None),
     motivo: str = Form(None),
+    fecha_hora: str = Form(None),
+    duracion_min: int = Form(None),
+    tipo: str = Form(None),
+    user_id: str = Form(None),
+    sincronizar_google: bool = Form(False),
+    zoom_meeting_id: str = Form(None),
+    zoom_password: str = Form(None),
+    zoom_join_url: str = Form(None),
 ):
     data = {}
     if estado is not None: data["estado"] = estado
@@ -672,8 +691,75 @@ async def actualizar_turno(
     if modalidad is not None: data["modalidad"] = modalidad.upper()
     if meet_link is not None: data["meet_link"] = meet_link
     if motivo is not None: data["motivo"] = motivo
-    result = _db_update("turnos", turno_id, data)
-    return JSONResponse(content=result)
+    if fecha_hora is not None: data["fecha_hora"] = fecha_hora
+    if duracion_min is not None: data["duracion_min"] = duracion_min
+    if tipo is not None: data["tipo"] = tipo
+    if zoom_meeting_id is not None: data["zoom_meeting_id"] = zoom_meeting_id
+    if zoom_password is not None: data["zoom_password"] = zoom_password
+    if zoom_join_url is not None: data["zoom_join_url"] = zoom_join_url
+
+    # Sincronizar cambios con Google Calendar (patch o creación con Meet)
+    if sincronizar_google and user_id and supabase:
+        try:
+            cur = supabase.table("turnos").select("*").eq("id", turno_id).execute()
+            row = (cur.data or [{}])[0]
+            merged = {**row, **data}
+            google_event_id = merged.get("google_event_id")
+            mod = (merged.get("modalidad") or "PRESENCIAL").upper()
+            fh = merged.get("fecha_hora", "")
+            try:
+                s_dt = datetime.fromisoformat(str(fh).replace("Z", "+00:00"))
+                e_dt = s_dt + timedelta(minutes=int(merged.get("duracion_min") or 45))
+            except Exception:
+                s_dt = e_dt = None
+            p_nombre, p_email = "Paciente", ""
+            if merged.get("paciente_id"):
+                pr = supabase.table("pacientes").select("nombre_completo, email")\
+                    .eq("id", merged["paciente_id"]).execute()
+                if pr.data:
+                    p_nombre = pr.data[0].get("nombre_completo", "Paciente")
+                    p_email = pr.data[0].get("email", "")
+            summary = f"Atención Vocal: {p_nombre}"
+            desc = (f"Consulta Fonoaudiológica - VocalisLab Pro.\n"
+                    f"Modalidad: {mod}\nMotivo: {merged.get('motivo', '')}\n"
+                    f"{merged.get('notas', '')}").strip()
+            from google_calendar import update_calendar_event, create_calendar_event
+            if google_event_id and s_dt:
+                g_resp = await update_calendar_event(
+                    event_id=google_event_id, user_id=user_id,
+                    summary=summary, description=desc,
+                    start_datetime=s_dt.isoformat(), end_datetime=e_dt.isoformat(),
+                )
+                g_data = json.loads(g_resp.body.decode()) if hasattr(g_resp, "body") else {}
+                if not g_data.get("ok"):
+                    print(f"[api_clinica] Patch Google falló, se recrea evento: {g_data}")
+                    google_event_id = None
+            if not google_event_id and s_dt:
+                g_resp = await create_calendar_event(
+                    user_id=user_id, summary=summary, description=desc,
+                    start_datetime=s_dt.isoformat(), end_datetime=e_dt.isoformat(),
+                    attendee_email=p_email, modalidad=mod,
+                    motivo=merged.get("motivo", ""),
+                )
+                g_data = json.loads(g_resp.body.decode()) if hasattr(g_resp, "body") else {}
+                if g_data.get("ok"):
+                    data["google_event_id"] = g_data.get("google_event_id")
+                    if g_data.get("meet_link"):
+                        data["meet_link"] = g_data.get("meet_link")
+        except Exception as e:
+            print(f"[api_clinica] No se pudo sincronizar edición con Google: {e}")
+
+    # Update tolerante: si las columnas zoom_* aún no existen en Supabase, quitarlas y reintentar
+    for _ in range(4):
+        try:
+            result = _db_update("turnos", turno_id, data)
+            return JSONResponse(content=result)
+        except Exception as e_upd:
+            col = _missing_column(str(e_upd))
+            if col and col in data:
+                data.pop(col, None)
+                continue
+            raise
 
 
 @router.delete("/api/turnos/{turno_id}")

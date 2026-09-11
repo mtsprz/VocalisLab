@@ -21,8 +21,14 @@ export default function AnalisisModule({ pacienteId }: Props) {
   const [step, setStep] = useState<'capture' | 'analyzing' | 'review' | 'editor'>('capture');
   const [recordingVocal, setRecordingVocal] = useState(false);
   const [recordingHabla, setRecordingHabla] = useState(false);
+  const [recordingHabla2, setRecordingHabla2] = useState(false);
   const [audioBlobVocal, setAudioBlobVocal] = useState<Blob | null>(null);
   const [audioBlobHabla, setAudioBlobHabla] = useState<Blob | null>(null);
+  const [audioBlobHabla2, setAudioBlobHabla2] = useState<Blob | null>(null);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>(
+    () => localStorage.getItem('vocalislab_audio_device') || ''
+  );
 
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
@@ -61,6 +67,10 @@ export default function AnalisisModule({ pacienteId }: Props) {
     setError('');
     setAudioBlobVocal(null);
     setAudioBlobHabla(null);
+    setAudioBlobHabla2(null);
+    setRecordingVocal(false);
+    setRecordingHabla(false);
+    setRecordingHabla2(false);
     aplicadaRef.current = -1;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pacienteId]);
@@ -89,32 +99,69 @@ export default function AnalisisModule({ pacienteId }: Props) {
     'Sintetizando cross-check bioacústico...', 'Análisis completado.',
   ];
 
-  const startRecording = async (type: 'vocal' | 'habla') => {
+  const startRecording = async (type: 'vocal' | 'habla' | 'habla2') => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Audio crudo para bioacústica: sin cancelación de eco, sin supresión
+      // de ruido y sin ganancia automática (alteran armónicos y amplitud)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+          channelCount: 1,
+          sampleRate: 44100,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        } as MediaTrackConstraints,
+      });
+      // Re-listar dispositivos ahora con etiquetas (el permiso ya fue otorgado)
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        setAudioDevices(devs.filter(d => d.kind === 'audioinput'));
+      } catch {}
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       chunksRef.current = [];
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         if (type === 'vocal') setAudioBlobVocal(blob);
-        else setAudioBlobHabla(blob);
+        else if (type === 'habla') setAudioBlobHabla(blob);
+        else setAudioBlobHabla2(blob);
         stream.getTracks().forEach(t => t.stop());
       };
       mr.start();
       mediaRecorderRef.current = mr;
       if (type === 'vocal') setRecordingVocal(true);
-      else setRecordingHabla(true);
+      else if (type === 'habla') setRecordingHabla(true);
+      else setRecordingHabla2(true);
       setError('');
     } catch {
-      setError('No se pudo acceder al micrófono para la grabación.');
+      setError('No se pudo acceder al micrófono seleccionado para la grabación.');
     }
   };
 
-  const stopRecording = (type: 'vocal' | 'habla') => {
+  const stopRecording = (type: 'vocal' | 'habla' | 'habla2') => {
     mediaRecorderRef.current?.stop();
     if (type === 'vocal') setRecordingVocal(false);
-    else setRecordingHabla(false);
+    else if (type === 'habla') setRecordingHabla(false);
+    else setRecordingHabla2(false);
+  };
+
+  // Listar micrófonos / placas USB disponibles
+  useEffect(() => {
+    (async () => {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        setAudioDevices(devs.filter(d => d.kind === 'audioinput'));
+      } catch {}
+    })();
+  }, []);
+
+  const pickDevice = (id: string) => {
+    setSelectedDeviceId(id);
+    try {
+      if (id) localStorage.setItem('vocalislab_audio_device', id);
+      else localStorage.removeItem('vocalislab_audio_device');
+    } catch {}
   };
 
   const analyze = async () => {
@@ -134,8 +181,9 @@ export default function AnalisisModule({ pacienteId }: Props) {
     try {
       const fd = new FormData();
       fd.append('audio_vocal', audioBlobVocal, 'vocal_a.webm');
-      if (audioBlobHabla) {
-        fd.append('audio_habla', audioBlobHabla, 'habla_continua.webm');
+      const hablaBlob = audioBlobHabla || audioBlobHabla2;
+      if (hablaBlob) {
+        fd.append('audio_habla', hablaBlob, 'habla_continua.webm');
       }
       fd.append('grbas', JSON.stringify(grbas));
       fd.append('rasati', JSON.stringify(rasati));
@@ -404,7 +452,35 @@ export default function AnalisisModule({ pacienteId }: Props) {
             Grabación de Muestra Vocal Sustentada /a/ y Habla Continua
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Selector de dispositivo de entrada */}
+          <div className="flex flex-col md:flex-row md:items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              Dispositivo de entrada:
+            </label>
+            <select
+              value={selectedDeviceId}
+              onChange={e => pickDevice(e.target.value)}
+              className="flex-1 px-3 py-2 bg-white dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            >
+              <option className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100" value="">
+                Predeterminado del sistema
+              </option>
+              {audioDevices.map(d => (
+                <option
+                  key={d.deviceId}
+                  className="bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100"
+                  value={d.deviceId}
+                >
+                  {d.label || `Micrófono ${d.deviceId.slice(0, 8)}…`}
+                </option>
+              ))}
+            </select>
+            <span className="text-[10px] text-gray-400">
+              Audio crudo 44.1 kHz mono, sin filtros (placa USB recomendada)
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Muestra Vocal Sustentada /a/ */}
             <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 space-y-3">
               <div className="flex items-center justify-between">
@@ -470,6 +546,50 @@ export default function AnalisisModule({ pacienteId }: Props) {
                     className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white font-bold text-xs rounded-xl animate-pulse active:scale-95"
                   >
                     <Square size={14} /> Detener
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Habla Continua Secundaria / Muestra Alternativa */}
+            <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-800 dark:text-white">
+                  Muestra 3: Habla Alternativa
+                </span>
+                {audioBlobHabla2 && (
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 size={10} /> Lista
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                Segunda lectura o muestra de reserva (se usa si la muestra 2 falla).
+              </p>
+
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                {!recordingHabla2 ? (
+                  <button
+                    onClick={() => startRecording('habla2')}
+                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl transition-all active:scale-95 shadow-md shadow-teal-600/20"
+                  >
+                    <Mic size={14} /> Grabar Alternativa
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => stopRecording('habla2')}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white font-bold text-xs rounded-xl animate-pulse active:scale-95"
+                  >
+                    <Square size={14} /> Detener
+                  </button>
+                )}
+                {audioBlobHabla2 && (
+                  <button
+                    onClick={() => { setAudioBlobHabla(audioBlobHabla2); }}
+                    className="px-3 py-2 rounded-xl border border-teal-500/40 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-500/10 transition-all"
+                    title="Usar esta muestra como habla continua del análisis"
+                  >
+                    Usar como habla continua
                   </button>
                 )}
               </div>
@@ -602,6 +722,8 @@ export default function AnalisisModule({ pacienteId }: Props) {
             motivo: clinical.data.anamnesis?.motivo_consulta || '',
             derivador: '',
           }}
+          pacienteTelefono={clinical.data.paciente?.telefono || ''}
+          pacienteEmail={clinical.data.paciente?.email || ''}
           metrics={{
             f0_mean: m.f0_mean, f0_min: m.f0_min, f0_max: m.f0_max,
             jitter_pct: m.jitter_pct, shimmer_pct: m.shimmer_pct,

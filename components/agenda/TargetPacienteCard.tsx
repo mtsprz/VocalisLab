@@ -21,6 +21,9 @@ interface TurnoData {
   notas?: string;
   meet_link?: string;
   google_event_id?: string;
+  zoom_meeting_id?: string;
+  zoom_password?: string;
+  zoom_join_url?: string;
   estado?: string;
 }
 
@@ -30,6 +33,8 @@ interface Props {
   onSelectPaciente: (pacienteId: string) => void;
   onActualizarEstado?: (turnoId: string, nuevoEstado: string) => void;
   onEliminarTurno?: (turnoId: string) => void;
+  onEditarTurno?: (turno: TurnoData) => void;
+  onZoom?: (turno: TurnoData) => void;
 }
 
 export default function TargetPacienteCard({
@@ -38,6 +43,8 @@ export default function TargetPacienteCard({
   onSelectPaciente,
   onActualizarEstado,
   onEliminarTurno,
+  onEditarTurno,
+  onZoom,
 }: Props) {
   const paciente = turno.pacientes;
   const pId = turno.paciente_id || paciente?.id;
@@ -89,7 +96,7 @@ export default function TargetPacienteCard({
         </div>
       </div>
 
-      {/* Meet Link Button (si es virtual) */}
+      {/* Meet Link Button (si es virtual con Google Meet) */}
       {esVirtual && turno.meet_link && (
         <div className="mt-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -109,6 +116,39 @@ export default function TargetPacienteCard({
           </a>
         </div>
       )}
+
+      {/* Zoom Teleconsulta (audio profesional) */}
+      <div className="mt-3 flex items-center gap-2">
+        {turno.zoom_join_url ? (
+          <a
+            href={turno.zoom_join_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+          >
+            <Video size={14} /> Unirse por Zoom
+          </a>
+        ) : (
+          onZoom && (
+            <button
+              onClick={() => onZoom(turno)}
+              className="flex-1 px-3 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+              title="Crear sala Zoom con audio profesional (sin filtros)"
+            >
+              <Video size={14} /> Crear sala Zoom
+            </button>
+          )
+        )}
+        {onZoom && turno.zoom_join_url && (
+          <button
+            onClick={() => onZoom(turno)}
+            className="px-3 py-2 rounded-xl border border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-500/10 transition-all"
+            title="Abrir panel de teleconsulta (guía de audio, notas)"
+          >
+            Panel
+          </button>
+        )}
+      </div>
 
       {/* Patient info contact */}
       {(paciente?.telefono || paciente?.email) && (
@@ -167,6 +207,15 @@ export default function TargetPacienteCard({
 
         {/* State select & delete */}
         <div className="flex items-center gap-2">
+          {onEditarTurno && (
+            <button
+              onClick={() => onEditarTurno(turno)}
+              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 px-2 py-1 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-lg transition-colors"
+              title="Editar cita (fecha, hora, modalidad) y sincronizar con Google"
+            >
+              Editar
+            </button>
+          )}
           {onActualizarEstado && (
             <select
               value={turno.estado || 'programado'}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind } from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind, MessageCircle, Mail, X, Send } from 'lucide-react';
+import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -293,6 +294,7 @@ const DEFAULT_SECTIONS: Section[] = [
 ];
 
 export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Props) {
+  const clinical = useClinical();
   const [sections, setSections] = useState<Section[]>(DEFAULT_SECTIONS);
   const [presets, setPresets] = useState<Preset[]>(DEFAULT_PRESETS);
   const [selectedPreset, setSelectedPreset] = useState('');
@@ -303,6 +305,12 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailBody, setEmailBody] = useState('');
+
+  const pacienteNombre = clinical.data.paciente?.nombre_completo || '';
+  const pacienteTelefono = (clinical.data.paciente?.telefono || '').replace(/\D/g, '');
+  const pacienteEmail = clinical.data.paciente?.email || '';
 
   useEffect(() => {
     if (initialExerciseIds && initialExerciseIds.length > 0) {
@@ -402,6 +410,23 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     a.click();
   };
 
+  const mensajeClinico = () => {
+    const nombre = pacienteNombre || 'paciente';
+    return `Hola ${nombre}, te comparto tu ${titulo} (${sesiones} sesiones) de VocalisLab Pro.\n\n${notas ? `Indicaciones: ${notas}\n\n` : ''}Descargá el PDF adjunto en este chat/correo y realizá los ejercicios según la dosificación indicada. Ante cualquier duda o molestia, escribime.\n\n— Servicio de Fonoaudiología Vocal`;
+  };
+
+  const compartirWhatsApp = () => {
+    const base = pacienteTelefono
+      ? `https://wa.me/${pacienteTelefono}?text=`
+      : `https://api.whatsapp.com/send?text=`;
+    window.open(base + encodeURIComponent(mensajeClinico()), '_blank');
+  };
+
+  const abrirEmailModal = () => {
+    setEmailBody(mensajeClinico());
+    setShowEmailModal(true);
+  };
+
   return (
     <div className="max-w-6xl space-y-6">
       {/* Header Banner */}
@@ -427,12 +452,28 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             {generating ? 'Generando PDF...' : `Generar Cuadernillo (${selectedExercises.length})`}
           </button>
           {pdfUrl && (
-            <button
-              onClick={downloadPdf}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
-            >
-              <Download size={16} /> Descargar PDF
-            </button>
+            <>
+              <button
+                onClick={downloadPdf}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
+              >
+                <Download size={16} /> Descargar PDF
+              </button>
+              <button
+                onClick={compartirWhatsApp}
+                className="px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#1fb857] text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-green-600/30 transition-all"
+                title={pacienteTelefono ? `Enviar a ${pacienteTelefono}` : 'Compartir por WhatsApp'}
+              >
+                <MessageCircle size={16} /> WhatsApp
+              </button>
+              <button
+                onClick={abrirEmailModal}
+                className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-sky-600/30 transition-all"
+                title={pacienteEmail ? `Enviar a ${pacienteEmail}` : 'Enviar por correo'}
+              >
+                <Mail size={16} /> Email
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -602,6 +643,58 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
           </button>
         </div>
       </div>
+
+      {/* Modal envío por Email */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#111827] rounded-3xl border border-gray-200 dark:border-white/10 w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                <Mail size={16} className="text-sky-500" /> Enviar cuadernillo por correo
+              </h3>
+              <button onClick={() => setShowEmailModal(false)} className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-3 text-xs">
+              <div>
+                <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                  Destinatario{pacienteEmail ? ` (${pacienteEmail})` : ' (sin correo registrado)'}
+                </label>
+                <textarea
+                  value={emailBody}
+                  onChange={e => setEmailBody(e.target.value)}
+                  rows={8}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                Recordá adjuntar el PDF descargado al correo antes de enviarlo.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    const su = encodeURIComponent(`Cuadernillo Terapéutico Vocal — ${pacienteNombre || ''}`.trim());
+                    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(pacienteEmail)}&su=${su}&body=${encodeURIComponent(emailBody)}`, '_blank');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold text-xs flex items-center gap-2"
+                >
+                  <Send size={14} /> Abrir Gmail
+                </button>
+                <button
+                  onClick={() => {
+                    const su = encodeURIComponent(`Cuadernillo Terapéutico Vocal — ${pacienteNombre || ''}`.trim());
+                    window.location.href = `mailto:${encodeURIComponent(pacienteEmail)}?subject=${su}&body=${encodeURIComponent(emailBody)}`;
+                  }}
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-2"
+                >
+                  <Mail size={14} /> App de correo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

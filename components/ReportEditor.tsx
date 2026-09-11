@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit3, Save, Undo2, Redo2, Eye, Lock, Unlock, User, Clock, FileText } from 'lucide-react';
+import { Edit3, Save, Undo2, Redo2, Eye, Lock, Unlock, User, Clock, FileText, MessageCircle, Mail } from 'lucide-react';
 
 interface ReportField {
   key: string;
@@ -24,6 +24,8 @@ interface ReportEditorProps {
   voxPlotData?: any;
   onSave: (fields: ReportField[], author: string) => void;
   onExport: (fields: ReportField[]) => void;
+  pacienteTelefono?: string;
+  pacienteEmail?: string;
 }
 
 const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
@@ -64,7 +66,7 @@ function buildFields(patientData: any, metrics: any, aiText: string, voxPlotData
   return fields;
 }
 
-export default function ReportEditor({ patientData, metrics, aiText, voxPlotData, onSave, onExport }: ReportEditorProps) {
+export default function ReportEditor({ patientData, metrics, aiText, voxPlotData, onSave, onExport, pacienteTelefono, pacienteEmail }: ReportEditorProps) {
   const [fields, setFields] = useState<ReportField[]>(() => buildFields(patientData, metrics, aiText, voxPlotData));
   const [history, setHistory] = useState<ReportField[][]>([fields]);
   const [historyIdx, setHistoryIdx] = useState(0);
@@ -215,6 +217,38 @@ export default function ReportEditor({ patientData, metrics, aiText, voxPlotData
           <FileText className="w-3.5 h-3.5" /> Exportar PDF final
         </button>
       </div>
+
+      {(pacienteTelefono || pacienteEmail) && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const digits = (pacienteTelefono || '').replace(/\D/g, '');
+              const msg = `Hola ${patientData?.nombre || 'paciente'}, te comparto tu Informe de Evaluación Vocal de VocalisLab Pro. Te adjunto el PDF por este medio. Ante cualquier duda escribime.`;
+              const url = digits
+                ? `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`
+                : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+              window.open(url, '_blank');
+            }}
+            className="flex-1 py-2.5 bg-[#25D366] hover:bg-[#1fb857] rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp{pacienteTelefono ? ` (${pacienteTelefono})` : ''}
+          </button>
+          <button
+            onClick={() => {
+              const su = encodeURIComponent(`Informe de Evaluación Vocal — ${patientData?.nombre || ''}`.trim());
+              const body = encodeURIComponent(`Hola ${patientData?.nombre || 'paciente'},\n\nTe envío tu informe de evaluación vocal de VocalisLab Pro (adjunto en este correo).\n\nSaludos.`);
+              if (pacienteEmail) {
+                window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(pacienteEmail)}&su=${su}&body=${body}`, '_blank');
+              } else {
+                window.location.href = `mailto:?subject=${su}&body=${body}`;
+              }
+            }}
+            className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            <Mail className="w-3.5 h-3.5" /> Email{pacienteEmail ? ` (${pacienteEmail})` : ''}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
