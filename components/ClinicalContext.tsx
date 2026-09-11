@@ -22,6 +22,11 @@ interface ClinicalContextType {
   completedSteps: string[];
   markStep: (step: string) => void;
   cargarPaciente: (pacienteId: string) => Promise<void>;
+  seleccionarPaciente: (pacienteStub: any) => void;
+  resetClinica: () => void;
+  /** Token que aumenta cada vez que termina una hidratación: los módulos
+   *  recargan sus formularios locales cuando cambia. */
+  cargaToken: number;
 }
 
 const ClinicalContext = createContext<ClinicalContextType | null>(null);
@@ -132,6 +137,7 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
     } catch {}
     return [];
   });
+  const [cargaToken, setCargaToken] = useState(0);
   const dataRef = useRef(data);
   dataRef.current = data;
 
@@ -158,9 +164,25 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
   const setAcustica = (d: any) => setData(prev => ({ ...prev, acustica: mergeState(prev.acustica, d) }));
   const setRecomendacion = (d: any) => setData(prev => ({ ...prev, recomendacion: d }));
 
+  /** Limpia todo el estado clínico (evita contaminar entre pacientes). */
+  const resetClinica = () => {
+    setData(DEFAULT_DATA);
+    setCompletedSteps([]);
+    try {
+      localStorage.removeItem('vocalislab_completed_steps');
+    } catch {}
+  };
+
+  /** Selección atómica: resetea, fija stub del paciente y marca el paso. */
+  const seleccionarPaciente = (pacienteStub: any) => {
+    setData({ ...DEFAULT_DATA, paciente: mergeState(DEFAULT_DATA.paciente, pacienteStub) });
+    markStep('pacientes');
+  };
+
   /** Hidrata todo el estado clínico desde el backend para un paciente. */
   const cargarPaciente = async (pacienteId: string) => {
     if (!pacienteId) return;
+    resetClinica();
     try {
       const rp = await fetch(`${BACKEND_URL}/api/pacientes/${pacienteId}`);
       if (rp.ok) {
@@ -211,6 +233,9 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
             tme_o: ev.tme_o,
             tme_s: ev.tme_s,
             indice_so: ev.indice_so,
+            observaciones: ev.observaciones || '',
+            f0_conversacional_hz: ev.f0_conversacional_hz,
+            autopercepcion_vocal: ev.autopercepcion_vocal,
           });
           if (ev.riesgo_vocal_score != null) {
             setRiesgoVocal({
@@ -236,13 +261,15 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch {}
+    setCargaToken(t => t + 1);
   };
 
   return (
     <ClinicalContext.Provider value={{
       data, setPaciente, setAnamnesis, setRiesgoVocal,
       setEscalas, setAcustica, setRecomendacion,
-      completedSteps, markStep, cargarPaciente
+      completedSteps, markStep, cargarPaciente,
+      seleccionarPaciente, resetClinica, cargaToken
     }}>
       {children}
     </ClinicalContext.Provider>

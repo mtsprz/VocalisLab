@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Loader2, CheckCircle2, ArrowRight, Shield, Activity, FileText, Send, UserCheck, RefreshCw } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
+import { calcularEdad } from './clinicalUtils';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -94,7 +95,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
         const data = await r.json();
         setPacienteData({
           nombre_completo: data.nombre_completo || 'Paciente',
-          edad: data.fecha_nacimiento ? (new Date().getFullYear() - new Date(data.fecha_nacimiento).getFullYear()) : 35,
+          edad: calcularEdad(data.fecha_nacimiento) ?? 35,
           sexo: data.sexo || 'Femenino',
           ocupacion: data.ocupacion || 'Profesional de la voz',
           demanda_vocal_horas: data.demanda_vocal_horas || 4

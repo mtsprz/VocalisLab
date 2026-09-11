@@ -222,7 +222,7 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                   <td className="px-4 py-3.5">
                     <button
                       onClick={() => {
-                        clinical.setPaciente({
+                        clinical.seleccionarPaciente({
                           id: p.id,
                           nombre_completo: p.nombre_completo,
                           dni: p.dni,
@@ -231,7 +231,6 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                           ocupacion: p.ocupacion,
                           demanda_vocal_horas: 4,
                         });
-                        clinical.markStep('pacientes');
                         // Hidratar anamnesis + escalas + acústica desde el backend
                         clinical.cargarPaciente(p.id).catch(() => {});
                         onSelectPaciente(p.id);

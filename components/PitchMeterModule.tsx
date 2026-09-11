@@ -37,6 +37,17 @@ export default function PitchMeterModule() {
   const [currentFreq, setCurrentFreq] = useState<number | null>(null);
   const [pitchHistory, setHistory] = useState<number[]>([]);
   const [sexo, setSexo] = useState(clinical.data.paciente.sexo || 'Femenino');
+  const pacienteRef = useRef(clinical.data.paciente?.id);
+
+  // Sincronizar sexo al cambiar de paciente (sin pisar la selección manual)
+  useEffect(() => {
+    const pid = clinical.data.paciente?.id;
+    if (pid !== pacienteRef.current) {
+      pacienteRef.current = pid;
+      if (clinical.data.paciente?.sexo) setSexo(clinical.data.paciente.sexo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinical.data.paciente]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);

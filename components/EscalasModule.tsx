@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Save, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, BarChart2, Shield } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 
@@ -177,6 +177,54 @@ export default function EscalasModule({ pacienteId }: Props) {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [evolucion, setEvolucion] = useState<any[]>([]);
+
+  const blankScores = () => {
+    const initialRisk: Record<string, number> = {};
+    for (let i = 1; i <= 69; i++) {
+      initialRisk[`R${i}`] = 0;
+    }
+    return {
+      GRBAS: { G: 0, R: 0, B: 0, A: 0, S: 0 },
+      RASATI: { R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 },
+      VHI10: { V1: 0, V2: 0, V3: 0, V4: 0, V5: 0, V6: 0, V7: 0, V8: 0, V9: 0, V10: 0 },
+      RiesgoVocal: initialRisk,
+      TME: { TME_O: 0, TME_S: 0 },
+    };
+  };
+
+  const aplicadaRef = useRef(-1);
+
+  // Reset total al cambiar de paciente
+  useEffect(() => {
+    setScores(blankScores());
+    setObservaciones('');
+    setSaveError('');
+    setSaved(false);
+    aplicadaRef.current = -1;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacienteId]);
+
+  // Hidrata una vez por hidratación del contexto (última evaluación del backend)
+  useEffect(() => {
+    if (clinical.cargaToken === aplicadaRef.current) return;
+    if (pacienteId && clinical.data.paciente?.id !== pacienteId) return;
+    aplicadaRef.current = clinical.cargaToken;
+    const esc = clinical.data.escalas || {};
+    const rv = clinical.data.riesgoVocal || {};
+    setScores(prev => ({
+      ...blankScores(),
+      GRBAS: { ...prev.GRBAS, ...(esc.grbas || {}) },
+      RASATI: { ...prev.RASATI, ...(esc.rasati || {}) },
+      VHI10: { ...prev.VHI10, ...(esc.vhi10_detalle || {}) },
+      RiesgoVocal: { ...prev.RiesgoVocal, ...(rv.detalle || {}) },
+      TME: {
+        TME_O: esc.tme_o ?? esc.tme ?? 0,
+        TME_S: esc.tme_s ?? esc.tme_segundos ?? 0,
+      },
+    }));
+    if (esc.observaciones) setObservaciones(esc.observaciones);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinical.cargaToken]);
 
   // Historial de evaluaciones para comparar basal vs. reevaluación (sesión 8)
   useEffect(() => {

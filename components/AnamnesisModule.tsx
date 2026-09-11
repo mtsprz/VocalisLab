@@ -119,16 +119,63 @@ export default function AnamnesisModule({ pacienteId }: Props) {
     } catch {}
   };
 
-  // Sync state if clinical context changes externally
+  // Reset total al cambiar de paciente (evita ver datos del anterior)
+  const resetFormulario = () => {
+    setMotivoConsulta('');
+    setDiagnosticoOrl('');
+    setMetodoExploracion('Nasal');
+    setResumenClinico('');
+    setAntecedentesSalud('');
+    setAutopercepcionVoz(null);
+    setTranscripcion('');
+    setAudioBlob(null);
+    setF0Stats(null);
+    setError('');
+    setSintomas({
+      carraspeo_frecuente: false,
+      fatiga_vocal: false,
+      dolor_al_hablar: false,
+      sensacion_cuerpo_extrano: false,
+      sequedad_laringea: false,
+      perdida_de_agudos: false,
+      disfonia_intermitente: false,
+    });
+    setFactoresRiesgo({
+      tabaquismo: false,
+      reflujo_laringofaringeo: false,
+      consumo_alto_cafe_mate: false,
+      ambiente_ruidoso_polvo: false,
+      reposo_insuficiente: false,
+      falta_hidratacion: false,
+    });
+  };
+
   useEffect(() => {
-    if (clinical.data.anamnesis.motivo_consulta) setMotivoConsulta(clinical.data.anamnesis.motivo_consulta);
-    if (clinical.data.anamnesis.diagnostico_orl) setDiagnosticoOrl(clinical.data.anamnesis.diagnostico_orl);
-    if (clinical.data.anamnesis.resumen_clinico) setResumenClinico(clinical.data.anamnesis.resumen_clinico);
-    if (clinical.data.anamnesis.sintomas) setSintomas(prev => ({ ...prev, ...clinical.data.anamnesis.sintomas }));
-    if (clinical.data.anamnesis.factores_riesgo) setFactoresRiesgo(prev => ({ ...prev, ...clinical.data.anamnesis.factores_riesgo }));
-    if (clinical.data.anamnesis.antecedentes_salud) setAntecedentesSalud(clinical.data.anamnesis.antecedentes_salud);
-    if (clinical.data.anamnesis.autopercepcion_voz != null) setAutopercepcionVoz(clinical.data.anamnesis.autopercepcion_voz);
-  }, [clinical.data.anamnesis]);
+    resetFormulario();
+    aplicadaRef.current = -1;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacienteId]);
+
+  // Hidrata el formulario una vez por hidratación del contexto
+  const aplicadaRef = useRef(-1);
+  useEffect(() => {
+    if (clinical.cargaToken === aplicadaRef.current) return;
+    if (pacienteId && clinical.data.paciente?.id !== pacienteId) return;
+    aplicadaRef.current = clinical.cargaToken;
+    const a = clinical.data.anamnesis || {};
+    setMotivoConsulta(a.motivo_consulta || '');
+    setDiagnosticoOrl(a.diagnostico_orl || '');
+    if (a.metodo_exploracion) setMetodoExploracion(a.metodo_exploracion);
+    setResumenClinico(a.resumen_clinico || '');
+    setAntecedentesSalud(a.antecedentes_salud || '');
+    setAutopercepcionVoz(a.autopercepcion_voz ?? null);
+    setTranscripcion(a.transcripcion || '');
+    if (a.sintomas) setSintomas(prev => ({ ...prev, ...a.sintomas }));
+    if (a.factores_riesgo) setFactoresRiesgo(prev => ({ ...prev, ...a.factores_riesgo }));
+    if (clinical.data.paciente?.demanda_vocal_horas) {
+      setDemandaVocalHoras(clinical.data.paciente.demanda_vocal_horas);
+    }
+  }, [clinical.cargaToken]);
 
   // Audio recording timer
   useEffect(() => {

@@ -6,6 +6,7 @@ import {
 import ClinicalReviewScreen from './ClinicalReviewScreen';
 import ReportEditor from './ReportEditor';
 import ExternalAnalysisUpload from './ExternalAnalysisUpload';
+import { calcularEdad } from './clinicalUtils';
 import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -34,11 +35,10 @@ export default function AnalisisModule({ pacienteId }: Props) {
   const [vhi10, setVhi10] = useState(clinical.data.escalas.vhi10_total || 0);
   const [tmeSec, setTmeSec] = useState(clinical.data.escalas.tme_segundos || 0);
 
-  const [edad, setEdad] = useState(
-    clinical.data.paciente.fecha_nacimiento
-      ? String(new Date().getFullYear() - new Date(clinical.data.paciente.fecha_nacimiento).getFullYear())
-      : '40'
-  );
+  const [edad, setEdad] = useState(() => {
+    const e = calcularEdad(clinical.data.paciente.fecha_nacimiento);
+    return e != null ? String(e) : '40';
+  });
   const [sexo, setSexo] = useState(clinical.data.paciente.sexo || 'Femenino');
   const [profNombre, setProfNombre] = useState('Lic. Fonoaudiólogo/a');
   const [profTitulo, setProfTitulo] = useState('Especialista en Voz Bioacústica');
@@ -49,14 +49,36 @@ export default function AnalisisModule({ pacienteId }: Props) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  // Update inherited scales when clinical context changes
+  const aplicadaRef = useRef(-1);
+
+  // Reset total al cambiar de paciente + hidratar una vez por carga del contexto
   useEffect(() => {
-    if (clinical.data.escalas.grbas) setGrbas(clinical.data.escalas.grbas);
-    if (clinical.data.escalas.rasati) setRasati(clinical.data.escalas.rasati);
-    if (clinical.data.escalas.vhi10_total) setVhi10(clinical.data.escalas.vhi10_total);
-    if (clinical.data.escalas.tme_segundos) setTmeSec(clinical.data.escalas.tme_segundos);
-    if (clinical.data.paciente.sexo) setSexo(clinical.data.paciente.sexo);
-  }, [clinical.data.escalas, clinical.data.paciente]);
+    setGrbas({ G: 0, R: 0, B: 0, A: 0, S: 0 });
+    setRasati({ R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 });
+    setVhi10(0);
+    setTmeSec(0);
+    setResult(null);
+    setError('');
+    setAudioBlobVocal(null);
+    setAudioBlobHabla(null);
+    aplicadaRef.current = -1;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacienteId]);
+
+  useEffect(() => {
+    if (clinical.cargaToken === aplicadaRef.current) return;
+    if (pacienteId && clinical.data.paciente?.id !== pacienteId) return;
+    aplicadaRef.current = clinical.cargaToken;
+    const esc = clinical.data.escalas || {};
+    if (esc.grbas) setGrbas(esc.grbas);
+    if (esc.rasati) setRasati(esc.rasati);
+    if (esc.vhi10_total != null) setVhi10(esc.vhi10_total);
+    if (esc.tme_segundos != null) setTmeSec(esc.tme_segundos);
+    if (clinical.data.paciente?.sexo) setSexo(clinical.data.paciente.sexo);
+    const e = calcularEdad(clinical.data.paciente?.fecha_nacimiento);
+    if (e != null) setEdad(String(e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinical.cargaToken]);
 
   const STAGES = [
     'Validando señal de audio...', 'Iniciando servidor de análisis Praat...',

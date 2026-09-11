@@ -66,7 +66,7 @@ def _get_styles():
         leading=16,
     ))
     styles.add(ParagraphStyle(
-        'BodyText',
+        'CuadBody',
         parent=styles['Normal'],
         fontSize=10,
         textColor=DARK_TEXT,
@@ -201,7 +201,7 @@ def _build_exercise(styles, exercise, idx):
 
     desc = exercise.get("description", "")
     if desc:
-        elements.append(Paragraph(desc, styles['BodyText']))
+        elements.append(Paragraph(desc, styles['CuadBody']))
 
     steps = exercise.get("steps", [])
     if steps:
@@ -212,7 +212,7 @@ def _build_exercise(styles, exercise, idx):
     phrases = exercise.get("phrases", [])
     if phrases:
         elements.append(Spacer(1, 2 * mm))
-        elements.append(Paragraph("<b>Frases:</b>", styles['BodyText']))
+        elements.append(Paragraph("<b>Frases:</b>", styles['CuadBody']))
         for phrase in phrases:
             elements.append(Paragraph(f"• {phrase}", styles['StepText']))
 
@@ -221,7 +221,7 @@ def _build_exercise(styles, exercise, idx):
         elements.append(Spacer(1, 2 * mm))
         elements.append(Paragraph(
             f"<i>Duración estimada: {duration} minutos</i>",
-            styles['BodyText']
+            styles['CuadBody']
         ))
 
     elements.append(Spacer(1, 3 * mm))
@@ -326,7 +326,7 @@ def generar_cuadernillo_pdf(
         story.append(Paragraph("Notas del Profesional", styles['SectionTitle']))
         story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
         story.append(Spacer(1, 4 * mm))
-        story.append(Paragraph(notas, styles['BodyText']))
+        story.append(Paragraph(notas, styles['CuadBody']))
 
     story.append(Spacer(1, 15 * mm))
     story.append(Paragraph(
