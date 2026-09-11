@@ -497,12 +497,17 @@ async def teleconsulta_estado(turno_id: str, role: str = "host"):
         if turno.get("paciente_id"):
             pr = sb.table("pacientes").select("id, nombre_completo, dni, telefono, email").eq("id", turno["paciente_id"]).limit(1).execute()
             paciente = (pr.data or [{}])[0]
-        sesiones = sb.table("sesiones_teleconsulta").select("id", count="exact").eq("turno_id", turno_id).execute()
+        try:
+            sesiones = sb.table("sesiones_teleconsulta").select("id", count="exact").eq("turno_id", turno_id).execute()
+            sesiones_count = sesiones.count or 0
+        except Exception as e_ses:
+            print(f"[zoom] sesiones_teleconsulta no disponible: {e_ses}")
+            sesiones_count = 0
         out = {
             "ok": True,
             "turno": turno,
             "paciente": paciente,
-            "sesiones_count": sesiones.count or 0,
+            "sesiones_count": sesiones_count,
         }
         if role != "host":
             out["turno"] = {**turno, "zoom_start_url": None}

@@ -24,7 +24,7 @@ interface Props {
  *   del Video SDK); el paciente debe activarlo en el panel de audio de Zoom.
  *   Ver guía en ZoomTeleconsulta.
  */
-export default function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLeave, onJoin }: Props) {
+export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLeave, onJoin }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<any>(null);
   const [status, setStatus] = useState<'cargando' | 'en_llamada' | 'error'>('cargando');
@@ -104,27 +104,35 @@ export default function ZoomEmbedded({ meetingNumber, password, userName, role =
     onLeave?.();
   };
 
+  // El root del SDK queda SIEMPRE vacío para React: el SDK muta ese DOM
+  // directamente (lo vacía al hacer init). Los estados se renderizan como
+  // overlays HERMANOS para que React nunca intente remover nodos del SDK
+  // (evita NotFoundError: removeChild en la reconciliación).
   return (
     <div className="space-y-2">
-      <div
-        ref={rootRef}
-        id="meetingSDKElement"
-        className="w-full min-h-[320px] sm:min-h-[480px] bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden"
-      >
-        {status === 'cargando' && (
-          <div className="flex flex-col items-center justify-center h-[320px] sm:h-[480px] gap-3 text-slate-400">
-            <Loader2 size={28} className="animate-spin text-blue-500" />
-            <p className="text-xs font-semibold">Conectando sala embebida…</p>
-          </div>
-        )}
-        {status === 'error' && (
-          <div className="flex flex-col items-center justify-center h-[320px] sm:h-[480px] gap-3 p-6 text-center">
-            <AlertCircle size={28} className="text-amber-500" />
-            <p className="text-xs font-bold text-slate-200">No se pudo embeber el video</p>
-            <p className="text-[11px] text-slate-400 max-w-sm">{errorMsg}</p>
-            <p className="text-[11px] text-slate-500">
-              Podés unirte igual con el enlace directo de Zoom o la app de escritorio.
-            </p>
+      <div className="relative">
+        <div
+          ref={rootRef}
+          id="meetingSDKElement"
+          className="w-full min-h-[320px] sm:min-h-[480px] bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden"
+        />
+        {status !== 'en_llamada' && (
+          <div className="absolute inset-0 rounded-2xl bg-slate-950/95 flex flex-col items-center justify-center gap-3 p-6 text-center pointer-events-none">
+            {status === 'cargando' ? (
+              <>
+                <Loader2 size={28} className="animate-spin text-blue-500" />
+                <p className="text-xs font-semibold text-slate-400">Conectando sala embebida…</p>
+              </>
+            ) : (
+              <>
+                <AlertCircle size={28} className="text-amber-500" />
+                <p className="text-xs font-bold text-slate-200">No se pudo embeber el video</p>
+                <p className="text-[11px] text-slate-400 max-w-sm">{errorMsg}</p>
+                <p className="text-[11px] text-slate-500">
+                  Podés unirte igual con el enlace directo de Zoom o la app de escritorio.
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -141,3 +149,5 @@ export default function ZoomEmbedded({ meetingNumber, password, userName, role =
     </div>
   );
 }
+
+export default React.memo(ZoomEmbedded);

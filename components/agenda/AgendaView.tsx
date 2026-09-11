@@ -20,9 +20,10 @@ interface Props {
 }
 
 export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconferencia }: Props) {
-  const { user } = useAuth();
+  const { user, logout, login } = useAuth();
   const [turnos, setTurnos] = useState<any[]>([]);
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+  const [googleAuthError, setGoogleAuthError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modalNuevoAbierto, setModalNuevoAbierto] = useState(false);
   const [turnoEditar, setTurnoEditar] = useState<any | null>(null);
@@ -55,6 +56,11 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
         if (r2.ok) {
           const gData = await r2.json();
           setGoogleEvents(gData.events || []);
+          setGoogleAuthError(false);
+        } else if (r2.status === 401) {
+          // Token Google ausente/expirado en el servidor: requiere re-login
+          setGoogleEvents([]);
+          setGoogleAuthError(true);
         }
       } catch {}
     }
@@ -150,9 +156,14 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
             <span className="text-[10px] font-bold tracking-widest uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-full">
               Gestión de Citas Clínicas & Google Calendar
             </span>
-            {user && (
+            {user && !googleAuthError && (
               <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <CheckCircle2 size={10} /> Google Calendar Conectado
+              </span>
+            )}
+            {user && googleAuthError && (
+              <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <AlertCircle size={10} /> Google desconectado
               </span>
             )}
           </div>
@@ -180,6 +191,22 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
           </button>
         </div>
       </div>
+
+      {/* Banner reconexión Google (token ausente/expirado en el servidor) */}
+      {user && googleAuthError && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+            Google Calendar no está sincronizando (sesión expirada o anterior a la configuración).
+            Cerrá sesión y volvé a entrar con Google para regenerar el acceso.
+          </p>
+          <button
+            onClick={() => { logout(); login(); }}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-xs whitespace-nowrap transition-all"
+          >
+            Reconectar Google
+          </button>
+        </div>
+      )}
 
       {/* Control Bar: Selector Formato + Navegación + Filtro Modalidad */}
       <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
