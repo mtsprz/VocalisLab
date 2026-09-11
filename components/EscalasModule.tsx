@@ -175,6 +175,7 @@ export default function EscalasModule({ pacienteId }: Props) {
   const [observaciones, setObservaciones] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Sync escalas data to global clinical context
   useEffect(() => {
@@ -254,6 +255,7 @@ export default function EscalasModule({ pacienteId }: Props) {
   const handleSave = async () => {
     if (!pacienteId) { alert('Seleccioná un paciente primero'); return; }
     setSaving(true);
+    setSaveError('');
     try {
       const fd = new FormData();
       fd.append('paciente_id', pacienteId);
@@ -266,10 +268,16 @@ export default function EscalasModule({ pacienteId }: Props) {
       fd.append('tme_o', String(scores.TME.TME_O || ''));
       fd.append('tme_s', String(scores.TME.TME_S || ''));
       fd.append('observaciones', observaciones);
-      await fetch(`${BACKEND_URL}/api/evaluaciones`, { method: 'POST', body: fd });
+      const r = await fetch(`${BACKEND_URL}/api/evaluaciones`, { method: 'POST', body: fd });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || `Error del servidor (${r.status})`);
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch {}
+    } catch (e: any) {
+      setSaveError(e.message || 'No se pudo guardar la evaluación');
+    }
     setSaving(false);
   };
 
@@ -528,6 +536,7 @@ export default function EscalasModule({ pacienteId }: Props) {
             <Save size={16} /> Guardar Evaluación
           </button>
           {saved && <span className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1 font-medium"><CheckCircle2 size={16} /> Guardado correctamente</span>}
+          {saveError && <span className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1 font-medium"><AlertCircle size={16} /> {saveError}</span>}
           {!pacienteId && <span className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium"><AlertCircle size={16} /> Seleccione un paciente en la barra lateral para guardar</span>}
         </div>
       </div>

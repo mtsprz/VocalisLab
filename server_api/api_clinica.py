@@ -752,20 +752,32 @@ async def debug_status():
             info["tables"][tbl] = {"exists": True, "count": r.count}
         except Exception as e:
             info["tables"][tbl] = {"exists": False, "error": str(e)[:200]}
-    # Prueba de escritura autolimpiante: inserta y borra una fila centinela.
-    # Detecta RLS bloqueando writes aunque los reads pasen.
-    probe: dict = {"insert_ok": False, "delete_ok": False}
-    try:
-        ins = supabase.table("pacientes").insert(
-            {"nombre_completo": "DEBUG_PROBE", "dni": "DEBUG_PROBE_TMP"}
-        ).execute()
-        probe["insert_ok"] = bool(ins.data)
+    # Prueba de escritura autolimpiante por tabla: inserta y borra una fila
+    # centinela. Detecta RLS/constraints que bloquean writes aunque los reads pasen.
+    probe_tests = {
+        "pacientes": ({"nombre_completo": "DEBUG_PROBE", "dni": "DEBUG_PROBE_TMP"}, {"dni": "DEBUG_PROBE_TMP"}),
+        "evaluaciones_clinicas": ({"observaciones": "DEBUG_PROBE"}, {"observaciones": "DEBUG_PROBE"}),
+        "anamnesis": ({"motivo_consulta": "DEBUG_PROBE"}, {"motivo_consulta": "DEBUG_PROBE"}),
+        "analisis_acusticos": ({"modo": "DEBUG_PROBE"}, {"modo": "DEBUG_PROBE"}),
+        "turnos": ({"fecha_hora": "2030-01-01T00:00:00", "motivo": "DEBUG_PROBE"}, {"motivo": "DEBUG_PROBE"}),
+        "usuarios_google": ({"google_id": "DEBUG_PROBE", "email": "debug@probe.local"}, {"google_id": "DEBUG_PROBE"}),
+    }
+    probe: dict = {}
+    for tbl, (payload, delfilter) in probe_tests.items():
+        res: dict = {"insert_ok": False, "delete_ok": False}
         try:
-            supabase.table("pacientes").delete().eq("dni", "DEBUG_PROBE_TMP").execute()
-            probe["delete_ok"] = True
-        except Exception as e_del:
-            probe["delete_error"] = str(e_del)[:200]
-    except Exception as e_ins:
-        probe["insert_error"] = str(e_ins)[:300]
+            ins = supabase.table(tbl).insert(payload).execute()
+            res["insert_ok"] = bool(ins.data)
+            try:
+                q = supabase.table(tbl).delete()
+                for k, v in delfilter.items():
+                    q = q.eq(k, v)
+                q.execute()
+                res["delete_ok"] = True
+            except Exception as e_del:
+                res["delete_error"] = str(e_del)[:200]
+        except Exception as e_ins:
+            res["insert_error"] = str(e_ins)[:300]
+        probe[tbl] = res
     info["write_probe"] = probe
     return JSONResponse(content=info)
