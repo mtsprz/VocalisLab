@@ -33,6 +33,24 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLe
   useEffect(() => {
     let cancelled = false;
 
+    // El SDK puede rechazar el join fuera del await (evento interno).
+    // Convertir el error 3712 en mensaje accionable en vez de spam en consola.
+    const onUnhandled = (ev: PromiseRejectionEvent) => {
+      const r: any = ev.reason;
+      if (r && (r.errorCode === 3712 || /signature is invalid/i.test(String(r.reason || r.message || '')))) {
+        ev.preventDefault();
+        if (!cancelled) {
+          setErrorMsg(
+            'Firma Zoom inválida (error 3712): las credenciales no corresponden a una app Meeting SDK. ' +
+            'En Render, ZOOM_SDK_KEY y ZOOM_SDK_SECRET deben ser el SDK Key y SDK Secret de la app “Meeting SDK” ' +
+            '(Marketplace → Build App → Meeting SDK), NO el Client ID/Secret de la app Server-to-Server.'
+          );
+          setStatus('error');
+        }
+      }
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
     (async () => {
       try {
         // 1. Firma desde el backend
@@ -90,6 +108,7 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLe
 
     return () => {
       cancelled = true;
+      window.removeEventListener('unhandledrejection', onUnhandled);
       try {
         clientRef.current?.leave?.();
       } catch {}

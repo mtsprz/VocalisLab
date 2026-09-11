@@ -23,7 +23,7 @@ interface Props {
  * Si Zoom no está configurado en el servidor, muestra la guía de setup sin romper.
  */
 export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSalaActualizada }: Props) {
-  const [config, setConfig] = useState<{ s2s_configured: boolean } | null>(null);
+  const [config, setConfig] = useState<{ s2s_configured: boolean; sdk_configured?: boolean; advertencias?: string[] } | null>(null);
   const [creando, setCreando] = useState(false);
   const [guardandoNota, setGuardandoNota] = useState(false);
   const [error, setError] = useState('');
@@ -121,6 +121,16 @@ export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSal
                 ZOOM_CLIENT_SECRET de una app Server-to-Server OAuth). Creá la app en Zoom App Marketplace
                 y agregá las variables en Render para habilitar la creación de salas.
               </span>
+            </div>
+          )}
+
+          {config?.advertencias && config.advertencias.length > 0 && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-[11px] font-medium space-y-1">
+              {config.advertencias.map((w, i) => (
+                <p key={i} className="flex items-start gap-2">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5" /> {w}
+                </p>
+              ))}
             </div>
           )}
 

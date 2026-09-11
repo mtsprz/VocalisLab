@@ -142,9 +142,20 @@ async def zoom_config():
     account_id, client_id, client_secret = _s2s_creds()
     sdk_key = os.environ.get("ZOOM_SDK_KEY", "")
     sdk_secret = os.environ.get("ZOOM_SDK_SECRET", "")
+    advertencias = []
+    if sdk_key and client_id and sdk_key == client_id:
+        advertencias.append(
+            "ZOOM_SDK_KEY es idéntico al Client ID Server-to-Server: la firma del Meeting SDK "
+            "será rechazada (error 3712). Creá una app 'Meeting SDK' en el Marketplace y usá su SDK Key/SDK Secret."
+        )
+    if sdk_secret and client_secret and sdk_secret == client_secret:
+        advertencias.append(
+            "ZOOM_SDK_SECRET es idéntico al Client Secret Server-to-Server: la firma será inválida (error 3712)."
+        )
     return JSONResponse(content={
         "s2s_configured": bool(account_id and client_id and client_secret),
         "sdk_configured": bool(sdk_key and sdk_secret),
+        "advertencias": advertencias,
     })
 
 
