@@ -16,8 +16,9 @@ import AnalisisModule from './AnalisisModule';
 import CuadernilloModule from './CuadernilloModule';
 import PitchMeterModule from './PitchMeterModule';
 import RecomendacionIAModule from './RecomendacionIAModule';
+import VideoconferenciaModule from './VideoconferenciaModule';
 
-type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo';
+type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia';
 
 const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -38,6 +39,7 @@ function AppInner() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
   const [initialExerciseIds, setInitialExerciseIds] = useState<string[]>([]);
+  const [videoconfTurno, setVideoconfTurno] = useState<any | null>(null);
 
   // Restaurar último paciente tras refresh e hidratar desde backend
   useEffect(() => {
@@ -76,7 +78,7 @@ function AppInner() {
       case 'dashboard':
         return <DashboardModule onNavigate={setActiveModule} onSelectPaciente={setSelectedPacienteId} />;
       case 'agenda':
-        return <AgendaView onNavigate={(m, pid) => { if (pid) setSelectedPacienteId(pid); setActiveModule(m as ActiveModule); }} onSelectPaciente={(id) => { setSelectedPacienteId(id); setActiveModule('anamnesis'); }} />;
+        return <AgendaView onNavigate={(m, pid) => { if (pid) setSelectedPacienteId(pid); setActiveModule(m as ActiveModule); }} onSelectPaciente={(id) => { setSelectedPacienteId(id); setActiveModule('anamnesis'); }} onVideoconferencia={(turno) => { if (turno?.paciente_id) setSelectedPacienteId(turno.paciente_id); setVideoconfTurno(turno); setActiveModule('videoconferencia'); }} />;
       case 'pacientes':
         return <PacientesModule onSelectPaciente={(id) => { setSelectedPacienteId(id); setActiveModule('anamnesis'); }} />;
       case 'anamnesis':
@@ -99,6 +101,17 @@ function AppInner() {
         return <PitchMeterModule />;
       case 'cuadernillo':
         return <CuadernilloModule pacienteId={selectedPacienteId} initialExerciseIds={initialExerciseIds} />;
+      case 'videoconferencia':
+        return videoconfTurno ? (
+          <VideoconferenciaModule
+            turno={videoconfTurno}
+            onNavigate={(m, pid) => { if (pid) setSelectedPacienteId(pid); setActiveModule(m as ActiveModule); }}
+            onVolver={() => setActiveModule('agenda')}
+            onEnviarCuadernillo={(ids) => { setInitialExerciseIds(ids); setActiveModule('cuadernillo'); }}
+          />
+        ) : (
+          <DashboardModule onNavigate={setActiveModule} onSelectPaciente={setSelectedPacienteId} />
+        );
       default:
         return <DashboardModule onNavigate={setActiveModule} onSelectPaciente={setSelectedPacienteId} />;
     }

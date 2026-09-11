@@ -143,6 +143,30 @@ ALTER TABLE turnos ADD COLUMN IF NOT EXISTS google_event_id TEXT;
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_meeting_id TEXT;
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_password TEXT;
 ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_join_url TEXT;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_start_url TEXT;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS zoom_status TEXT DEFAULT 'pendiente';
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS teleconsulta_provider TEXT;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS fecha_sincronizacion TIMESTAMPTZ;
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS ultima_error_sincronizacion TEXT;
+CREATE INDEX IF NOT EXISTS idx_turnos_google_event ON turnos(google_event_id);
+CREATE INDEX IF NOT EXISTS idx_turnos_zoom_meeting ON turnos(zoom_meeting_id);
+
+-- 6c. TABLA SESIONES DE TELECONSULTA (notas, ejercicios, duración, incidencias)
+CREATE TABLE IF NOT EXISTS sesiones_teleconsulta (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    turno_id UUID REFERENCES turnos(id) ON DELETE CASCADE,
+    paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
+    fecha_inicio TIMESTAMPTZ DEFAULT now(),
+    fecha_fin TIMESTAMPTZ,
+    duracion_min INT,
+    notas TEXT DEFAULT '',
+    ejercicios_realizados JSONB DEFAULT '[]',
+    incidencias_tecnicas TEXT DEFAULT '',
+    resumen_final TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sesiones_turno ON sesiones_teleconsulta(turno_id);
+CREATE INDEX IF NOT EXISTS idx_sesiones_paciente ON sesiones_teleconsulta(paciente_id);
 
 -- 6b. MIGRACIÓN v1 → v2 (la tabla pacientes del schema v1 no tiene estas columnas
 -- y trae un NOT NULL legacy en "nombre" que bloquea los INSERT del backend)
@@ -176,6 +200,7 @@ ALTER TABLE analisis_acusticos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cuadernillos_paciente ENABLE ROW LEVEL SECURITY;
 ALTER TABLE turnos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios_google ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sesiones_teleconsulta ENABLE ROW LEVEL SECURITY;
 
 -- 9. POLÍTICAS RLS (Borrado preventivo antes de crear para evitar el error 42710)
 DO $$
@@ -212,6 +237,7 @@ DROP POLICY IF EXISTS "App backend full access" ON analisis_acusticos;
 DROP POLICY IF EXISTS "App backend full access" ON cuadernillos_paciente;
 DROP POLICY IF EXISTS "App backend full access" ON turnos;
 DROP POLICY IF EXISTS "App backend full access" ON usuarios_google;
+DROP POLICY IF EXISTS "App backend full access" ON sesiones_teleconsulta;
 CREATE POLICY "App backend full access" ON pacientes FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON anamnesis FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON evaluaciones_clinicas FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
@@ -219,6 +245,7 @@ CREATE POLICY "App backend full access" ON analisis_acusticos FOR ALL TO anon, a
 CREATE POLICY "App backend full access" ON cuadernillos_paciente FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON turnos FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON usuarios_google FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON sesiones_teleconsulta FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- 10. TRIGGER UPDATED_AT
 CREATE OR REPLACE FUNCTION update_updated_at()

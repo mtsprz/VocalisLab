@@ -10,6 +10,7 @@ interface Props {
   /** 1 = terapeuta (host), 0 = paciente */
   role?: number;
   onLeave?: () => void;
+  onJoin?: () => void;
 }
 
 /**
@@ -23,7 +24,7 @@ interface Props {
  *   del Video SDK); el paciente debe activarlo en el panel de audio de Zoom.
  *   Ver guía en ZoomTeleconsulta.
  */
-export default function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLeave }: Props) {
+export default function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLeave, onJoin }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<any>(null);
   const [status, setStatus] = useState<'cargando' | 'en_llamada' | 'error'>('cargando');
@@ -75,7 +76,10 @@ export default function ZoomEmbedded({ meetingNumber, password, userName, role =
           userName: userName || 'Fonoaudiólogo/a',
         });
 
-        if (!cancelled) setStatus('en_llamada');
+        if (!cancelled) {
+          setStatus('en_llamada');
+          onJoin?.();
+        }
       } catch (e: any) {
         if (!cancelled) {
           setErrorMsg(e.message || 'No se pudo unir a la sala embebida');

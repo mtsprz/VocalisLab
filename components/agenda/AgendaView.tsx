@@ -16,9 +16,10 @@ type VistaFormato = 'mes' | 'semana' | 'dia' | 'lista';
 interface Props {
   onNavigate: (modulo: string, pacienteId?: string) => void;
   onSelectPaciente: (pacienteId: string) => void;
+  onVideoconferencia?: (turno: any) => void;
 }
 
-export default function AgendaView({ onNavigate, onSelectPaciente }: Props) {
+export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconferencia }: Props) {
   const { user } = useAuth();
   const [turnos, setTurnos] = useState<any[]>([]);
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
@@ -267,6 +268,7 @@ export default function AgendaView({ onNavigate, onSelectPaciente }: Props) {
                 onEliminarTurno={handleEliminarTurno}
                 onEditarTurno={(t) => { setTurnoEditar(t); setModalNuevoAbierto(true); }}
                 onZoom={(t) => setTurnoZoom(t)}
+                onIngresarVideoconferencia={onVideoconferencia}
               />
             ))}
           </div>

@@ -38,6 +38,7 @@ export default function NuevoTurnoModal({
   const [tipo, setTipo] = useState('control');
   const [notas, setNotas] = useState('');
   const [syncGoogle, setSyncGoogle] = useState(true);
+  const [crearZoom, setCrearZoom] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -111,6 +112,20 @@ export default function NuevoTurnoModal({
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         throw new Error(err.detail || 'Error guardando turno en el servidor');
+      }
+      const guardado = await resp.json().catch(() => ({}));
+
+      // Flujo agenda: turno virtual → crear sala Zoom automáticamente (idempotente)
+      if (!turnoEditar && modalidad === 'VIRTUAL' && crearZoom && user?.id && guardado?.id) {
+        try {
+          await fetch(`${BACKEND_URL}/api/teleconsulta/zoom/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ turno_id: guardado.id, user_id: user.id }),
+          });
+        } catch (e) {
+          console.warn('Sala Zoom no creada (se puede crear desde la tarjeta):', e);
+        }
       }
 
       onTurnoCreado();
@@ -302,6 +317,21 @@ export default function NuevoTurnoModal({
               <span className="text-[11px] text-gray-700 dark:text-gray-300">
                 Sincronizar en <strong>Google Calendar</strong>
                 {modalidad === 'VIRTUAL' ? ' y generar enlace de Google Meet automático' : ''}.
+              </span>
+            </label>
+          )}
+
+          {/* Sala Zoom automática para virtuales */}
+          {modalidad === 'VIRTUAL' && !turnoEditar && (
+            <label className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={crearZoom}
+                onChange={e => setCrearZoom(e.target.checked)}
+                className="rounded text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-[11px] text-gray-700 dark:text-gray-300">
+                Crear <strong>sala Zoom</strong> automáticamente (audio profesional, waiting room).
               </span>
             </label>
           )}

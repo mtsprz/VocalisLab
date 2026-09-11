@@ -749,6 +749,40 @@ async def actualizar_turno(
         except Exception as e:
             print(f"[api_clinica] No se pudo sincronizar edición con Google: {e}")
 
+    # Sincronizar Zoom: reprogramación (PATCH) o cancelación (DELETE)
+    if user_id and supabase:
+        try:
+            cur2 = supabase.table("turnos").select("id, zoom_meeting_id, fecha_hora, duracion_min").eq("id", turno_id).execute()
+            zrow = (cur2.data or [{}])[0]
+            zmid = zrow.get("zoom_meeting_id")
+            if zmid:
+                # Llamada interna a los endpoints Zoom (misma app)
+                from teleconsulta_zoom import zoom_update as _zupd, zoom_delete as _zdel
+
+                class _FakeReq:
+                    def __init__(self, payload):
+                        self._payload = payload
+                        self.query_params = {}
+                    async def json(self):
+                        return self._payload
+
+                if data.get("estado") == "cancelado":
+                    try:
+                        await _zdel(zmid, _FakeReq({"user_id": user_id, "turno_id": turno_id}))
+                    except Exception as e_z:
+                        print(f"[api_clinica] Cancelación Zoom tolerada: {e_z}")
+                elif ("fecha_hora" in data or "duracion_min" in data):
+                    try:
+                        await _zupd(zmid, _FakeReq({
+                            "user_id": user_id, "turno_id": turno_id,
+                            "fecha_hora": data.get("fecha_hora", zrow.get("fecha_hora")),
+                            "duracion_min": data.get("duracion_min", zrow.get("duracion_min")),
+                        }))
+                    except Exception as e_z:
+                        print(f"[api_clinica] Reprogramación Zoom tolerada: {e_z}")
+        except Exception as e:
+            print(f"[api_clinica] Sync Zoom omitido: {e}")
+
     # Update tolerante: si las columnas zoom_* aún no existen en Supabase, quitarlas y reintentar
     for _ in range(4):
         try:
@@ -832,7 +866,8 @@ async def debug_status():
     if not supabase:
         return JSONResponse(content=info)
     for tbl in ["pacientes", "turnos", "anamnesis", "evaluaciones_clinicas",
-                "analisis_acusticos", "cuadernillos_paciente", "usuarios_google"]:
+                "analisis_acusticos", "cuadernillos_paciente", "usuarios_google",
+                "sesiones_teleconsulta"]:
         try:
             r = supabase.table(tbl).select("id", count="exact").limit(1).execute()
             info["tables"][tbl] = {"exists": True, "count": r.count}
@@ -847,6 +882,7 @@ async def debug_status():
         "analisis_acusticos": ({"modo": "DEBUG_PROBE"}, {"modo": "DEBUG_PROBE"}),
         "turnos": ({"fecha_hora": "2030-01-01T00:00:00", "motivo": "DEBUG_PROBE"}, {"motivo": "DEBUG_PROBE"}),
         "usuarios_google": ({"google_id": "DEBUG_PROBE", "email": "debug@probe.local"}, {"google_id": "DEBUG_PROBE"}),
+        "sesiones_teleconsulta": ({"notas": "DEBUG_PROBE"}, {"notas": "DEBUG_PROBE"}),
     }
     probe: dict = {}
     for tbl, (payload, delfilter) in probe_tests.items():

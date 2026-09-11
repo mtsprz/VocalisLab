@@ -35,6 +35,7 @@ interface Props {
   onEliminarTurno?: (turnoId: string) => void;
   onEditarTurno?: (turno: TurnoData) => void;
   onZoom?: (turno: TurnoData) => void;
+  onIngresarVideoconferencia?: (turno: TurnoData) => void;
 }
 
 export default function TargetPacienteCard({
@@ -45,6 +46,7 @@ export default function TargetPacienteCard({
   onEliminarTurno,
   onEditarTurno,
   onZoom,
+  onIngresarVideoconferencia,
 }: Props) {
   const paciente = turno.pacientes;
   const pId = turno.paciente_id || paciente?.id;
@@ -149,6 +151,16 @@ export default function TargetPacienteCard({
           </button>
         )}
       </div>
+
+      {/* Ingresar a videoconferencia integrada */}
+      {onIngresarVideoconferencia && (
+        <button
+          onClick={() => onIngresarVideoconferencia(turno)}
+          className="mt-2 w-full px-3 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-600/25 transition-all"
+        >
+          <Video size={14} /> Ingresar a videoconferencia
+        </button>
+      )}
 
       {/* Patient info contact */}
       {(paciente?.telefono || paciente?.email) && (
