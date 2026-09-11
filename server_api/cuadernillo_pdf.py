@@ -261,6 +261,10 @@ _PICTO_ORAL = ("frases_balanceadas", "consonantes_fricativas", "escalas_vocalica
                "soplo_escalonado", "apertura", "moldeado", "vocalico", "articul")
 _PICTO_VASO = ("tubo_agua", "popote_aire", "oclusion_succion", "lax", "sorbete",
                "sovt", "semioclu")
+_PICTO_POSTURA = ("le_huche", "shiatsu", "rotacion_hombros", "masaje_laringeo",
+                  "respiracion_abdominal", "expansion_costo", "descenso_laringeo",
+                  "pautas_rlf", "calentamiento", "enfriamiento", "relaj",
+                  "postura", "hombro", "cuello", "cervical")
 
 
 def _pictograma(ex: dict):
@@ -269,7 +273,10 @@ def _pictograma(ex: dict):
         return _picto_vaso(), "Vaso con agua y sorbete"
     if any(k in blob for k in _PICTO_ORAL):
         return _picto_oral(), "Cómo poner la boca"
-    return None, ""
+    if any(k in blob for k in _PICTO_POSTURA):
+        return _picto_postura(), "Postura del cuerpo"
+    # Regla de diagramación: ningún ejercicio sin pictograma → fallback postural
+    return _picto_postura(), "Postura del cuerpo"
 
 
 # ─── Propósitos en lenguaje cotidiano por sección ─────────────────
@@ -441,9 +448,10 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
 
     # Fila visual: curva melódica (+ pictograma o duración)
     tipo = _tipo_curva(exercise)
-    curva = _curva_melodica(tipo)
-    picto, picto_cap = _pictograma(exercise)
     duration = exercise.get("duration_min", "")
+    seg_label = f"{duration} min" if tipo == "sostenido" and duration else ""
+    curva = _curva_melodica(tipo, segundos=seg_label)
+    picto, picto_cap = _pictograma(exercise)
     if picto is not None:
         visual = Table(
             [[curva, picto]],
