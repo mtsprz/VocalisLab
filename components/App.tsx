@@ -143,8 +143,8 @@ function AppInner() {
                 <Stethoscope size={18} className="text-white" />
               </div>
               <div>
-                <h1 className="text-sm font-bold text-gray-900 dark:text-white">VocalisLab</h1>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold tracking-wider uppercase">Pro — Fonoaudiología</p>
+                <h1 className="text-sm font-bold text-gray-900 dark:text-white">Consultorio de Voz</h1>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold tracking-wider uppercase">Lic. Matías Pérez</p>
               </div>
             </div>
           </div>

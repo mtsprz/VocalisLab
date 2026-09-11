@@ -38,7 +38,7 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
 
   const cargarAgenda = async () => {
     setLoading(true);
-    // Cargar turnos de VocalisLab
+    // Cargar turnos de la agenda clínica
     try {
       const r = await fetch(`${BACKEND_URL}/api/turnos?limit=300`);
       if (r.ok) {
@@ -283,7 +283,7 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Turnos Clínicos de VocalisLab */}
+          {/* Turnos clínicos de la agenda */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {turnosFiltrados.map(turno => (
               <TargetPacienteCard

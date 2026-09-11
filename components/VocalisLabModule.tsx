@@ -303,7 +303,7 @@ export default function VocalisLabModule() {
       const url = window.URL.createObjectURL(blobPdf);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `VocalisLab_Informe_${dni || 'Clinico'}.pdf`;
+      a.download = `Informe_${dni || 'Clinico'}.pdf`;
       a.click();
       try {
         const grbasStr = `G${grbas.G} R${grbas.R} B${grbas.B} A${grbas.A} S${grbas.S}`;
@@ -334,9 +334,9 @@ export default function VocalisLabModule() {
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-sky-400 bg-clip-text text-transparent">
-              VocalisLab Pro
+              Consultorio de Voz
             </h1>
-            <p className="text-sm text-slate-400">Bioacústica Fonoaudiológica — Praat/Parselmouth — VoiceLab v2.0</p>
+            <p className="text-sm text-slate-400">Bioacústica Fonoaudiológica — Lic. Matías Pérez</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -649,7 +649,7 @@ export default function VocalisLabModule() {
               if (r.csvExport) {
                 const blob = new Blob([r.csvExport], { type: 'text/csv' });
                 const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = 'VocalisLab_Datos.csv'; a.click();
+                const a = document.createElement('a'); a.href = url; a.download = 'Datos.csv'; a.click();
               }
             }}
             onViewGraphs={() => setFlowStep('review')}

@@ -8,6 +8,7 @@ import {
 import ZoomEmbedded from './ZoomEmbedded';
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
+import { firmaProfesional } from './clinicalUtils';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -381,7 +382,7 @@ export default function VideoconferenciaModule({ turno: turnoInicial, onNavigate
 
   const compartirWhatsApp = (confirmar: boolean) => {
     const tel = (paciente.telefono || '').replace(/\D/g, '');
-    const msg = `Hola ${paciente.nombre_completo || 'paciente'}, te comparto el resumen de tu teleconsulta fonoaudiológica (${duracionMin} min):\n\n${resumen || notas || 'Sesión completada.'}\n\n— VocalisLab Pro`;
+    const msg = `Hola ${paciente.nombre_completo || 'paciente'}, te comparto el resumen de tu teleconsulta fonoaudiológica (${duracionMin} min):\n\n${resumen || notas || 'Sesión completada.'}\n\n${firmaProfesional()}`;
     const hacer = () => window.open(
       tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`
           : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
@@ -393,7 +394,7 @@ export default function VideoconferenciaModule({ turno: turnoInicial, onNavigate
   const compartirEmail = () => {
     if (!window.confirm('¿Abrir correo con el resumen para enviar al paciente?')) return;
     const su = encodeURIComponent(`Resumen de teleconsulta — ${paciente.nombre_completo || ''}`.trim());
-    const body = encodeURIComponent(`${resumen || notas || ''}\n\nDuración: ${duracionMin} min\n— VocalisLab Pro`);
+    const body = encodeURIComponent(`${resumen || notas || ''}\n\nDuración: ${duracionMin} min\n\n${firmaProfesional()}`);
     if (paciente.email) {
       window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(paciente.email)}&su=${su}&body=${body}`, '_blank');
     } else {
@@ -624,7 +625,7 @@ export default function VideoconferenciaModule({ turno: turnoInicial, onNavigate
                       onClick={() => {
                         if (!window.confirm('¿Compartir resumen por WhatsApp con el paciente?')) return;
                         const tel = (paciente.telefono || '').replace(/\D/g, '');
-                        const msg = `Hola ${paciente.nombre_completo || 'paciente'}, resumen de tu teleconsulta (${duracionMin} min):\n\n${resumen || notas}\n\n— VocalisLab Pro`;
+                        const msg = `Hola ${paciente.nombre_completo || 'paciente'}, resumen de tu teleconsulta (${duracionMin} min):\n\n${resumen || notas}\n\n${firmaProfesional()}`;
                         window.open(tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}` : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
                       }}
                       className="px-3 py-2 rounded-xl bg-[#25D366] hover:bg-[#1fb857] text-white text-[11px] font-bold flex items-center gap-1">
@@ -634,7 +635,7 @@ export default function VideoconferenciaModule({ turno: turnoInicial, onNavigate
                       onClick={() => {
                         if (!window.confirm('¿Abrir correo con el resumen para enviar al paciente?')) return;
                         const su = encodeURIComponent(`Resumen de teleconsulta — ${paciente.nombre_completo || ''}`.trim());
-                        const body = encodeURIComponent(`${resumen || notas}\n\nDuración: ${duracionMin} min\n— VocalisLab Pro`);
+                        const body = encodeURIComponent(`${resumen || notas}\n\nDuración: ${duracionMin} min\n\n${firmaProfesional()}`);
                         if (paciente.email) window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(paciente.email)}&su=${su}&body=${body}`, '_blank');
                         else window.location.href = `mailto:?subject=${su}&body=${body}`;
                       }}

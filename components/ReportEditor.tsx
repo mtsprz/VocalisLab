@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Edit3, Save, Undo2, Redo2, Eye, Lock, Unlock, User, Clock, FileText, MessageCircle, Mail } from 'lucide-react';
+import { firmaProfesional } from './clinicalUtils';
 
 interface ReportField {
   key: string;
@@ -223,7 +224,7 @@ export default function ReportEditor({ patientData, metrics, aiText, voxPlotData
           <button
             onClick={() => {
               const digits = (pacienteTelefono || '').replace(/\D/g, '');
-              const msg = `Hola ${patientData?.nombre || 'paciente'}, te comparto tu Informe de Evaluación Vocal de VocalisLab Pro. Te adjunto el PDF por este medio. Ante cualquier duda escribime.`;
+              const msg = `Hola ${patientData?.nombre || 'paciente'}, te comparto tu Informe de Evaluación Vocal. Te adjunto el PDF por este medio. Ante cualquier duda escribime.\n\n${firmaProfesional()}`;
               const url = digits
                 ? `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`
                 : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
@@ -236,7 +237,7 @@ export default function ReportEditor({ patientData, metrics, aiText, voxPlotData
           <button
             onClick={() => {
               const su = encodeURIComponent(`Informe de Evaluación Vocal — ${patientData?.nombre || ''}`.trim());
-              const body = encodeURIComponent(`Hola ${patientData?.nombre || 'paciente'},\n\nTe envío tu informe de evaluación vocal de VocalisLab Pro (adjunto en este correo).\n\nSaludos.`);
+              const body = encodeURIComponent(`Hola ${patientData?.nombre || 'paciente'},\n\nTe envío tu informe de evaluación vocal (adjunto en este correo).\n\nSaludos.\n\n${firmaProfesional()}`);
               if (pacienteEmail) {
                 window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(pacienteEmail)}&su=${su}&body=${body}`, '_blank');
               } else {

@@ -11,3 +11,16 @@ export function calcularEdad(fechaNacimiento: string | null | undefined): number
   if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
   return edad;
 }
+
+/** Firma profesional para mensajes/WhatsApp/Email (marca blanca personal). */
+export function firmaProfesional(): string {
+  try {
+    const raw = localStorage.getItem('vocalislab_profesional');
+    if (raw) {
+      const p = JSON.parse(raw);
+      const nom = String(p.profesional_nombre || '').trim();
+      if (nom) return `— ${nom}`;
+    }
+  } catch {}
+  return '— Lic. Matías Pérez\nConsultorio de Voz y Rehabilitación Vocal';
+}

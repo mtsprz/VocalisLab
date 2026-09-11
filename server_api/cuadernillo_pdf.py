@@ -100,6 +100,14 @@ def _simplificar(texto: str) -> str:
     return out
 
 
+def _checkbox() -> Drawing:
+    """Casillero vectorial 12x12px para tildar a mano."""
+    d = Drawing(14, 14)
+    d.add(Rect(1, 1, 12, 12, strokeColor=SECONDARY, strokeWidth=1.2,
+               fillColor=white))
+    return d
+
+
 _MOJIBAKE = [
     ("Ã¡", "á"), ("Ã©", "é"), ("Ã­", "í"), ("Ã³", "ó"), ("Ãº", "ú"),
     ("Ã±", "ñ"), ("ÃÁ", "Á"), ("ÃÉ", "É"), ("ÃÍ", "Í"), ("ÃÓ", "Ó"),
@@ -117,13 +125,49 @@ def _sanear(texto: str) -> str:
     out = str(texto)
     for src, dst in _MOJIBAKE:
         out = out.replace(src, dst)
+    # Artefactos de sintaxis tipo $10=voz$ / $0=$ (restos de plantillas)
+    out = re.sub(r"\$[^$\n]*\$", "", out)
+    out = out.replace("$", "")
     out = re.sub(r"\s+", " ", out).strip()
     # Colapsa palabra duplicada exacta consecutiva ("respiración respiración")
     out = re.sub(r"(?i)\b(\w[\w\-]*)\s+\1\b", r"\1", out)
+    # Tildes faltantes frecuentes (palabra completa, preservando mayúsculas)
+    for sin, con in _TILDES:
+        def _rep(m, _con=con):
+            t = m.group(0)
+            if t.isupper():
+                return _con.upper()
+            if t[0].isupper():
+                return _con[0].upper() + _con[1:]
+            return _con
+        out = re.sub(r"\b" + sin + r"\b", _rep, out, flags=re.IGNORECASE)
     # Mayúscula inicial
     if out:
         out = out[0].upper() + out[1:]
     return out
+
+
+_TILDES = [
+    ("manana", "mañana"), ("movilizacion", "movilización"),
+    ("respiracion", "respiración"), ("digitopresion", "digitopresión"),
+    ("laringea", "laríngea"),
+    ("faringea", "faríngea"), ("terapeutico", "terapéutico"),
+    ("clinico", "clínico"), ("sintesis", "síntesis"),
+    ("diagnostico", "diagnóstico"), ("maximo", "máximo"),
+    ("minimo", "mínimo"), ("oido", "oído"), ("area", "área"),
+    ("linea", "línea"), ("medico", "médico"), ("sesion", "sesión"),
+    ("evaluacion", "evaluación"), ("funcion", "función"),
+    ("tension", "tensión"), ("presion", "presión"),
+    ("fonico", "fónico"), ("fonica", "fónica"),
+    ("acustico", "acústico"), ("acustica", "acústica"),
+    ("cronico", "crónico"), ("musculo", "músculo"),
+    ("lamina", "lámina"), ("numero", "número"), ("telefono", "teléfono"),
+    ("tecnica", "técnica"), ("rapido", "rápido"), ("comun", "común"),
+    ("exhalacion", "exhalación"), ("inhalacion", "inhalación"),
+    ("vocalizacion", "vocalización"), ("articulacion", "articulación"),
+    ("relajacion", "relajación"), ("hidratacion", "hidratación"),
+    ("simbolo", "símbolo"),
+]
 
 
 # ─── Clasificación de curva melódica por ejercicio ─────────────────
@@ -411,10 +455,16 @@ def _svg_laryngeal_massage():
 def _svg_larynx_descent():
     d = Drawing(150, 96)
     _cap(d, "Bostezo: la laringe baja")
-    d.add(Circle(75, 62, 14, strokeColor=INK, strokeWidth=1.5, fillColor=None))
-    d.add(Circle(75, 62, 5, strokeColor=INK, strokeWidth=1.2, fillColor=None))
-    _flecha(d, 75, 50, 75, 26)
-    d.add(String(82, 34, "baja", fontName="Helvetica", fontSize=6, fillColor=INK_SUAVE))
+    # Boca abierta en óvalo suave + garganta en curva
+    pts = []
+    for i in range(33):
+        a = i / 32 * 2 * _math.pi
+        pts += [75 + 16 * _math.cos(a), 62 + 10 * _math.sin(a)]
+    d.add(PolyLine(pts, strokeColor=INK, strokeWidth=1.5))
+    d.add(PolyLine([68, 52, 66, 36, 70, 24, 80, 24, 84, 36, 82, 52],
+                   strokeColor=INK, strokeWidth=1.2))
+    _flecha(d, 100, 56, 100, 30)
+    d.add(String(106, 40, "baja", fontName="Helvetica", fontSize=6, fillColor=INK_SUAVE))
     _nota(d, "Bostezo grande y suspiro")
     return d
 
@@ -422,10 +472,12 @@ def _svg_larynx_descent():
 def _svg_suction_straw():
     d = Drawing(150, 96)
     _cap(d, "Chupe suave por el sorbete")
-    d.add(Line(30, 44, 60, 44, strokeColor=INK, strokeWidth=3))
-    d.add(Circle(24, 44, 8, strokeColor=INK, strokeWidth=1.5, fillColor=None))
-    _flecha(d, 110, 44, 66, 44)
-    _flecha(d, 130, 44, 116, 44)
+    # Labios en curva + sorbete fino
+    d.add(PolyLine([28, 44, 38, 38, 52, 38, 60, 44, 52, 50, 38, 50, 28, 44],
+                   strokeColor=INK, strokeWidth=1.5))
+    d.add(Line(60, 44, 104, 44, strokeColor=INK, strokeWidth=1.5))
+    _flecha(d, 104, 44, 66, 44)
+    _flecha(d, 128, 44, 114, 44)
     _nota(d, "Mejillas adentro, 10 seg")
     return d
 
@@ -467,8 +519,8 @@ def _svg_stepped_blow():
 def _svg_glottal_closure():
     d = Drawing(150, 96)
     _cap(d, "Cierre firme y corto")
-    d.add(Line(40, 30, 70, 48, strokeColor=INK, strokeWidth=2))
-    d.add(Line(110, 30, 80, 48, strokeColor=INK, strokeWidth=2))
+    d.add(Line(40, 30, 70, 48, strokeColor=INK, strokeWidth=1.5))
+    d.add(Line(110, 30, 80, 48, strokeColor=INK, strokeWidth=1.5))
     _flecha(d, 48, 40, 68, 46)
     _flecha(d, 102, 40, 82, 46)
     d.add(String(60, 58, "/a/ /i/ corto", fontName="Helvetica", fontSize=6,
@@ -483,7 +535,7 @@ def _svg_laxvox_glass():
     gx, gy, gw, gh = 50, 10, 50, 56
     d.add(Rect(gx, gy, gw, gh, strokeColor=INK, strokeWidth=1.5, fillColor=None))
     d.add(Rect(gx + 2, gy + 2, gw - 4, 22, strokeColor=None, fillColor=FONDO_SUAVE))
-    d.add(Line(gx + 38, gy + gh + 14, gx + 24, gy + 4, strokeColor=INK, strokeWidth=2.5))
+    d.add(Line(gx + 38, gy + gh + 14, gx + 24, gy + 4, strokeColor=INK, strokeWidth=1.5))
     d.add(Line(gx + gw + 4, gy + 4, gx + gw + 4, gy + 15, strokeColor=INK, strokeWidth=1.2))
     d.add(String(gx + gw + 8, gy + 8, "1,5 cm", fontName="Helvetica-Bold",
                  fontSize=7, fillColor=INK))
@@ -494,14 +546,16 @@ def _svg_laxvox_glass():
 def _svg_lip_trill():
     d = Drawing(150, 96)
     _cap(d, "Vibración de labios")
-    d.add(Circle(60, 48, 12, strokeColor=INK, strokeWidth=1.5, fillColor=None))
+    # Labios como curvas suaves + onda senoidal de vibración
+    d.add(PolyLine([44, 52, 52, 44, 62, 44, 70, 52, 62, 60, 52, 60, 44, 52],
+                   strokeColor=INK, strokeWidth=1.5))
     pts = []
-    for i in range(25):
-        x = 78 + i * 2.4
-        y = 48 + (6 if i % 2 == 0 else -6)
+    for i in range(41):
+        x = 78 + i * 1.6
+        y = 48 + _math.sin(i / 40 * _math.pi * 2 * 3) * 6
         pts += [x, y]
     d.add(PolyLine(pts, strokeColor=INK, strokeWidth=1.5))
-    d.add(String(60, 66, "/brrr/", fontName="Helvetica-Bold", fontSize=7, fillColor=INK))
+    d.add(String(44, 66, "/brrr/", fontName="Helvetica-Bold", fontSize=7, fillColor=INK))
     _nota(d, "Sirenas suaves")
     return d
 
@@ -510,7 +564,7 @@ def _svg_straw_in_air():
     d = Drawing(150, 96)
     _cap(d, "Sorbete al aire (sin vaso)")
     d.add(Circle(40, 48, 10, strokeColor=INK, strokeWidth=1.5, fillColor=None))
-    d.add(Line(50, 48, 92, 48, strokeColor=INK, strokeWidth=2.5))
+    d.add(Line(50, 48, 92, 48, strokeColor=INK, strokeWidth=1.5))
     _flecha(d, 92, 48, 118, 48)
     d.add(Line(118, 30, 118, 66, strokeColor=INK_SUAVE, strokeWidth=0.8))
     _nota(d, "Tonos y sirenas")
@@ -533,10 +587,21 @@ def _svg_fricative_flow():
 def _svg_facial_mask():
     d = Drawing(150, 96)
     _cap(d, "Vibra en la máscara")
-    d.add(Circle(60, 48, 22, strokeColor=INK, strokeWidth=1.5, fillColor=None))
-    for r in (8, 14, 20):
-        d.add(Circle(78, 48, r, strokeColor=INK, strokeWidth=1.0, fillColor=None))
-    d.add(String(60, 20, "/m/", fontName="Helvetica-Bold", fontSize=8, fillColor=INK))
+    # Perfil facial estilizado en curva suave (frente-nariz-labios-mentón)
+    perfil = []
+    for i in range(41):
+        t = i / 40
+        x = 52 + _math.sin(t * _math.pi) * 14 + t * 8
+        y = 78 - t * 52 + _math.sin(t * _math.pi * 3) * 4
+        perfil += [x, y]
+    d.add(PolyLine(perfil, strokeColor=INK, strokeWidth=1.5))
+    for r in (7, 12, 17):
+        pts = []
+        for i in range(21):
+            a = -0.7 + i * (1.4 / 20)
+            pts += [86 + r * _math.cos(a), 48 + r * _math.sin(a)]
+        d.add(PolyLine(pts, strokeColor=INK, strokeWidth=1.0))
+    d.add(String(44, 16, "/m/", fontName="Helvetica-Bold", fontSize=8, fillColor=INK))
     _nota(d, "Labios juntos, cosquilleo")
     return d
 
@@ -594,7 +659,7 @@ def _svg_cooldown_flow():
 def _svg_antireflux():
     d = Drawing(150, 96)
     _cap(d, "Cene temprano, duerma alto")
-    d.add(Line(25, 30, 125, 52, strokeColor=INK, strokeWidth=2))
+    d.add(Line(25, 30, 125, 52, strokeColor=INK, strokeWidth=1.5))
     d.add(Line(25, 30, 25, 18, strokeColor=INK, strokeWidth=1.2))
     d.add(Circle(105, 22, 12, strokeColor=INK, strokeWidth=1.2, fillColor=None))
     d.add(Line(105, 22, 105, 14, strokeColor=INK, strokeWidth=1.2))
@@ -736,36 +801,65 @@ def _descargar_logo(url: str):
         return None
 
 
+def _isologo_onda() -> Drawing:
+    """Isologo vectorial: onda sonora + arcos de resonancia (marca del consultorio)."""
+    W, H = 220, 72
+    d = Drawing(W, H)
+    # Arcos de resonancia a la izquierda
+    for r in (14, 24, 34):
+        pts = []
+        for i in range(25):
+            a = -0.9 + i * (1.8 / 24)
+            pts += [52 + r * _math.cos(a), 36 + r * _math.sin(a)]
+        d.add(PolyLine(pts, strokeColor=SECONDARY, strokeWidth=1.5))
+    # Onda sonora continua
+    pts = []
+    for i in range(81):
+        x = 66 + i * (W - 76) / 80
+        y = 36 + _math.sin(i / 80 * _math.pi * 2 * 3) * 16 * _math.sin(i / 80 * _math.pi)
+        pts += [x, y]
+    d.add(PolyLine(pts, strokeColor=PRIMARY, strokeWidth=2))
+    # Nodo central
+    d.add(Circle(52, 36, 4, strokeColor=PRIMARY, strokeWidth=1.5,
+                 fillColor=PRIMARY))
+    return d
+
+
+def _fondo_portada(canvas, doc):
+    """Fondo cálido + marco elegante solo para la portada."""
+    canvas.saveState()
+    canvas.setFillColor(HexColor("#F8FAFC"))
+    canvas.rect(0, 0, A4[0], A4[1], stroke=0, fill=1)
+    canvas.setStrokeColor(SECONDARY)
+    canvas.setLineWidth(1.2)
+    canvas.rect(12 * mm, 12 * mm, A4[0] - 24 * mm, A4[1] - 24 * mm,
+                stroke=1, fill=0)
+    canvas.setStrokeColor(LIGHT_GRAY)
+    canvas.setLineWidth(0.6)
+    canvas.rect(14.5 * mm, 14.5 * mm, A4[0] - 29 * mm, A4[1] - 29 * mm,
+                stroke=1, fill=0)
+    canvas.restoreState()
+    _add_page_number(canvas, doc)
+
+
 def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha, profesional=None):
-    """Portada marca blanca con membrete del profesional tratante."""
+    """Portada editorial médica limpia, centrada, marca blanca personal."""
     elements = []
     profesional = profesional if isinstance(profesional, dict) else {}
 
-    logo_path = _descargar_logo(_prof(profesional, "profesional_logo_url"))
-    if logo_path:
-        try:
-            from reportlab.platypus import Image as RLImage
-            from reportlab.lib.utils import ImageReader
-            iw, ih = ImageReader(logo_path).getSize()
-            max_w, max_h = 55 * mm, 30 * mm
-            scale = min(max_w / iw, max_h / ih, 1.0)
-            logo_img = RLImage(logo_path, width=iw * scale, height=ih * scale)
-            logo_img.hAlign = 'CENTER'
-            elements.append(logo_img)
-            elements.append(Spacer(1, 6 * mm))
-        except Exception:
-            pass
+    elements.append(Spacer(1, 26 * mm))
+    elements.append(_isologo_onda())
+    elements.append(Spacer(1, 8 * mm))
 
-    elements.append(Spacer(1, 18 * mm))
-    elements.append(Paragraph(
-        escape(_prof(profesional, "profesional_nombre", "Atención Fonoaudiológica")),
-        styles['CoverTitle']))
-    tit_mat = " ".join(x for x in [
-        _prof(profesional, "profesional_titulo"),
+    nombre = _prof(profesional, "profesional_nombre", "Lic. Matías Pérez")
+    elements.append(Paragraph(escape(nombre), styles['CoverTitle']))
+    rol = " ".join(x for x in [
+        _prof(profesional, "profesional_titulo", "Fonoaudiólogo"),
         ("M.P. " + _prof(profesional, "profesional_matricula")) if _prof(profesional, "profesional_matricula") else "",
     ] if x).strip()
-    if tit_mat:
-        elements.append(Paragraph(escape(tit_mat), styles['CoverSubtitle']))
+    elements.append(Paragraph(escape(rol), styles['CoverSubtitle']))
+    elements.append(Paragraph("Consultorio de Voz y Rehabilitación Vocal",
+                              styles['CoverSubtitle']))
     contacto = "  |  ".join(x for x in [
         _prof(profesional, "profesional_telefono"),
         _prof(profesional, "profesional_email"),
@@ -778,9 +872,25 @@ def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha, profesional=N
     ] if x).strip()
     if redes:
         elements.append(Paragraph(escape(redes), styles['CoverSubtitle']))
-    elements.append(Spacer(1, 6 * mm))
+
+    logo_path = _descargar_logo(_prof(profesional, "profesional_logo_url"))
+    if logo_path:
+        try:
+            from reportlab.platypus import Image as RLImage
+            from reportlab.lib.utils import ImageReader
+            iw, ih = ImageReader(logo_path).getSize()
+            max_w, max_h = 45 * mm, 24 * mm
+            scale = min(max_w / iw, max_h / ih, 1.0)
+            logo_img = RLImage(logo_path, width=iw * scale, height=ih * scale)
+            logo_img.hAlign = 'CENTER'
+            elements.append(Spacer(1, 4 * mm))
+            elements.append(logo_img)
+        except Exception:
+            pass
+
+    elements.append(Spacer(1, 10 * mm))
     elements.append(Paragraph(escape(titulo or ""), styles['CoverSubtitle']))
-    elements.append(Spacer(1, 15 * mm))
+    elements.append(Spacer(1, 8 * mm))
 
     info_data = [
         ["Paciente:", paciente_nombre or "Sin especificar"],
@@ -940,10 +1050,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         for i, step in enumerate(steps, 1):
             txt = _sanear(_simplificar(step))
             rows.append([
-                Paragraph("<b>[ &nbsp; ]</b>",
-                          ParagraphStyle('CheckCell', parent=styles['Normal'],
-                                         fontSize=16, alignment=TA_CENTER,
-                                         textColor=SECONDARY)),
+                _checkbox(),
                 Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText']),
             ])
         pasos_tabla = Table(rows, colWidths=[12 * mm, 92 * mm])
@@ -979,8 +1086,16 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         elements.append(Paragraph("<b>Frases para practicar (lea en voz alta y clara):</b>",
                                   styles['CuadBody']))
         for phrase in phrases:
-            elements.append(Paragraph(f"[ &nbsp; ] &nbsp;{escape(_sanear(_simplificar(str(phrase))))}",
-                                      styles['StepText']))
+            elements.append(Table(
+                [[_checkbox(),
+                  Paragraph(escape(_sanear(_simplificar(str(phrase)))),
+                            styles['StepText'])]],
+                colWidths=[12 * mm, 148 * mm],
+                style=TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ])))
 
     elements.append(Spacer(1, 4 * mm))
     elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
@@ -1135,44 +1250,6 @@ def _build_self_assessment(styles):
     return elements
 
 
-def _build_sessions_calendar(styles, sesiones, ejercicios):
-    elements = []
-    elements.append(Paragraph("Calendario de Sesiones con su Profesional",
-                              styles['SectionTitle']))
-    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
-    elements.append(Spacer(1, 4 * mm))
-
-    header = ["Sesión", "Ejercicios que tocan", "¿Asistí?"]
-    data = [header]
-
-    ej_por_sesion = max(1, len(ejercicios) // max(1, sesiones))
-    for s in range(1, sesiones + 1):
-        inicio = (s - 1) * ej_por_sesion
-        fin = min(inicio + ej_por_sesion + 1, len(ejercicios))
-        ej_nombres = "\n".join([f"• {_sanear(_simplificar(e.get('name', '')))}"
-                                for e in ejercicios[inicio:fin]])
-        data.append([str(s), ej_nombres or "Revisión", "[ ] Sí   [ ] No"])
-
-    table = Table(data, colWidths=[18 * mm, 100 * mm, 42 * mm])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('FONTSIZE', (0, 1), (-1, -1), 12),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
-    ]))
-    elements.append(table)
-    return elements
-
-
 def _add_page_number(canvas, doc):
     canvas.saveState()
     canvas.setFont('Helvetica', 9)
@@ -1207,6 +1284,10 @@ def generar_cuadernillo_pdf(
         bottomMargin=25 * mm,
         leftMargin=16 * mm,
         rightMargin=16 * mm,
+        title=titulo or "Cuadernillo Terapéutico Vocal",
+        author=_prof(profesional, "profesional_nombre", "Lic. Matías Pérez"),
+        subject="Cuadernillo terapéutico vocal personalizado",
+        keywords="fonoaudiología, voz, terapia vocal, ejercicios",
     )
 
     styles = _get_styles()
@@ -1240,8 +1321,6 @@ def generar_cuadernillo_pdf(
     story.extend(_build_tme_log(styles))
     story.append(PageBreak())
     story.extend(_build_self_assessment(styles))
-    story.append(PageBreak())
-    story.extend(_build_sessions_calendar(styles, sesiones, ejercicios))
 
     if notas:
         story.append(Spacer(1, 8 * mm))
@@ -1258,5 +1337,5 @@ def generar_cuadernillo_pdf(
         styles['FooterText']
     ))
 
-    doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
+    doc.build(story, onFirstPage=_fondo_portada, onLaterPages=_add_page_number)
     return pdf_path

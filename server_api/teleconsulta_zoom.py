@@ -188,7 +188,7 @@ async def crear_sala(request: Request):
         pass
 
     payload = {
-        "topic": f"Teleconsulta Vocal: {paciente_nombre} — VocalisLab Pro",
+        "topic": f"Teleconsulta Vocal: {paciente_nombre}",
         "type": 2,
         "start_time": start_time or None,
         "duration": duracion_min,
@@ -352,7 +352,7 @@ async def zoom_create(request: Request):
         start_time = None
 
     payload = {
-        "topic": f"Teleconsulta Vocal: {paciente_nombre} — VocalisLab Pro",
+        "topic": f"Teleconsulta Vocal: {paciente_nombre}",
         "type": 2,
         "duration": duracion_min,
         "timezone": "America/Argentina/Buenos_Aires",

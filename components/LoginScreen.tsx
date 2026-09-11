@@ -13,8 +13,8 @@ export default function LoginScreen() {
           <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto shadow-2xl shadow-indigo-500/30 mb-4">
             <Stethoscope size={32} className="text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">VocalisLab</h1>
-          <p className="text-sm text-indigo-300 font-semibold tracking-wider uppercase mt-1">Pro — Plataforma Fonoaudiológica</p>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">Consultorio de Voz</h1>
+          <p className="text-sm text-indigo-300 font-semibold tracking-wider uppercase mt-1">Lic. Matías Pérez — Fonoaudiólogo</p>
         </div>
 
         {/* Login Card */}

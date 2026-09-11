@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind, MessageCircle, Mail, X, Send } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
+import { firmaProfesional } from './clinicalUtils';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -440,7 +441,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
 
   const mensajeClinico = () => {
     const nombre = pacienteNombre || 'paciente';
-    return `Hola ${nombre}, te comparto tu ${titulo} (${sesiones} sesiones) de VocalisLab Pro.\n\n${notas ? `Indicaciones: ${notas}\n\n` : ''}Descargá el PDF adjunto en este chat/correo y realizá los ejercicios según la dosificación indicada. Ante cualquier duda o molestia, escribime.\n\n— Servicio de Fonoaudiología Vocal`;
+    return `Hola ${nombre}, te comparto tu ${titulo} (${sesiones} sesiones).\n\n${notas ? `Indicaciones: ${notas}\n\n` : ''}Descargá el PDF adjunto en este chat/correo y realizá los ejercicios según la dosificación indicada. Ante cualquier duda o molestia, escribime.\n\n${firmaProfesional()}`;
   };
 
   const compartirWhatsApp = () => {

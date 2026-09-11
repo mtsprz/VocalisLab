@@ -180,7 +180,7 @@ export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSal
                     <button
                       onClick={() => setModoEmbebido(v => !v)}
                       className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-600/25"
-                      title="Video embebido dentro de VocalisLab (Meeting SDK Component View)"
+                      title="Video embebido dentro de la app (Meeting SDK Component View)"
                     >
                       <Video size={13} /> {modoEmbebido ? 'Ocultar video embebido' : 'Atender aquí embebido'}
                     </button>

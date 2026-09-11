@@ -235,7 +235,7 @@ async def create_event_json(request: Request):
     start_datetime = f"{fecha}T{hora_inicio}:00"
     end_datetime = f"{fecha}T{hora_fin}:00"
     summary = f"Atención Vocal: {paciente_nombre}"
-    description = f"Consulta Fonoaudiológica - VocalisLab Pro.\nPaciente: {paciente_nombre}\nModalidad: {modalidad}\nMotivo: {motivo}"
+    description = f"Consulta Fonoaudiológica — Consultorio de Voz.\nPaciente: {paciente_nombre}\nModalidad: {modalidad}\nMotivo: {motivo}"
 
     return await create_calendar_event(
         user_id=user_id,
@@ -344,7 +344,7 @@ async def sync_turno_to_calendar(
         end = start
 
     summary = f"Atención Vocal: {paciente_nombre}"
-    description = f"Sesión de fonoaudiología en VocalisLab Pro.\nModalidad: {modalidad}\nMotivo: {motivo}\n{notas}".strip()
+    description = f"Sesión de fonoaudiología — Consultorio de Voz.\nModalidad: {modalidad}\nMotivo: {motivo}\n{notas}".strip()
 
     return await create_calendar_event(
         user_id=user_id,

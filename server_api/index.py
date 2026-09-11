@@ -328,7 +328,7 @@ def _cross_check_acoustics_vs_perceptual(metrics: dict, grbas: dict, rasati: dic
 
     return result
 
-app = FastAPI(title="VocalisLab Bioacoustic API")
+app = FastAPI(title="Consultorio de Voz API")
 
 ALLOWED_ORIGINS = [
     "https://vocalis-lab.vercel.app",

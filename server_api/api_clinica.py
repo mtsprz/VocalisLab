@@ -583,7 +583,7 @@ async def crear_turno(
             g_resp = await create_calendar_event(
                 user_id=user_id,
                 summary=f"Atención Vocal: {paciente_nombre}",
-                description=f"Consulta Fonoaudiológica - VocalisLab Pro.\nModalidad: {modalidad}\nMotivo: {motivo}\n{notas}".strip(),
+                description=f"Consulta Fonoaudiológica — Consultorio de Voz.\nModalidad: {modalidad}\nMotivo: {motivo}\n{notas}".strip(),
                 start_datetime=start_dt.isoformat(),
                 end_datetime=end_dt.isoformat(),
                 attendee_email=paciente_email,
@@ -720,7 +720,7 @@ async def actualizar_turno(
                     p_nombre = pr.data[0].get("nombre_completo", "Paciente")
                     p_email = pr.data[0].get("email", "")
             summary = f"Atención Vocal: {p_nombre}"
-            desc = (f"Consulta Fonoaudiológica - VocalisLab Pro.\n"
+            desc = (f"Consulta Fonoaudiológica — Consultorio de Voz.\n"
                     f"Modalidad: {mod}\nMotivo: {merged.get('motivo', '')}\n"
                     f"{merged.get('notas', '')}").strip()
             from google_calendar import update_calendar_event, create_calendar_event
