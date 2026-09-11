@@ -13,6 +13,8 @@ import json
 import hashlib
 import io
 import base64
+import shutil
+import subprocess
 import numpy as np
 import parselmouth
 from parselmouth.praat import call
@@ -59,6 +61,39 @@ def _max_formant_from_f0(mean_f0):
         return 5000
     else:
         return 5500
+
+
+def asegurar_wav_compatible(file_path: str) -> str:
+    """Convierte a WAV 16-bit mono 44.1kHz con ffmpeg si Praat no lee el formato
+    original (ej. .webm Opus de MediaRecorder). Devuelve la ruta utilizable
+    (la misma si ya era legible, o la del WAV convertido)."""
+    try:
+        parselmouth.Sound(file_path)
+        return file_path
+    except Exception:
+        pass
+    out_path = os.path.splitext(file_path)[0] + "_conv.wav"
+    try:
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            try:
+                parselmouth.Sound(out_path)
+                return out_path
+            except Exception:
+                pass
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            return file_path
+        subprocess.run(
+            [ffmpeg, "-y", "-i", file_path,
+             "-ar", "44100", "-ac", "1", "-sample_fmt", "s16", out_path],
+            check=True, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=120,
+        )
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return out_path
+    except Exception as e:
+        print(f"[voicelab] No se pudo convertir a WAV: {e}")
+    return file_path
 
 
 def validar_audio_completo(file_path: str) -> dict:
@@ -920,6 +955,11 @@ def generar_base64_charts(sound, pf, pc, metrics, harmonics, avqi_val) -> dict:
 
 def analisis_completo(file_path: str, file_path_habla: Optional[str] = None, modo: str = "clinico", sexo: Optional[str] = None, pitch_floor: Optional[float] = None, pitch_ceiling: Optional[float] = None) -> dict:
     timestamp = datetime.now(timezone.utc).isoformat()
+
+    # Los navegadores graban .webm (Opus) que Praat no lee: convertir a WAV
+    file_path = asegurar_wav_compatible(file_path)
+    if file_path_habla:
+        file_path_habla = asegurar_wav_compatible(file_path_habla)
 
     try:
         audio_info = validar_audio_completo(file_path)
