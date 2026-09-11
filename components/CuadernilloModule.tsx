@@ -307,6 +307,33 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [loading, setLoading] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailBody, setEmailBody] = useState('');
+  const [showMembrete, setShowMembrete] = useState(false);
+  const [profesional, setProfesional] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem('vocalislab_profesional');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return {
+      profesional_nombre: '',
+      profesional_titulo: 'Lic. en Fonoaudiología',
+      profesional_matricula: '',
+      profesional_telefono: '',
+      profesional_email: '',
+      profesional_instagram: '',
+      profesional_direccion: '',
+      profesional_logo_url: '',
+    };
+  });
+
+  const setProf = (k: string, v: string) => {
+    setProfesional(prev => {
+      const next = { ...prev, [k]: v };
+      try {
+        localStorage.setItem('vocalislab_profesional', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const pacienteNombre = clinical.data.paciente?.nombre_completo || '';
   const pacienteTelefono = (clinical.data.paciente?.telefono || '').replace(/\D/g, '');
@@ -384,6 +411,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       fd.append('ejercicios_json', JSON.stringify(selected));
       fd.append('contrato_json', JSON.stringify(contrato));
       fd.append('notas', notas);
+      fd.append('profesional_json', JSON.stringify(profesional));
 
       const r = await fetch(`${BACKEND_URL}/api/cuadernillo/generar`, { method: 'POST', body: fd });
       const data = await r.json();
@@ -598,6 +626,44 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
           <FileText size={16} className="text-indigo-500" /> Parámetros de Prescripción & Contrato Terapéutico
         </h3>
+
+        {/* Membrete profesional (marca blanca del PDF) */}
+        <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 overflow-hidden">
+          <button
+            onClick={() => setShowMembrete(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 bg-indigo-50/60 dark:bg-indigo-950/30 text-xs font-bold text-indigo-800 dark:text-indigo-200"
+          >
+            <span>Membrete profesional del PDF (marca blanca — sin logos de plataforma)</span>
+            <span className="text-indigo-500">{showMembrete ? '▲' : '▼'}</span>
+          </button>
+          {showMembrete && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
+              {[
+                { k: 'profesional_nombre', label: 'Nombre y apellido', ph: 'Lic. María García' },
+                { k: 'profesional_titulo', label: 'Título profesional', ph: 'Lic. en Fonoaudiología' },
+                { k: 'profesional_matricula', label: 'Matrícula (M.P.)', ph: '12345' },
+                { k: 'profesional_telefono', label: 'Teléfono / WhatsApp', ph: '+54 9 ...' },
+                { k: 'profesional_email', label: 'Email', ph: 'contacto@consultorio.com' },
+                { k: 'profesional_instagram', label: 'Instagram / Red', ph: '@consultorio' },
+                { k: 'profesional_direccion', label: 'Dirección / Consultorio', ph: 'Av. ...' },
+                { k: 'profesional_logo_url', label: 'Logo (URL de imagen)', ph: 'https://...' },
+              ].map(f => (
+                <div key={f.k}>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">{f.label}</label>
+                  <input
+                    value={profesional[f.k] || ''}
+                    onChange={e => setProf(f.k, e.target.value)}
+                    placeholder={f.ph}
+                    className="mt-1 w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              ))}
+              <p className="md:col-span-2 text-[10px] text-gray-400">
+                Estos datos aparecen en portada, encabezados y pie del PDF. Se guardan en este dispositivo.
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

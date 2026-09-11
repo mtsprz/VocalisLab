@@ -1129,12 +1129,14 @@ async def generar_cuadernillo_endpoint(
     ejercicios_json: str = Form("[]"),
     contrato_json: str = Form("{}"),
     notas: str = Form(""),
+    profesional_json: str = Form("{}"),
 ):
     try:
         ejercicios = json.loads(ejercicios_json) if ejercicios_json.startswith("[") else []
         contrato = json.loads(contrato_json) if contrato_json.startswith("{") else {}
+        profesional = json.loads(profesional_json) if profesional_json.startswith("{") else {}
     except Exception:
-        ejercicios, contrato = [], {}
+        ejercicios, contrato, profesional = [], {}, {}
 
     pdf_path = generar_cuadernillo_pdf(
         paciente_nombre=paciente_nombre,
@@ -1143,6 +1145,7 @@ async def generar_cuadernillo_endpoint(
         ejercicios=ejercicios,
         contrato=contrato,
         notas=notas,
+        profesional=profesional,
     )
 
     with open(pdf_path, "rb") as f:
@@ -1162,6 +1165,45 @@ async def generar_cuadernillo_endpoint(
         "filename": f"{titulo.replace(' ', '_')}.pdf",
         "size_bytes": len(pdf_bytes),
     })
+
+
+@app.post("/api/cuadernillo/imagen-boceto")
+async def cuadernillo_imagen_boceto(
+    boceto: UploadFile = File(...),
+    nombre: str = Form("ejercicio vocal"),
+    descripcion: str = Form(""),
+):
+    """Sketch-to-Image: refina un boceto del profesional a arte de líneas limpio."""
+    try:
+        data = await boceto.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error leyendo boceto: {e}")
+    if not data or len(data) < 500:
+        raise HTTPException(status_code=400, detail="Boceto vacío o demasiado pequeño")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Boceto mayor a 8 MB")
+    try:
+        from imagen_terapeutica import generar_desde_boceto, proveedores_disponibles
+        if not proveedores_disponibles():
+            return JSONResponse(content={
+                "ok": False,
+                "error": "Sin proveedor de imágenes configurado (FAL_KEY, RECRAFT_API_KEY o REPLICATE_API_TOKEN).",
+            })
+        path = generar_desde_boceto(data, nombre, descripcion)
+        if not path:
+            return JSONResponse(content={
+                "ok": False,
+                "error": "No se pudo refinar el boceto. Probá con trazos más marcados sobre fondo blanco.",
+            })
+        import base64
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        return JSONResponse(content={"ok": True, "imagen_base64": b64})
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error refinando boceto: {str(e)[:300]}")
 
 
 # ─── MOTOR DE RECOMENDACIÓN IA TERAPÉUTICO ─────────────────

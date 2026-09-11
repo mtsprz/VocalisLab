@@ -101,6 +101,7 @@ def _simplificar(texto: str) -> str:
 
 
 # ─── Clasificación de curva melódica por ejercicio ─────────────────
+_CURVA_STACCATO = ("staccato", "stacatto", "punteado", "punteo")
 _CURVA_SIRENA = ("sirena", "vibraci", "trill", "fluctu", "tubo_agua", "popote_aire",
                  "escalas_vocalicas", "lax", "laxvox")
 _CURVA_DESCENSO = ("descenso", "bostezo", "enfriamiento", "suspiro", "le_huche",
@@ -113,6 +114,8 @@ _CURVA_SOSTENIDO = ("humming", "frases_balanceadas", "respiracion_abdominal",
 
 def _tipo_curva(ex: dict) -> str:
     blob = f"{ex.get('id', '')} {ex.get('name', '')} {ex.get('description', '')}".lower()
+    if any(k in blob for k in _CURVA_STACCATO):
+        return "staccato"
     if any(k in blob for k in _CURVA_SIRENA):
         return "sirena"
     if any(k in blob for k in _CURVA_DESCENSO):
@@ -127,6 +130,7 @@ _CURVA_TITULO = {
     "sirena": "Sirena: suba y baje varias veces",
     "sostenido": "Mantenga el sonido parejo",
     "descendente": "Baje suave de agudo a grave",
+    "staccato": "Golpecitos cortos y separados",
 }
 
 
@@ -167,6 +171,17 @@ def _curva_melodica(tipo: str, segundos: str = "") -> Drawing:
         if segundos:
             d.add(String(W / 2 - 14, y + 8, segundos, fontName="Helvetica-Bold",
                          fontSize=7, fillColor=CURVE_COLOR))
+    elif tipo == "staccato":
+        # Serie de puntos/golpecitos cortos ascendentes
+        n = 9
+        for i in range(n):
+            x = 16 + i * (W - 32) / (n - 1)
+            y = 16 + (i / (n - 1)) * (H - 32)
+            d.add(Circle(x, y, 3.2, strokeColor=CURVE_COLOR, strokeWidth=1.6,
+                         fillColor=CURVE_COLOR))
+            d.add(Line(x, y + 4, x, y + 12, strokeColor=ARROW_COLOR, strokeWidth=1.2))
+        d.add(String(14, H - 10, "corto-corto-corto", fontName="Helvetica",
+                     fontSize=6, fillColor=GRAY_TEXT))
     else:  # descendente
         pts = []
         for i in range(21):
@@ -332,10 +347,81 @@ def _get_styles():
     return styles
 
 
-def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha):
+def _prof(profesional: dict, key: str, default: str = "") -> str:
+    """Lee un dato del profesional con fallback seguro."""
+    if not isinstance(profesional, dict):
+        return default
+    v = profesional.get(key, default)
+    return str(v or default).strip()
+
+
+def _descargar_logo(url: str):
+    """Descarga el logo del profesional a un temporal. Devuelve path o None."""
+    url = (url or "").strip()
+    if not url or not url.lower().startswith(("http://", "https://")):
+        return None
+    try:
+        import httpx
+        r = httpx.get(url, timeout=15, follow_redirects=True)
+        if r.status_code != 200 or len(r.content) < 500:
+            return None
+        ctype = r.headers.get("content-type", "")
+        ext = ".png"
+        if "jpeg" in ctype or "jpg" in ctype:
+            ext = ".jpg"
+        elif "webp" in ctype:
+            ext = ".webp"
+        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+        tmp.write(r.content)
+        tmp.close()
+        return tmp.name
+    except Exception:
+        return None
+
+
+def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha, profesional=None):
+    """Portada marca blanca con membrete del profesional tratante."""
     elements = []
-    elements.append(Spacer(1, 40 * mm))
-    elements.append(Paragraph("VOCALISLAB PRO", styles['CoverTitle']))
+    profesional = profesional if isinstance(profesional, dict) else {}
+
+    logo_path = _descargar_logo(_prof(profesional, "profesional_logo_url"))
+    if logo_path:
+        try:
+            from reportlab.platypus import Image as RLImage
+            from reportlab.lib.utils import ImageReader
+            iw, ih = ImageReader(logo_path).getSize()
+            max_w, max_h = 55 * mm, 30 * mm
+            scale = min(max_w / iw, max_h / ih, 1.0)
+            logo_img = RLImage(logo_path, width=iw * scale, height=ih * scale)
+            logo_img.hAlign = 'CENTER'
+            elements.append(logo_img)
+            elements.append(Spacer(1, 6 * mm))
+        except Exception:
+            pass
+
+    elements.append(Spacer(1, 18 * mm))
+    elements.append(Paragraph(
+        escape(_prof(profesional, "profesional_nombre", "Atención Fonoaudiológica")),
+        styles['CoverTitle']))
+    tit_mat = " ".join(x for x in [
+        _prof(profesional, "profesional_titulo"),
+        ("M.P. " + _prof(profesional, "profesional_matricula")) if _prof(profesional, "profesional_matricula") else "",
+    ] if x).strip()
+    if tit_mat:
+        elements.append(Paragraph(escape(tit_mat), styles['CoverSubtitle']))
+    contacto = "  |  ".join(x for x in [
+        _prof(profesional, "profesional_telefono"),
+        _prof(profesional, "profesional_email"),
+    ] if x).strip()
+    if contacto:
+        elements.append(Paragraph(escape(contacto), styles['CoverSubtitle']))
+    redes = "  |  ".join(x for x in [
+        _prof(profesional, "profesional_instagram"),
+        _prof(profesional, "profesional_direccion"),
+    ] if x).strip()
+    if redes:
+        elements.append(Paragraph(escape(redes), styles['CoverSubtitle']))
+    elements.append(Spacer(1, 6 * mm))
     elements.append(Paragraph(escape(titulo or ""), styles['CoverSubtitle']))
     elements.append(Spacer(1, 15 * mm))
 
@@ -343,7 +429,7 @@ def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha):
         ["Paciente:", paciente_nombre or "Sin especificar"],
         ["Fecha de inicio:", fecha],
         ["Sesiones:", str(sesiones)],
-        ["Generado por:", "VocalisLab Pro — Plataforma Fonoaudiológica"],
+        ["Profesional:", _prof(profesional, "profesional_nombre", "Su fonoaudiólogo/a")],
     ]
     info_table = Table(info_data, colWidths=[45 * mm, 90 * mm])
     info_table.setStyle(TableStyle([
@@ -445,6 +531,28 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
 
     if desc:
         elements.append(Paragraph(escape(desc), styles['CuadBody']))
+
+    # Ilustración IA autónoma (si hay proveedor configurado); si no, vectorial
+    try:
+        from imagen_terapeutica import generar_imagen_ejercicio, proveedores_disponibles
+        ai_img = generar_imagen_ejercicio(name, desc) if proveedores_disponibles() else None
+    except Exception:
+        ai_img = None
+    if ai_img:
+        try:
+            from reportlab.platypus import Image as RLImage
+            from reportlab.lib.utils import ImageReader
+            iw, ih = ImageReader(ai_img).getSize()
+            max_w, max_h = 120 * mm, 70 * mm
+            sc = min(max_w / iw, max_h / ih, 1.0)
+            im = RLImage(ai_img, width=iw * sc, height=ih * sc)
+            im.hAlign = 'CENTER'
+            elements.append(im)
+            elements.append(Paragraph("Ilustración de apoyo generada para este ejercicio",
+                                      styles['CaptionText']))
+            elements.append(Spacer(1, 2 * mm))
+        except Exception:
+            pass
 
     # Fila visual: curva melódica (+ pictograma o duración)
     tipo = _tipo_curva(exercise)
@@ -566,14 +674,14 @@ def _build_tme_log(styles):
     elements.append(Spacer(1, 2 * mm))
     elements.append(Paragraph(
         "Una vez por día, tome aire y largue el aire con una <b>S</b> suave "
-        "todo lo que pueda. Anote cuántos segundos duró. Así vemos cómo mejora "
-        "su control del aire.",
+        "todo lo que pueda. Anote cuántos segundos duró y cómo sintió su voz. "
+        "Así vemos cómo mejora su control del aire.",
         styles['CuadBody']))
 
-    data = [["Fecha", "TME con S fuerte (seg)", "TME con S suave (seg)", "Iniciales"]]
-    for _ in range(10):
-        data.append(["", "", "", ""])
-    table = Table(data, colWidths=[36 * mm, 44 * mm, 44 * mm, 36 * mm],
+    data = [["Fecha", "Segundos logrados", "Sensación vocal", "[ ]"]]
+    for _ in range(12):
+        data.append(["", "", "", "[ ]"])
+    table = Table(data, colWidths=[32 * mm, 38 * mm, 62 * mm, 28 * mm],
                   repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
@@ -711,8 +819,8 @@ def _add_page_number(canvas, doc):
     canvas.setFillColor(GRAY_TEXT)
     canvas.drawCentredString(A4[0] / 2, 15 * mm, f"Página {doc.page}")
     canvas.setFont('Helvetica', 8)
-    canvas.drawString(15 * mm, 15 * mm, "VocalisLab Pro")
-    canvas.drawRightString(A4[0] - 15 * mm, 15 * mm, "Plataforma Fonoaudiológica")
+    canvas.drawString(15 * mm, 15 * mm, getattr(doc, '_prof_pie_izq', ''))
+    canvas.drawRightString(A4[0] - 15 * mm, 15 * mm, getattr(doc, '_prof_pie_der', ''))
     canvas.restoreState()
 
 
@@ -723,8 +831,10 @@ def generar_cuadernillo_pdf(
     ejercicios: list,
     contrato: dict,
     notas: str = "",
+    profesional: dict = None,
 ) -> str:
     fecha = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
+    profesional = profesional if isinstance(profesional, dict) else {}
 
     tmp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
     pdf_path = tmp_file.name
@@ -742,7 +852,13 @@ def generar_cuadernillo_pdf(
     styles = _get_styles()
     story = []
 
-    story.extend(_build_cover(styles, titulo, paciente_nombre, sesiones, fecha))
+    pie_izq = _prof(profesional, "profesional_nombre")
+    pie_der = _prof(profesional, "profesional_telefono") or _prof(profesional, "profesional_email")
+    doc._prof_pie_izq = pie_izq
+    doc._prof_pie_der = pie_der
+
+    story.extend(_build_cover(styles, titulo, paciente_nombre, sesiones, fecha,
+                              profesional=profesional))
     story.extend(_build_contract(styles, contrato))
 
     story.append(Paragraph("Mis Ejercicios de Voz", styles['SectionTitle']))
@@ -775,8 +891,10 @@ def generar_cuadernillo_pdf(
         story.append(Paragraph(escape(_simplificar(notas)), styles['CuadBody']))
 
     story.append(Spacer(1, 15 * mm))
+    firma_txt = _prof(profesional, "profesional_nombre", "Su profesional tratante")
     story.append(Paragraph(
-        "Este material fue generado por VocalisLab Pro. Distribución restringida al paciente y profesional tratante.",
+        f"Este material fue preparado por {escape(firma_txt)} para uso exclusivo "
+        "del paciente. Si siente dolor o molestia, suspenda los ejercicios y consulte.",
         styles['FooterText']
     ))
 
