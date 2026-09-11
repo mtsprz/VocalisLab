@@ -314,13 +314,13 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       if (raw) return JSON.parse(raw);
     } catch {}
     return {
-      profesional_nombre: '',
-      profesional_titulo: 'Lic. en Fonoaudiología',
+      profesional_nombre: 'Lic. Matias Perez',
+      profesional_titulo: 'Fonoaudiólogo',
       profesional_matricula: '',
       profesional_telefono: '',
       profesional_email: '',
       profesional_instagram: '',
-      profesional_direccion: '',
+      profesional_direccion: 'Consultorio',
       profesional_logo_url: '',
     };
   });

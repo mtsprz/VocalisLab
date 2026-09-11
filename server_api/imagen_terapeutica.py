@@ -1,17 +1,69 @@
 """VocalisLab Pro — Motor autónomo de imágenes terapéuticas.
 
 Genera ilustraciones clínicas en arte de líneas (blanco y negro, fondo blanco)
-para los ejercicios del cuadernillo usando proveedores externos, con fallback
-automático al dibujo vectorial interno si no hay claves configuradas.
+para los ejercicios del cuadernillo, con fallback automático al dibujo
+vectorial interno si no hay claves configuradas.
 
-Orden de proveedores (según claves presentes):
-  1. FAL.ai (FAL_KEY) — FLUX line art
-  2. Recraft V3 (RECRAFT_API_KEY) — style line_art
-  3. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX
+Orden de proveedores:
+  1. Gemini Flash Image / Nano Banana (GEMINI_API_KEY) — GRATUITO con la key
+     existente. Modelos: gemini-2.5-flash-image, gemini-2.0-flash-preview-image-generation.
+  2. FAL.ai (FAL_KEY) — FLUX line art.
+  3. Recraft V3 (RECRAFT_API_KEY) — style line_art.
+  4. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX.
 
 Sin claves → devuelve None y el cuadernillo usa los pictogramas vectoriales.
 Las imágenes se cachean en /tmp por hash del prompt (no se regeneran).
 """
+
+PROMPT_BASE = ("Minimalist 2D medical line art illustration of {desc}, clean black "
+               "strokes on white background, simple pedagogical style, vector icon "
+               "style, no shading, no colors, high legibility --ar 1:1")
+
+# Descripciones específicas obligatorias por ejercicio (inglés, estilo line-art)
+IMG_DESC_POR_EJERCICIO = {
+    "rotacion_hombros": "human upper torso showing neck side bend and shoulder roll arrows",
+    "respiracion_abdominal": "human torso side-view showing abdominal expansion arrows during breathing",
+    "tubo_agua": "clear glass with water, submerged silicone tube at 1.5 cm depth, bubbling effect",
+    "popote_aire": "side profile of human mouth blowing through a thin straw in open air, no glass, no water",
+    "humming_m": "side view of human face with gentle vibration lines around nasolabial and mask area",
+    "frases_balanceadas": "person speaking clearly with expanding soundwave arcs extending forward 3 meters",
+    "calentamiento": "three ascending warm-up steps for voice training with arrows going up",
+    "enfriamiento": "three descending cool-down steps for voice training with arrows going down",
+    "le_huche": "person breathing deeply with relaxed shoulders, respiratory cycle arrows",
+    "shiatsu_cabeza": "head pressure points marked with dots on temples and jaw for self-massage",
+    "masaje_laringeo": "hands gently massaging the front of the neck, laryngeal area",
+    "descenso_laringeo": "wide yawn with open mouth showing lowered larynx arrow",
+    "oclusion_succion": "lips sealed around a narrow straw sucking gently",
+    "expansion_costo_lateral": "ribcage with lateral expansion arrows on lower ribs",
+    "soplo_escalonado": "stepped ascending airflow blocks from whisper to voiced sound",
+    "empuje_glotico": "two vocal folds closing firmly with inward arrows",
+    "vibracion_labial": "lips vibrating with trill motion lines",
+    "consonantes_fricativas": "teeth with continuous airflow producing v and z sounds",
+    "escalas_vocalicas": "five ascending musical stairs with notes going up and down",
+    "pautas_rlf": "inclined bed wedge pillow and clock showing no food 2.5 hours before sleep",
+}
+
+GEMINI_IMAGE_MODELS = [
+    "gemini-2.5-flash-image",
+    "gemini-2.0-flash-preview-image-generation",
+]
+
+
+def _gemini_image_models():
+    env = os.environ.get("GEMINI_IMAGE_MODEL", "").strip()
+    if env:
+        return [m.strip() for m in env.split(",") if m.strip()]
+    return list(GEMINI_IMAGE_MODELS)
+
+
+def _descripcion_ejercicio(exercise_id: str, nombre: str, descripcion: str) -> str:
+    ex_id = str(exercise_id or "").strip().lower()
+    if ex_id in IMG_DESC_POR_EJERCICIO:
+        return IMG_DESC_POR_EJERCICIO[ex_id]
+    base = (nombre or "vocal exercise").strip()
+    if descripcion:
+        base += f" ({descripcion[:120].strip()})"
+    return f"speech therapy for voice: {base}"
 import os
 import hashlib
 import tempfile
@@ -50,10 +102,48 @@ def _es_imagen_valida(path: str) -> bool:
 
 
 def _prompt_ejercicio(nombre: str, descripcion: str) -> str:
-    base = f"Clinical speech therapy illustration for the exercise '{nombre}'"
-    if descripcion:
-        base += f": {descripcion[:220]}"
-    return f"{base}. Simple clear shapes for elderly patients. {ESTILO_LINEA}"
+    return PROMPT_BASE.format(desc=f"{nombre}. {descripcion[:220]}".strip())
+
+
+def _via_gemini(prompt: str) -> str | None:
+    """Nano Banana / Gemini Flash Image (gratuito con GEMINI_API_KEY)."""
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        import httpx
+    except ImportError:
+        return None
+    for model in _gemini_image_models():
+        try:
+            r = httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseModalities": ["IMAGE"]},
+                },
+                timeout=120,
+            )
+            if r.status_code != 200:
+                print(f"[imagen_terapeutica] Gemini {model} {r.status_code}: {r.text[:200]}")
+                continue
+            for cand in (r.json().get("candidates") or []):
+                for part in ((cand.get("content") or {}).get("parts") or []):
+                    inline = part.get("inlineData") or part.get("inline_data") or {}
+                    b64 = inline.get("data", "")
+                    if b64:
+                        import base64
+                        dest = _cache_path(prompt, "gemini")
+                        with open(dest, "wb") as f:
+                            f.write(base64.b64decode(b64))
+                        if _es_imagen_valida(dest):
+                            return dest
+            print(f"[imagen_terapeutica] Gemini {model}: sin imagen en respuesta")
+        except Exception:
+            traceback.print_exc()
+            continue
+    return None
 
 
 def _via_fal(prompt: str) -> str | None:
@@ -173,10 +263,19 @@ def proveedores_disponibles() -> list:
     return provs
 
 
-def generar_imagen_ejercicio(nombre: str, descripcion: str = "") -> str | None:
+def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
+                            exercise_id: str = "") -> str | None:
     """Devuelve el path local de la ilustración IA, o None si no hay proveedor
     configurado o fallan todos (el cuadernillo usa el dibujo vectorial)."""
-    prompt = _prompt_ejercicio(nombre or "ejercicio vocal", descripcion or "")
+    desc = _descripcion_ejercicio(exercise_id, nombre or "ejercicio vocal",
+                                  descripcion or "")
+    prompt = PROMPT_BASE.format(desc=desc)
+    dest = _cache_path(prompt, "gemini")
+    if _es_imagen_valida(dest):
+        return dest
+    path = _via_gemini(prompt)
+    if path and _es_imagen_valida(path):
+        return path
     for prov, fn in (("fal", _via_fal), ("recraft", _via_recraft),
                      ("replicate", _via_replicate)):
         dest = _cache_path(prompt, prov)
