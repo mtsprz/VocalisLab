@@ -53,7 +53,7 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
   ];
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6 max-w-6xl mx-auto w-full">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card) => (
           <button

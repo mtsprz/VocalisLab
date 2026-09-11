@@ -109,16 +109,16 @@ export default function ZoomEmbedded({ meetingNumber, password, userName, role =
       <div
         ref={rootRef}
         id="meetingSDKElement"
-        className="w-full min-h-[480px] bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden"
+        className="w-full min-h-[320px] sm:min-h-[480px] bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden"
       >
         {status === 'cargando' && (
-          <div className="flex flex-col items-center justify-center h-[480px] gap-3 text-slate-400">
+          <div className="flex flex-col items-center justify-center h-[320px] sm:h-[480px] gap-3 text-slate-400">
             <Loader2 size={28} className="animate-spin text-blue-500" />
             <p className="text-xs font-semibold">Conectando sala embebida…</p>
           </div>
         )}
         {status === 'error' && (
-          <div className="flex flex-col items-center justify-center h-[480px] gap-3 p-6 text-center">
+          <div className="flex flex-col items-center justify-center h-[320px] sm:h-[480px] gap-3 p-6 text-center">
             <AlertCircle size={28} className="text-amber-500" />
             <p className="text-xs font-bold text-slate-200">No se pudo embeber el video</p>
             <p className="text-[11px] text-slate-400 max-w-sm">{errorMsg}</p>

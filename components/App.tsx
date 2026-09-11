@@ -36,7 +36,10 @@ function AppInner() {
   const { user, logout } = useAuth();
   const clinical = useClinical();
   const [activeModule, setActiveModule] = useState<ActiveModule>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // En móvil el sidebar arranca cerrado (overlay); en PC arranca abierto
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(
+    () => typeof window === 'undefined' || window.innerWidth >= 768
+  );
   const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
   const [initialExerciseIds, setInitialExerciseIds] = useState<string[]>([]);
   const [videoconfTurno, setVideoconfTurno] = useState<any | null>(null);
@@ -68,6 +71,13 @@ function AppInner() {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Al navegar en móvil, cerrar el sidebar automáticamente
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [activeModule]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -118,9 +128,15 @@ function AppInner() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 overflow-hidden transition-colors duration-200">
+    <div className="flex h-dvh bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 overflow-hidden transition-colors duration-200">
       {sidebarOpen && (
-        <aside className="w-64 bg-white dark:bg-[#111827] border-r border-gray-200 dark:border-gray-800 flex flex-col shadow-sm flex-shrink-0 z-20 transition-colors duration-200">
+        <>
+          {/* Backdrop solo en móvil (sidebar overlay) */}
+          <div
+            className="fixed inset-0 bg-black/50 z-20 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <aside className="fixed md:static inset-y-0 left-0 w-64 max-w-[85vw] bg-white dark:bg-[#111827] border-r border-gray-200 dark:border-gray-800 flex flex-col shadow-xl md:shadow-sm flex-shrink-0 z-30 transition-colors duration-200">
           <div className="p-4 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
@@ -155,14 +171,17 @@ function AppInner() {
             <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center font-medium">v2.1 — Plataforma Clínica</p>
           </div>
         </aside>
+        </>
       )}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white dark:bg-[#111827] border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0 transition-colors duration-200">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400">
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <header className="bg-white dark:bg-[#111827] border-b border-gray-200 dark:border-gray-800 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 flex-shrink-0 transition-colors duration-200">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 shrink-0">
               {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
-            <ClinicalStepper activeModule={activeModule} onNavigate={setActiveModule as any} />
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <ClinicalStepper activeModule={activeModule} onNavigate={setActiveModule as any} />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {user && (
@@ -189,7 +208,7 @@ function AppInner() {
             </button>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 dark:bg-[#0b0f19] transition-colors duration-200">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-slate-50 dark:bg-[#0b0f19] transition-colors duration-200">
           {renderModule()}
         </div>
       </main>

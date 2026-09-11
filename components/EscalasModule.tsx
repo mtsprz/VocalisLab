@@ -438,15 +438,15 @@ export default function EscalasModule({ pacienteId }: Props) {
             </span>
           )}
         </div>
-        <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 pb-1">
+        <div className="hidden sm:grid grid-cols-4 gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 pb-1">
           <span>Métrica</span><span className="text-right">Basal</span>
           <span className="text-right">Actual</span><span className="text-right">Δ</span>
         </div>
         {conDatos.map(r => (
-          <div key={r.metrica} className="grid grid-cols-4 gap-2 text-xs py-1 border-t border-indigo-100 dark:border-indigo-900/50">
-            <span className="font-medium text-gray-700 dark:text-gray-300">{r.metrica}</span>
-            <span className="text-right font-mono text-gray-600 dark:text-gray-400">{r.b ?? '—'}</span>
-            <span className="text-right font-mono font-bold text-gray-900 dark:text-white">{r.a ?? '—'}</span>
+          <div key={r.metrica} className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-0.5 text-xs py-1.5 border-t border-indigo-100 dark:border-indigo-900/50">
+            <span className="col-span-3 sm:col-span-1 font-medium text-gray-700 dark:text-gray-300">{r.metrica}</span>
+            <span className="text-left sm:text-right font-mono text-gray-600 dark:text-gray-400"><span className="sm:hidden text-gray-400">Basal: </span>{r.b ?? '—'}</span>
+            <span className="text-left sm:text-right font-mono font-bold text-gray-900 dark:text-white"><span className="sm:hidden text-gray-400 font-medium">Actual: </span>{r.a ?? '—'}</span>
             <span className="text-right font-mono">{fmtDelta(r)}</span>
           </div>
         ))}
@@ -591,7 +591,7 @@ export default function EscalasModule({ pacienteId }: Props) {
   };
 
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="max-w-5xl mx-auto w-full space-y-4">
       {/* Scale Switcher Tabs */}
       <div className="flex flex-wrap gap-2">
         {Object.entries(SCALES).map(([key, scale]) => (
@@ -697,7 +697,7 @@ export default function EscalasModule({ pacienteId }: Props) {
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           placeholder="Escriba aquí cualquier observación pertinente..."
         />
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             onClick={handleSave}
             disabled={saving || !pacienteId}

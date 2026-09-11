@@ -138,8 +138,8 @@ export default function NuevoTurnoModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white dark:bg-[#111827] rounded-3xl border border-gray-200 dark:border-white/10 w-full max-w-lg shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white dark:bg-[#111827] rounded-3xl border border-gray-200 dark:border-white/10 w-full max-w-lg shadow-2xl overflow-hidden max-h-[92dvh] overflow-y-auto">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -225,7 +225,7 @@ export default function NuevoTurnoModal({
           </div>
 
           {/* Fecha y Horario */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="col-span-1">
               <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">Fecha</label>
               <input

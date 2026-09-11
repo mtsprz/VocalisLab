@@ -428,7 +428,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   };
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl mx-auto w-full space-y-6">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-indigo-900/60 via-purple-900/40 to-slate-900/80 backdrop-blur-xl border border-indigo-500/20 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -646,8 +646,8 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
 
       {/* Modal envío por Email */}
       {showEmailModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-[#111827] rounded-3xl border border-gray-200 dark:border-white/10 w-full max-w-lg shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#111827] rounded-3xl border border-gray-200 dark:border-white/10 w-full max-w-lg shadow-2xl overflow-hidden max-h-[92dvh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex items-center justify-between">
               <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
                 <Mail size={16} className="text-sky-500" /> Enviar cuadernillo por correo

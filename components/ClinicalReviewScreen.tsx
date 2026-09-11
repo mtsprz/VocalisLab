@@ -122,10 +122,10 @@ export default function ClinicalReviewScreen({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-sky-400" />
-          <h2 className="text-lg font-bold text-slate-100">Control Clínico</h2>
+          <h2 className="text-base sm:text-lg font-bold text-slate-100">Control Clínico</h2>
         </div>
         <div className="flex items-center gap-3">
           <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${audioStatus.bg} ${audioStatus.color}`}>

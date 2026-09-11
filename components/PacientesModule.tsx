@@ -106,10 +106,10 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
   const set = (field: string) => (v: string) => setForm(prev => ({ ...prev, [field]: v }));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="max-w-5xl mx-auto w-full space-y-4">
       {/* Header Search & Actions */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 relative">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1 relative min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             value={buscar}
@@ -120,7 +120,7 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
         </div>
         <button
           onClick={() => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true); }}
-          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition-all whitespace-nowrap"
         >
           <UserPlus size={16} /> Nuevo Paciente
         </button>

@@ -566,7 +566,7 @@ export default function VideoconferenciaModule({ turno: turnoInicial, onNavigate
 
       {/* Overlay presentar consigna (para compartir pantalla) */}
       {presentar && (
-        <div className="fixed inset-0 z-[60] bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
+        <div className="fixed inset-0 z-[60] bg-slate-950 flex flex-col items-center justify-center p-4 sm:p-8 text-center overflow-y-auto">
           <p className="text-sm text-slate-400 font-bold uppercase tracking-widest mb-4">Consigna para el paciente — compartí esta pantalla</p>
           <h2 className="text-3xl md:text-5xl font-black text-white max-w-4xl">{presentar.name}</h2>
           <div className="mt-6 space-y-3 max-w-2xl">

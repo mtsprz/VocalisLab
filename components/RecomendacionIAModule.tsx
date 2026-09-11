@@ -140,7 +140,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
   };
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-5xl mx-auto w-full space-y-6">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 border border-indigo-700/50 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-400/20 via-transparent to-transparent pointer-events-none" />
