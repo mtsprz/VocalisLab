@@ -366,6 +366,103 @@ def _via_replicate(prompt: str) -> str | None:
         return None
 
 
+def _supabase():
+    try:
+        from supabase import create_client
+        url = __import__("os").environ.get("SUPABASE_URL", "")
+        key = __import__("os").environ.get("SUPABASE_SERVICE_KEY",
+                                           __import__("os").environ.get("SUPABASE_ANON_KEY", ""))
+        if url and key:
+            return create_client(url, key)
+    except Exception as e:
+        print(f"[imagen_terapeutica] Supabase no disponible: {e}")
+    return None
+
+
+BUCKET = "ejercicios"
+
+
+def _ensure_bucket(sb) -> bool:
+    try:
+        sb.storage.get_bucket(BUCKET)
+        return True
+    except Exception:
+        try:
+            sb.storage.create_bucket(BUCKET, options={"public": True})
+            return True
+        except Exception as e:
+            print(f"[imagen_terapeutica] No se pudo crear bucket: {e}")
+            return False
+
+
+def buscar_imagen_guardada(exercise_id: str) -> str | None:
+    """Devuelve el path local de la imagen persistida para el ejercicio, o None.
+    1) Fila en ejercicio_imagenes → 2) descarga de Storage a caché local."""
+    ex_id = str(exercise_id or "").strip().lower()
+    if not ex_id:
+        return None
+    sb = _supabase()
+    if not sb:
+        return None
+    try:
+        res = sb.table("ejercicio_imagenes").select("image_url, storage_path")\
+            .eq("exercise_id", ex_id).limit(1).execute()
+        rows = res.data or []
+        if not rows:
+            return None
+        row = rows[0]
+        # 1) caché local por hash estable del exercise_id
+        dest = _cache_path(f"ejercicio:{ex_id}", "db")
+        if _es_imagen_valida(dest):
+            return dest
+        # 2) descargar desde la URL persistida
+        url = row.get("image_url", "")
+        if url and _descargar(url, dest, timeout=60):
+            return dest
+        return None
+    except Exception as e:
+        print(f"[imagen_terapeutica] Lookup DB falló: {e}")
+        return None
+
+
+def guardar_imagen_ejercicio(exercise_id: str, local_path: str, prompt: str = "",
+                             proveedor: str = "") -> str | None:
+    """Sube la imagen a Storage y la asocia al ejercicio. Devuelve la URL pública."""
+    ex_id = str(exercise_id or "").strip().lower()
+    if not ex_id or not local_path:
+        return None
+    sb = _supabase()
+    if not sb:
+        return None
+    try:
+        if not _ensure_bucket(sb):
+            return None
+        ext = ".png"
+        low = local_path.lower()
+        if low.endswith((".jpg", ".jpeg")):
+            ext = ".jpg"
+        elif low.endswith(".webp"):
+            ext = ".webp"
+        storage_path = f"{ex_id}{ext}"
+        with open(local_path, "rb") as f:
+            sb.storage.from_(BUCKET).upload(
+                storage_path, f,
+                {"content-type": f"image/{'jpeg' if ext == '.jpg' else ext[1:]}",
+                 "upsert": "true"})
+        pub = sb.storage.from_(BUCKET).get_public_url(storage_path)
+        sb.table("ejercicio_imagenes").upsert({
+            "exercise_id": ex_id,
+            "image_url": pub,
+            "storage_path": storage_path,
+            "prompt": (prompt or "")[:2000],
+            "proveedor": proveedor,
+        }, on_conflict="exercise_id").execute()
+        return pub
+    except Exception as e:
+        print(f"[imagen_terapeutica] No se pudo persistir imagen de {ex_id}: {e}")
+        return None
+
+
 def proveedores_disponibles() -> list:
     provs = []
     if os.environ.get("WAVESPEED_API_KEY", "").strip():
@@ -409,45 +506,61 @@ def _pollinations_permitido() -> bool:
 def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
                             exercise_id: str = "") -> str | None:
     """Devuelve el path local de la ilustración IA, o None si no hay proveedor
-    configurado o fallan todos (el cuadernillo usa el dibujo vectorial)."""
-    desc = _descripcion_ejercicio(exercise_id, nombre or "ejercicio vocal",
+    configurado o fallan todos (el cuadernillo usa el dibujo vectorial).
+
+    Orden: 1) imagen ya asociada en DB → 2) proveedores en cascada →
+    3) la recién generada se sube a Storage y se asocia (no se regenera más).
+    """
+    ex_id = str(exercise_id or "").strip().lower()
+    if ex_id:
+        db_path = buscar_imagen_guardada(ex_id)
+        if db_path:
+            return db_path
+    desc = _descripcion_ejercicio(ex_id, nombre or "ejercicio vocal",
                                   descripcion or "")
     prompt = PROMPT_BASE.format(desc=desc)
-    desc3d = IMG_DESC_3D.get(str(exercise_id or "").strip().lower(),
-                             f"speech therapy exercise: {desc}")
+    desc3d = IMG_DESC_3D.get(ex_id, f"speech therapy exercise: {desc}")
     prompt_3d = (f"Hyperrealistic 3D clinical render, {desc3d}, studio lighting, "
                  "medical textbook aesthetic, high detail")
+
+    def _ok(path, prov, prm):
+        if path and _es_imagen_valida(path):
+            if ex_id:
+                guardar_imagen_ejercicio(ex_id, path, prm, prov)
+            return path
+        return None
+
     # Wavespeed primero (key dedicada del consultorio), luego el resto
     dest = _cache_path(prompt, "wavespeed")
     if _es_imagen_valida(dest):
         return dest
-    path = _via_wavespeed(prompt)
-    if path and _es_imagen_valida(path):
-        return path
+    r = _ok(_via_wavespeed(prompt), "wavespeed", prompt)
+    if r:
+        return r
     dest = _cache_path(prompt, "pixazo")
     if _es_imagen_valida(dest):
         return dest
-    path = _via_pixazo(prompt, prompt_3d)
-    if path and _es_imagen_valida(path):
-        return path
+    r = _ok(_via_pixazo(prompt, prompt_3d), "pixazo", prompt)
+    if r:
+        return r
     if _pollinations_permitido():
-        path = _via_pollinations(prompt)
-        if path and _es_imagen_valida(path):
-            return path
+        r = _ok(_via_pollinations(prompt), "pollinations", prompt)
+        if r:
+            return r
     dest = _cache_path(prompt, "gemini")
     if _es_imagen_valida(dest):
         return dest
-    path = _via_gemini(prompt)
-    if path and _es_imagen_valida(path):
-        return path
+    r = _ok(_via_gemini(prompt), "gemini", prompt)
+    if r:
+        return r
     for prov, fn in (("fal", _via_fal), ("recraft", _via_recraft),
                      ("replicate", _via_replicate)):
         dest = _cache_path(prompt, prov)
         if _es_imagen_valida(dest):
             return dest
-        path = fn(prompt)
-        if path and _es_imagen_valida(path):
-            return path
+        r = _ok(fn(prompt), prov, prompt)
+        if r:
+            return r
     return None
 
 

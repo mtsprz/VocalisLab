@@ -309,6 +309,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailBody, setEmailBody] = useState('');
   const [showMembrete, setShowMembrete] = useState(false);
+  const [sugerencias, setSugerencias] = useState<any[]>([]);
+  const [expandiendo, setExpandiendo] = useState(false);
+  const [seccionExpandir, setSeccionExpandir] = useState('sovte');
+  const [expandMsg, setExpandMsg] = useState('');
   const [profesional, setProfesional] = useState<Record<string, string>>(() => {
     try {
       const raw = localStorage.getItem('vocalislab_profesional');
@@ -362,6 +366,40 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     } catch {
       // DEFAULT_PRESETS and DEFAULT_SECTIONS are already present as fallbacks
     }
+    try {
+      const r2 = await fetch(`${BACKEND_URL}/api/ejercicios/ia?estado=pendiente`);
+      if (r2.ok) setSugerencias(await r2.json());
+    } catch {}
+  };
+
+  const expandirBanco = async () => {
+    setExpandiendo(true);
+    setExpandMsg('');
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/expandir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seccion_id: seccionExpandir, cantidad: 3 }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) throw new Error(data.detail || `Error ${r.status}`);
+      setExpandMsg(`${(data.creados || []).length} ejercicios sugeridos. Revisalos abajo.`);
+      const r2 = await fetch(`${BACKEND_URL}/api/ejercicios/ia?estado=pendiente`);
+      if (r2.ok) setSugerencias(await r2.json());
+    } catch (e: any) {
+      setExpandMsg(e.message || 'La IA no pudo generar ejercicios');
+    }
+    setExpandiendo(false);
+  };
+
+  const moderarSugerencia = async (id: string, estado: 'aprobado' | 'descartado') => {
+    try {
+      const fd = new FormData();
+      fd.append('estado', estado);
+      await fetch(`${BACKEND_URL}/api/ejercicios/ia/${id}`, { method: 'PUT', body: fd });
+      setSugerencias(prev => prev.filter(s => s.id !== id));
+      if (estado === 'aprobado') loadBank();
+    } catch {}
   };
 
   const applyPreset = (presetId: string) => {
@@ -546,6 +584,67 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             );
           })}
         </div>
+      </div>
+
+      {/* Expansión IA del banco (Farías/Le Huche/Titze) + moderación */}
+      <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2 mr-auto">
+            <Sparkles size={16} className="text-purple-500" /> Expandir banco con IA
+          </h3>
+          <select
+            value={seccionExpandir}
+            onChange={e => setSeccionExpandir(e.target.value)}
+            className="px-3 py-2 bg-white dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-xl text-xs"
+          >
+            {sections.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={expandirBanco}
+            disabled={expandiendo}
+            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 disabled:opacity-50"
+          >
+            {expandiendo ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {expandiendo ? 'Generando…' : 'Sugerir ejercicios'}
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+          La IA propone ejercicios nuevos con fundamento Farías/Le Huche/Titze. Nada entra al
+          catálogo sin tu aprobación.
+        </p>
+        {expandMsg && <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">{expandMsg}</p>}
+        {sugerencias.length > 0 && (
+          <div className="space-y-2 pt-1">
+            {sugerencias.map(s => (
+              <div key={s.id} className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/25 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">{s.name}</p>
+                  <span className="text-[10px] text-purple-600 dark:text-purple-300 font-mono">{s.seccion_id}</span>
+                </div>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{s.description}</p>
+                {s.fundamento && (
+                  <p className="text-[10px] text-gray-400 italic">Fundamento: {s.fundamento}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => moderarSugerencia(s.id, 'aprobado')}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold"
+                  >
+                    Aprobar al catálogo
+                  </button>
+                  <button
+                    onClick={() => moderarSugerencia(s.id, 'descartado')}
+                    className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 text-[11px] font-bold"
+                  >
+                    Descartar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Exercise Catalogue by Section */}

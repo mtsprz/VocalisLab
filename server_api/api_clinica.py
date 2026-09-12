@@ -5,10 +5,11 @@ Endpoints para pacientes, evaluaciones, anamnesis, cuadernillos y turnos.
 import os
 import sys
 import json
+import re
 import traceback
 from datetime import datetime, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -480,8 +481,159 @@ async def listar_analisis(
 
 @router.get("/api/ejercicios")
 async def obtener_banco_ejercicios():
+    import copy
     bank = _load_exercise_bank()
+    bank = copy.deepcopy(bank)
+    # Fusionar ejercicios IA aprobados con el catálogo base
+    try:
+        if supabase:
+            res = supabase.table("ejercicios_ia").select("*").eq("estado", "aprobado").execute()
+            for row in (res.data or []):
+                ex = {
+                    "id": row.get("exercise_key"),
+                    "name": row.get("name"),
+                    "description": row.get("description", ""),
+                    "steps": row.get("steps") or [],
+                    "duration_min": row.get("duration_min", 5),
+                    "difficulty": row.get("difficulty", "basico"),
+                    "indications": row.get("indications") or [],
+                    "contraindications": row.get("contraindications") or [],
+                    "origen_ia": True,
+                }
+                placed = False
+                for sec in bank.get("sections", []):
+                    if sec.get("id") == row.get("seccion_id"):
+                        if all(e.get("id") != ex["id"] for e in sec.get("exercises", [])):
+                            sec.setdefault("exercises", []).append(ex)
+                        placed = True
+                        break
+                if not placed:
+                    secs = bank.setdefault("sections", [])
+                    ia_sec = next((s for s in secs if s.get("id") == "aporte_ia"), None)
+                    if not ia_sec:
+                        ia_sec = {"id": "aporte_ia", "name": "Aporte IA (validados)",
+                                  "description": "Ejercicios generados por IA y aprobados por el profesional",
+                                  "exercises": []}
+                        secs.append(ia_sec)
+                    if all(e.get("id") != ex["id"] for e in ia_sec["exercises"]):
+                        ia_sec["exercises"].append(ex)
+    except Exception as e:
+        print(f"[api_clinica] Merge ejercicios IA omitido: {e}")
     return JSONResponse(content=bank)
+
+
+PROMPT_EXPANDIR_BANCO = """Sos un fonoaudiólogo experto en voz. Tu marco teórico EXCLUSIVO:
+- Farías, P. (2012). Ejercicios que restauran la función vocal.
+- Farías, P. (2016). Guía clínica para el especialista en laringe y voz.
+- Le Huche, F. — fisiología y relajación diferencial.
+- Titze, I. — tracto vocal semiocluido (SOVTE).
+
+Generá ejercicios terapéuticos vocales NUEVOS (no repitas los existentes listados abajo),
+adecuados a la sección y patología indicadas, con consignas en lenguaje claro para el paciente.
+
+Devolvé EXCLUSIVAMENTE JSON válido con esta forma:
+{"ejercicios": [{"id": "snake_case_unico", "name": "...", "description": "...",
+"steps": ["paso 1 (4 a 8 pasos)", "..."], "duration_min": 5,
+"difficulty": "basico|intermedio|avanzado",
+"indications": ["..."], "contraindications": ["..."],
+"fundamento_farias": "qué principio de Farías/Le Huche/Titze aplica"}]}"""
+
+
+@router.post("/api/ejercicios/expandir")
+async def expandir_banco(request: Request):
+    """Genera ejercicios nuevos con IA (quedan pendientes de aprobación)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    seccion_id = (body.get("seccion_id") or "sovte").strip()
+    patologia_id = (body.get("patologia_id") or "").strip()
+    try:
+        cantidad = max(1, min(6, int(body.get("cantidad", 3))))
+    except Exception:
+        cantidad = 3
+
+    bank = _load_exercise_bank()
+    existentes = []
+    for sec in bank.get("sections", []):
+        if not seccion_id or sec.get("id") == seccion_id:
+            existentes.extend([e.get("name", "") for e in sec.get("exercises", [])])
+
+    prompt = (f"{PROMPT_EXPANDIR_BANCO}\n\nSECCIÓN DESTINO: {seccion_id}\n"
+              f"PATOLOGÍA OBJETIVO: {patologia_id or 'general'}\n"
+              f"CANTIDAD A GENERAR: {cantidad}\n"
+              f"EJERCICIOS EXISTENTES (no repetir): {', '.join(existentes[:40])}")
+    try:
+        from llm_client import groq_chat
+        texto, _model = groq_chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.6, max_tokens=2500,
+            response_format={"type": "json_object"},
+        )
+        start, end = texto.find("{"), texto.rfind("}") + 1
+        parsed = json.loads(texto[start:end])
+        candidatos = parsed.get("ejercicios", []) if isinstance(parsed, dict) else []
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"La IA no devolvió ejercicios válidos: {str(e)[:200]}")
+
+    creados = []
+    for c in candidatos[:cantidad]:
+        try:
+            key = re.sub(r"[^a-z0-9_]", "", str(c.get("id", "")).lower().replace(" ", "_"))[:60]
+            if not key:
+                continue
+            row = {
+                "seccion_id": seccion_id,
+                "exercise_key": key,
+                "name": str(c.get("name", ""))[:200] or key,
+                "description": str(c.get("description", ""))[:2000],
+                "steps": c.get("steps") if isinstance(c.get("steps"), list) else [],
+                "duration_min": int(c.get("duration_min") or 5),
+                "difficulty": str(c.get("difficulty", "basico"))[:20],
+                "indications": c.get("indications") if isinstance(c.get("indications"), list) else [],
+                "contraindications": c.get("contraindications") if isinstance(c.get("contraindications"), list) else [],
+                "fundamento": str(c.get("fundamento_farias", ""))[:2000],
+                "estado": "pendiente",
+            }
+            if supabase:
+                ins = supabase.table("ejercicios_ia").upsert(row, on_conflict="exercise_key").execute()
+                if ins.data:
+                    creados.append(ins.data[0])
+            else:
+                creados.append({**row, "id": f"local_{key}"})
+        except Exception as e:
+            print(f"[api_clinica] Candidato descartado: {e}")
+            continue
+    return JSONResponse(content={"ok": True, "creados": creados})
+
+
+@router.get("/api/ejercicios/ia")
+async def listar_ejercicios_ia(estado: str = Query("pendiente")):
+    if not supabase:
+        return JSONResponse(content=[])
+    try:
+        q = supabase.table("ejercicios_ia").select("*").order("created_at", desc=True)
+        if estado and estado != "todos":
+            q = q.eq("estado", estado)
+        return JSONResponse(content=q.limit(100).execute().data or [])
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content=[])
+
+
+@router.put("/api/ejercicios/ia/{row_id}")
+async def moderar_ejercicio_ia(row_id: str, estado: str = Form(...)):
+    if estado not in ("aprobado", "descartado", "pendiente"):
+        raise HTTPException(status_code=400, detail="estado inválido")
+    result = _db_update("ejercicios_ia", row_id, {"estado": estado})
+    return JSONResponse(content=result)
+
+
+@router.delete("/api/ejercicios/ia/{row_id}")
+async def eliminar_ejercicio_ia(row_id: str):
+    _db_delete("ejercicios_ia", row_id)
+    return JSONResponse(content={"ok": True})
 
 
 @router.post("/api/cuadernillos")
@@ -867,7 +1019,7 @@ async def debug_status():
         return JSONResponse(content=info)
     for tbl in ["pacientes", "turnos", "anamnesis", "evaluaciones_clinicas",
                 "analisis_acusticos", "cuadernillos_paciente", "usuarios_google",
-                "sesiones_teleconsulta"]:
+                "sesiones_teleconsulta", "ejercicio_imagenes", "ejercicios_ia"]:
         try:
             r = supabase.table(tbl).select("id", count="exact").limit(1).execute()
             info["tables"][tbl] = {"exists": True, "count": r.count}
@@ -883,6 +1035,8 @@ async def debug_status():
         "turnos": ({"fecha_hora": "2030-01-01T00:00:00", "motivo": "DEBUG_PROBE"}, {"motivo": "DEBUG_PROBE"}),
         "usuarios_google": ({"google_id": "DEBUG_PROBE", "email": "debug@probe.local"}, {"google_id": "DEBUG_PROBE"}),
         "sesiones_teleconsulta": ({"notas": "DEBUG_PROBE"}, {"notas": "DEBUG_PROBE"}),
+        "ejercicio_imagenes": ({"exercise_id": "DEBUG_PROBE", "image_url": "https://localhost/debug.png"}, {"exercise_id": "DEBUG_PROBE"}),
+        "ejercicios_ia": ({"exercise_key": "DEBUG_PROBE", "name": "DEBUG"}, {"exercise_key": "DEBUG_PROBE"}),
     }
     probe: dict = {}
     for tbl, (payload, delfilter) in probe_tests.items():

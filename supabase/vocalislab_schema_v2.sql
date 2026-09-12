@@ -168,6 +168,39 @@ CREATE TABLE IF NOT EXISTS sesiones_teleconsulta (
 CREATE INDEX IF NOT EXISTS idx_sesiones_turno ON sesiones_teleconsulta(turno_id);
 CREATE INDEX IF NOT EXISTS idx_sesiones_paciente ON sesiones_teleconsulta(paciente_id);
 
+-- 6d. TABLA IMÁGENES DE EJERCICIOS (persistencia durable: no regenerar con IA)
+CREATE TABLE IF NOT EXISTS ejercicio_imagenes (
+    exercise_id TEXT PRIMARY KEY,
+    image_url TEXT NOT NULL,
+    storage_path TEXT,
+    prompt TEXT,
+    proveedor TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 6e. TABLA EJERCICIOS GENERADOS POR IA (expansión del banco, con moderación)
+CREATE TABLE IF NOT EXISTS ejercicios_ia (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    seccion_id TEXT DEFAULT 'sovte',
+    exercise_key TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    steps JSONB DEFAULT '[]',
+    duration_min INT DEFAULT 5,
+    difficulty TEXT DEFAULT 'basico',
+    indications JSONB DEFAULT '[]',
+    contraindications JSONB DEFAULT '[]',
+    fundamento TEXT DEFAULT '',
+    estado TEXT DEFAULT 'pendiente',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ejercicios_ia_estado ON ejercicios_ia(estado);
+
+-- Bucket público para ilustraciones (creación idempotente vía SQL)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('ejercicios', 'ejercicios', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- 6b. MIGRACIÓN v1 → v2 (la tabla pacientes del schema v1 no tiene estas columnas
 -- y trae un NOT NULL legacy en "nombre" que bloquea los INSERT del backend)
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS nombre_completo TEXT;
@@ -201,6 +234,8 @@ ALTER TABLE cuadernillos_paciente ENABLE ROW LEVEL SECURITY;
 ALTER TABLE turnos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios_google ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sesiones_teleconsulta ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ejercicio_imagenes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ejercicios_ia ENABLE ROW LEVEL SECURITY;
 
 -- 9. POLÍTICAS RLS (Borrado preventivo antes de crear para evitar el error 42710)
 DO $$
@@ -238,6 +273,8 @@ DROP POLICY IF EXISTS "App backend full access" ON cuadernillos_paciente;
 DROP POLICY IF EXISTS "App backend full access" ON turnos;
 DROP POLICY IF EXISTS "App backend full access" ON usuarios_google;
 DROP POLICY IF EXISTS "App backend full access" ON sesiones_teleconsulta;
+DROP POLICY IF EXISTS "App backend full access" ON ejercicio_imagenes;
+DROP POLICY IF EXISTS "App backend full access" ON ejercicios_ia;
 CREATE POLICY "App backend full access" ON pacientes FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON anamnesis FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON evaluaciones_clinicas FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
@@ -246,6 +283,12 @@ CREATE POLICY "App backend full access" ON cuadernillos_paciente FOR ALL TO anon
 CREATE POLICY "App backend full access" ON turnos FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON usuarios_google FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "App backend full access" ON sesiones_teleconsulta FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON ejercicio_imagenes FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "App backend full access" ON ejercicios_ia FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Storage: el backend (rol anon) debe poder subir/leer ilustraciones
+DROP POLICY IF EXISTS "App backend storage" ON storage.objects;
+CREATE POLICY "App backend storage" ON storage.objects FOR ALL TO anon, authenticated USING (bucket_id = 'ejercicios') WITH CHECK (bucket_id = 'ejercicios');
 
 -- 10. TRIGGER UPDATED_AT
 CREATE OR REPLACE FUNCTION update_updated_at()
