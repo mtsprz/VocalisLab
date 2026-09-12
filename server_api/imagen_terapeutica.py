@@ -5,9 +5,10 @@ para los ejercicios del cuadernillo, con fallback automático al dibujo
 vectorial interno si no hay claves configuradas.
 
 Orden de proveedores:
-  1. Pixazo (PIXAZO_API_KEY) — Flux Schnell vía gateway (probado end-to-end).
+  1. Wavespeed (WAVESPEED_API_KEY) — z-image/turbo (o WAVESPEED_MODEL).
+  2. Pixazo (PIXAZO_API_KEY) — Flux Schnell vía gateway (probado end-to-end).
      Estilo: lineart (default) o 3D hiperrealista (PIXAZO_STYLE=3d).
-  2. Gemini Flash Image / Nano Banana (GEMINI_API_KEY) — gratuito.
+  3. Gemini Flash Image / Nano Banana (GEMINI_API_KEY) — gratuito.
   3. FAL.ai (FAL_KEY) — FLUX line art.
   4. Recraft V3 (RECRAFT_API_KEY) — style line_art.
   5. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX.
@@ -154,6 +155,54 @@ PROMPT_3D_BASE = ("Hyperrealistic 3D clinical render of {desc}, soft studio ligh
 
 def _estilo_pixazo() -> str:
     return os.environ.get("PIXAZO_STYLE", "lineart").strip().lower()
+
+
+def _via_wavespeed(prompt: str) -> str | None:
+    """Wavespeed gateway: submit + polling hasta COMPLETED."""
+    key = os.environ.get("WAVESPEED_API_KEY", "").strip()
+    if not key:
+        return None
+    model = os.environ.get("WAVESPEED_MODEL", "wavespeed-ai/z-image/turbo").strip()
+    try:
+        import httpx
+        import time
+        r = httpx.post(
+            f"https://api.wavespeed.ai/api/v3/{model}",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"prompt": prompt, "size": "1024*1024"},
+            timeout=60,
+        )
+        if r.status_code != 200:
+            print(f"[imagen_terapeutica] Wavespeed submit {r.status_code}: {r.text[:200]}")
+            return None
+        body = r.json()
+        if body.get("code") != 200:
+            print(f"[imagen_terapeutica] Wavespeed error: {str(body)[:200]}")
+            return None
+        get_url = ((body.get("data") or {}).get("urls") or {}).get("get", "")
+        if not get_url:
+            return None
+        for _ in range(25):
+            time.sleep(6)
+            g = httpx.get(get_url, headers={"Authorization": f"Bearer {key}"}, timeout=30)
+            if g.status_code != 200:
+                continue
+            gd = g.json()
+            data = gd.get("data") or {}
+            if data.get("status") == "completed":
+                outs = data.get("outputs") or []
+                if outs and outs[0]:
+                    dest = _cache_path(prompt, "wavespeed")
+                    return dest if _descargar(outs[0], dest, timeout=90) else None
+                return None
+            if data.get("status") in ("failed", "error"):
+                print(f"[imagen_terapeutica] Wavespeed falló: {str(gd)[:200]}")
+                return None
+        print("[imagen_terapeutica] Wavespeed timeout esperando imagen")
+        return None
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def _via_pixazo(prompt: str, prompt_3d: str = "") -> str | None:
@@ -319,6 +368,8 @@ def _via_replicate(prompt: str) -> str | None:
 
 def proveedores_disponibles() -> list:
     provs = []
+    if os.environ.get("WAVESPEED_API_KEY", "").strip():
+        provs.append("wavespeed")
     if os.environ.get("PIXAZO_API_KEY", "").strip():
         provs.append("pixazo")
     if os.environ.get("GEMINI_API_KEY", "").strip():
@@ -366,6 +417,13 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
                              f"speech therapy exercise: {desc}")
     prompt_3d = (f"Hyperrealistic 3D clinical render, {desc3d}, studio lighting, "
                  "medical textbook aesthetic, high detail")
+    # Wavespeed primero (key dedicada del consultorio), luego el resto
+    dest = _cache_path(prompt, "wavespeed")
+    if _es_imagen_valida(dest):
+        return dest
+    path = _via_wavespeed(prompt)
+    if path and _es_imagen_valida(path):
+        return path
     dest = _cache_path(prompt, "pixazo")
     if _es_imagen_valida(dest):
         return dest

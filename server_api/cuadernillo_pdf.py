@@ -1100,7 +1100,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     # si no hay nada configurado, dibujo vectorial. Nunca se rompe el PDF.
     try:
         from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
-        ai_img = generar_imagen_ejercicio(name, desc, ex.get("id", "")) if imagen_ia_habilitada() else None
+        ai_img = generar_imagen_ejercicio(name, desc, exercise.get("id", "")) if imagen_ia_habilitada() else None
     except Exception:
         ai_img = None
     if ai_img:
