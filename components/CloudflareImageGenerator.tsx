@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, Loader2, Download, Copy, CheckCircle2 } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_BACKEND_URL || '';
 
 const PRESET_PROMPTS: { label: string; prompt: string }[] = [
   { label: 'Agua / Hidratación', prompt: 'Minimalist 2D medical line art illustration of a clear glass with water and a silicone tube bubbling at 1.5 cm depth, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors, high legibility' },
