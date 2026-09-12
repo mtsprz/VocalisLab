@@ -313,6 +313,8 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [expandiendo, setExpandiendo] = useState(false);
   const [seccionExpandir, setSeccionExpandir] = useState('sovte');
   const [expandMsg, setExpandMsg] = useState('');
+  const [fichas, setFichas] = useState<any[]>([]);
+  const [fichaAbierta, setFichaAbierta] = useState<string | null>(null);
   const [profesional, setProfesional] = useState<Record<string, string>>(() => {
     try {
       const raw = localStorage.getItem('vocalislab_profesional');
@@ -362,6 +364,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         const data = await r.json();
         if (data.sections && data.sections.length > 0) setSections(data.sections);
         if (data.presets && data.presets.length > 0) setPresets(data.presets);
+        if (data.fichas_clinicas && data.fichas_clinicas.length > 0) setFichas(data.fichas_clinicas);
       }
     } catch {
       // DEFAULT_PRESETS and DEFAULT_SECTIONS are already present as fallbacks
@@ -679,29 +682,54 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 ml-1">
               {section.exercises.map(ex => {
                 const checked = selectedExercises.includes(ex.id);
+                const ficha = fichas.find((f: any) => f.bank_id === ex.id || f.id === ex.id);
+                const abierta = fichaAbierta === ex.id;
                 return (
-                  <label
+                  <div
                     key={ex.id}
-                    className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
+                    className={`rounded-xl border transition-all ${
                       checked
-                        ? 'bg-indigo-500/10 border-indigo-500/50 text-gray-900 dark:text-white'
+                        ? 'bg-indigo-500/10 border-indigo-500/50'
                         : 'bg-gray-50/50 dark:bg-white/[0.02] border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/15'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleExercise(ex.id)}
-                      className="mt-1 rounded text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{ex.name}</p>
-                        {ex.duration_min && (
-                          <span className="text-[10px] font-medium text-gray-400 shrink-0">{ex.duration_min} min</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{ex.description}</p>
+                    <label className="flex items-start gap-3 p-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleExercise(ex.id)}
+                        className="mt-1 rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{ex.name}</p>
+                          {ex.duration_min && (
+                            <span className="text-[10px] font-medium text-gray-400 shrink-0">{ex.duration_min} min</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{ex.description}</p>
+                      {ficha && (
+                        <button
+                          onClick={e => { e.preventDefault(); setFichaAbierta(abierta ? null : ex.id); }}
+                          className="mt-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          {abierta ? 'Ocultar ficha clínica' : `Ver ficha ${ficha.id} · ${ficha.fuente?.libro || ''}`.slice(0,60)}
+                        </button>
+                      )}
+                      {ficha && abierta && (
+                        <div className="mt-2 p-2.5 rounded-lg bg-white dark:bg-[#0b0f19] border border-indigo-200 dark:border-indigo-800/50 text-[11px] space-y-1.5">
+                          <p><span className="font-bold">Categoría:</span> {ficha.categoria_terapeutica}</p>
+                          <p><span className="font-bold">Indicaciones:</span> {Array.isArray(ficha.indicaciones) ? ficha.indicaciones.join(', ') : ficha.indicaciones}</p>
+                          <p><span className="font-bold">Fundamento:</span> {ficha.fundamento}</p>
+                          <p><span className="font-bold">Consigna:</span> {ficha.consigna}</p>
+                          <p><span className="font-bold">Dosificación:</span> {ficha.dosificacion}</p>
+                          <p><span className="font-bold">Precauciones:</span> {ficha.precauciones}</p>
+                          <p><span className="font-bold">Efecto:</span> {ficha.efecto_inmediato}</p>
+                          <p className="text-[10px] text-gray-500"><span className="font-bold">Fuente:</span> {ficha.fuente?.libro} — {ficha.fuente?.autores} {ficha.fuente?.capitulo ? `(${ficha.fuente.capitulo})` : ''}</p>
+                          {ficha.bloqueo_exofiticas && <p className="text-[10px] font-bold text-red-600">⚠️ Excluido automáticamente si hay lesión exofítica (pushing)</p>}
+                          <p className="text-[10px] text-gray-400">Triggers: GRBAS {ficha.triggers?.grbas?.join(',')} | RASAT {ficha.triggers?.rasati?.join(',')} | S/Z &gt;{ficha.triggers?.sz_min} | {ficha.triggers?.patologias?.slice(0,2).join(', ')}</p>
+                        </div>
+                      )}
                       {ex.steps && ex.steps.length > 0 && (
                         <div className="mt-2 space-y-0.5 pt-1.5 border-t border-gray-100 dark:border-white/5">
                           {ex.steps.slice(0, 3).map((st, i) => (
@@ -713,7 +741,9 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                         </div>
                       )}
                     </div>
+                  </div>
                   </label>
+                  </div>
                 );
               })}
             </div>

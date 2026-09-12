@@ -17,8 +17,9 @@ import CuadernilloModule from './CuadernilloModule';
 import PitchMeterModule from './PitchMeterModule';
 import RecomendacionIAModule from './RecomendacionIAModule';
 import VideoconferenciaModule from './VideoconferenciaModule';
+import CloudflareImageGenerator from './CloudflareImageGenerator';
 
-type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia';
+type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia' | 'imagenes';
 
 const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -30,6 +31,7 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
   { id: 'recomendacion', label: 'Motor IA', icon: <Sparkles size={20} /> },
   { id: 'pitch', label: 'Pitch Meter', icon: <Music size={20} /> },
   { id: 'cuadernillo', label: 'Cuadernillo', icon: <FileText size={20} /> },
+  { id: 'imagenes', label: 'Generador Imagen', icon: <Sparkles size={20} /> },
 ];
 
 function AppInner() {
@@ -111,6 +113,8 @@ function AppInner() {
         return <PitchMeterModule />;
       case 'cuadernillo':
         return <CuadernilloModule pacienteId={selectedPacienteId} initialExerciseIds={initialExerciseIds} />;
+      case 'imagenes':
+        return <CloudflareImageGenerator />;
       case 'videoconferencia':
         return videoconfTurno ? (
           <VideoconferenciaModule

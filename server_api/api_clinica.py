@@ -30,6 +30,7 @@ except Exception as e:
 router = APIRouter()
 
 EXERCISE_BANK_PATH = os.path.join(os.path.dirname(__file__), "exercise_bank.json")
+FICHAS_PATH = os.path.join(os.path.dirname(__file__), "fichas_clinicas.json")
 
 
 def _get_supabase():
@@ -42,6 +43,15 @@ def _load_exercise_bank():
             return json.load(f)
     except Exception:
         return {"sections": [], "presets": []}
+
+
+def _load_fichas_clinicas():
+    try:
+        with open(FICHAS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("fichas", []) if isinstance(data, dict) else []
+    except Exception:
+        return []
 
 
 def _db_insert(table: str, data: dict):
@@ -484,6 +494,9 @@ async def obtener_banco_ejercicios():
     import copy
     bank = _load_exercise_bank()
     bank = copy.deepcopy(bank)
+    # Fichas clínicas del manual (Farías/Cobeta/Pinho/Guzmán/Boone/Smith/Mura):
+    # fundamento, dosificación, precauciones, efecto y fuente por ejercicio.
+    bank["fichas_clinicas"] = _load_fichas_clinicas()
     # Fusionar ejercicios IA aprobados con el catálogo base
     try:
         if supabase:
@@ -1057,3 +1070,55 @@ async def debug_status():
         probe[tbl] = res
     info["write_probe"] = probe
     return JSONResponse(content=info)
+
+
+# ─── GENERACIÓN DE IMAGEN (Cloudflare Workers AI - endpoint seguro) ─────
+@router.post("/api/generate-image")
+async def generate_image(request: Request):
+    """Endpoint seguro: recibe {prompt} y devuelve imagen base64 sin exponer claves CF en el cliente."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    prompt = str(body.get("prompt", "")).strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt requerido")
+    if len(prompt) > 4000:
+        prompt = prompt[:4000]
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+    if not (account and token):
+        raise HTTPException(status_code=503, detail="Cloudflare no configurado: faltan CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN en el servidor")
+    try:
+        import base64
+        import httpx
+        r = httpx.post(
+            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"prompt": prompt},
+            timeout=180,
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Cloudflare {r.status_code}: {r.text[:300]}")
+        ctype = r.headers.get("content-type", "")
+        if "image" in ctype:
+            b64 = base64.b64encode(r.content).decode()
+            return JSONResponse(content={"ok": True, "image_base64": f"data:image/png;base64,{b64}"})
+        # Algunos modelos devuelven JSON con url/base64; manejar por si acaso
+        try:
+            data = r.json()
+            # Intentar extraer base64 de varios formatos posibles
+            for key in ("result", "image", "data"):
+                val = data.get(key)
+                if isinstance(val, str) and len(val) > 1000:
+                    prefix = "data:image/png;base64," if not val.startswith("data:") else ""
+                    return JSONResponse(content={"ok": True, "image_base64": prefix + val})
+            raise ValueError("Formato inesperado")
+        except Exception:
+            b64 = base64.b64encode(r.content).decode()
+            return JSONResponse(content={"ok": True, "image_base64": f"data:image/png;base64,{b64}"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando imagen: {str(e)[:300]}")

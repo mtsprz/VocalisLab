@@ -107,6 +107,39 @@ def _prompt_ejercicio(nombre: str, descripcion: str) -> str:
     return PROMPT_BASE.format(desc=f"{nombre}. {descripcion[:220]}".strip())
 
 
+def _via_cloudflare(prompt: str) -> str | None:
+    """Cloudflare Workers AI — @cf/bytedance/stable-diffusion-xl-lightning.
+    Responde binario image/png, no JSON. Gratuito con tu cuenta Cloudflare."""
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+    if not (account and token):
+        return None
+    try:
+        import httpx
+        dest = _cache_path(prompt, "cloudflare")
+        if _es_imagen_valida(dest):
+            return dest
+        r = httpx.post(
+            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"prompt": prompt},
+            timeout=180,
+        )
+        if r.status_code != 200:
+            print(f"[imagen_terapeutica] Cloudflare {r.status_code}: {r.text[:200]}")
+            return None
+        ctype = r.headers.get("content-type", "")
+        if "image" not in ctype and len(r.content) < 2000:
+            print(f"[imagen_terapeutica] Cloudflare no devolvió imagen: {ctype}")
+            return None
+        with open(dest, "wb") as f:
+            f.write(r.content)
+        return dest if _es_imagen_valida(dest) else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def _via_gemini(prompt: str) -> str | None:
     """Nano Banana / Gemini Flash Image (gratuito con GEMINI_API_KEY)."""
     key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -465,6 +498,8 @@ def guardar_imagen_ejercicio(exercise_id: str, local_path: str, prompt: str = ""
 
 def proveedores_disponibles() -> list:
     provs = []
+    if os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip() and os.environ.get("CLOUDFLARE_API_TOKEN", "").strip():
+        provs.append("cloudflare")
     if os.environ.get("WAVESPEED_API_KEY", "").strip():
         provs.append("wavespeed")
     if os.environ.get("PIXAZO_API_KEY", "").strip():
@@ -530,6 +565,13 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
             return path
         return None
 
+    # Cloudflare primero (tu cuenta, gratuito y rápido), luego Wavespeed, resto
+    dest = _cache_path(prompt, "cloudflare")
+    if _es_imagen_valida(dest):
+        return dest
+    r = _ok(_via_cloudflare(prompt), "cloudflare", prompt)
+    if r:
+        return r
     # Wavespeed primero (key dedicada del consultorio), luego el resto
     dest = _cache_path(prompt, "wavespeed")
     if _es_imagen_valida(dest):

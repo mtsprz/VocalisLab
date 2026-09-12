@@ -213,9 +213,40 @@ Genera la recomendación terapéutica precisa.
     if riesgo_alertas:
         pautas.insert(0, f"Control prioritario de las conductas de riesgo de grado 3: {', '.join(riesgo_alertas[:3])}.")
 
+    # Reglas de seguridad del manual (Farías): exofíticas + S/O
+    alertas_seguridad = []
+    texto_diag = f"{anamnesis.get('diagnostico_orl', '')} {anamnesis.get('motivo_consulta', '')}".lower()
+    import re as _re
+    hay_exofitica = bool(_re.search(
+        r"n[oó]dulo|p[oó]lipo|quiste|edema(\s+de\s+reinke)?|lesi[oó]n (de masa|exof)",
+        texto_diag))
+    if hay_exofitica:
+        antes = len(selected_exs)
+        selected_exs = [e for e in selected_exs if e.get("id") != "empuje_glotico"]
+        if len(selected_exs) < antes:
+            alertas_seguridad.append(
+                "EXCLUIDO POR SEGURIDAD: empuje glótico contraindicado con lesión "
+                "exofítica (nódulos/pólipos/quiste/edema): riesgo de trauma mecánico cordal.")
+    try:
+        so_val = float(indice_so) if indice_so else 0
+    except Exception:
+        so_val = 0
+    if so_val > 1.2 and not hay_exofitica:
+        if not any(e.get("id") == "empuje_glotico" for e in selected_exs):
+            selected_exs.insert(0, {
+                "id": "empuje_glotico",
+                "name": "Técnica de Empuje (Pushing)",
+                "justificacion": "Incompetencia glótica (S/O > 1.2): aducción refleja por esfuerzo para vencer el hiato aéreo.",
+                "dosificacion": "3 series de 10 emisiones ¡KIP!/¡TEP! en días alternos.",
+                "prioridad": "Alta"
+            })
+        alertas_seguridad.append(
+            "Incompetencia glótica (índice S/O > 1.2): se prioriza aducción (empuje) + SOVTE de alta carga.")
+
     total_ses = 12 if riesgo_total > 90 else (10 if riesgo_total > 60 else 8)
 
     return {
+        "alertas_seguridad": alertas_seguridad,
         "sintesis_fisiopatologica": f"Paciente {sexo} de {edad} años con demanda vocal de {demanda} h/día y puntaje de riesgo vocal de {riesgo_total} ({riesgo_grupo}). Se observa compromiso biomecánico con grado de disfonía G{g_score} y tensión asociada T{tension_score}, correlacionado con perturbación acústica.",
         "diagnostico_funcional_fonoaudiologico": "Sobreesfuerzo Vocal e Hiperfunción Laríngea con Patrón Hipercinético" if tension_score >= 2 else "Incompetencia Glótica Funcional con Desbalance Resonancial",
         "objetivos_terapeuticos": [
