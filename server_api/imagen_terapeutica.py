@@ -123,10 +123,58 @@ ESTILO_LINEA = ("Black and white line art vector, pure white background, "
                 "no background shadows")
 
 
-def _cache_path(prompt: str, proveedor: str) -> str:
+def _cache_path(prompt: str, proveedor: str, ext: str = "png") -> str:
     h = hashlib.sha1(f"{proveedor}:{prompt}".encode()).hexdigest()[:16]
     os.makedirs(CACHE_DIR, exist_ok=True)
-    return os.path.join(CACHE_DIR, f"{proveedor}_{h}.png")
+    ext = (ext or "png").strip().lstrip(".").lower() or "png"
+    return os.path.join(CACHE_DIR, f"{proveedor}_{h}.{ext}")
+
+
+def _sniff_ext(raw: bytes) -> str:
+    """Detecta la extensión real por magic bytes (Workers AI devuelve
+    PNG binario o JPEG en base64 dentro de JSON según el modelo)."""
+    if raw[:2] == b"\xff\xd8":
+        return "jpg"
+    if raw[:4] == b"\x89PNG":
+        return "png"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "webp"
+    return "png"
+
+
+def _extraer_imagen_cf(payload, ctype: str = ""):
+    """Extrae (ext, bytes) de una respuesta de Workers AI.
+    Soporta: binario image/*, {"result": {"image": "<b64>"}},
+    {"result": "<b64>"}, {"image"/"data": "<b64>"}. Devuelve (None, None)
+    si no hay imagen."""
+    import base64 as _b64
+    raw = None
+    if isinstance(payload, (bytes, bytearray)) and "image" in (ctype or ""):
+        raw = bytes(payload)
+    elif isinstance(payload, dict):
+        res = payload.get("result", None)
+        cand = ""
+        if isinstance(res, dict):
+            cand = res.get("image", "") or ""
+        elif isinstance(res, str):
+            cand = res
+        if not (isinstance(cand, str) and len(cand) > 1000):
+            for key in ("image", "data"):
+                val = payload.get(key)
+                if isinstance(val, str) and len(val) > 1000:
+                    cand = val
+                    break
+        if isinstance(cand, str) and len(cand) > 1000:
+            # Puede venir como data URL o base64 puro
+            if "," in cand and cand.startswith("data:"):
+                cand = cand.split(",", 1)[1]
+            try:
+                raw = _b64.b64decode(cand)
+            except Exception:
+                raw = None
+    if raw and len(raw) > 2000:
+        return _sniff_ext(raw), raw
+    return None, None
 
 
 def _descargar(url: str, destino: str, timeout: int = 60) -> bool:
@@ -153,10 +201,13 @@ def _prompt_ejercicio(nombre: str, descripcion: str) -> str:
     return PROMPT_BASE.format(desc=f"{nombre}. {descripcion[:220]}".strip())
 
 
-def _via_cloudflare(prompt: str) -> str | None:
+def _via_cloudflare(prompt: str, desc_fallback: str = "") -> str | None:
     """Cloudflare Workers AI — modelo configurable vía CLOUDFLARE_MODEL
     (default: FLUX.1 Schnell, alta coherencia anatómica).
-    Responde binario image/png, no JSON. Gratuito con tu cuenta Cloudflare."""
+    Responde binario image/png o JSON con b64 anidado según el modelo.
+    Si el filtro NSFW (8007) bloquea el prompt realista, reintenta una vez
+    con el template line-art ("diagram/illustration"), que el filtro acepta.
+    Gratuito con tu cuenta Cloudflare."""
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
     if not (account and token):
@@ -164,33 +215,56 @@ def _via_cloudflare(prompt: str) -> str | None:
     try:
         import httpx
         model = _cloudflare_model()
-        dest = _cache_path(f"{model}:{prompt}", "cloudflare")
-        if _es_imagen_valida(dest):
-            return dest
-        body: dict = {"prompt": prompt}
-        # Los Stable Diffusion aceptan prompt negativo y pasos; FLUX no.
-        if "stable-diffusion" in model and "lightning" not in model:
-            body["negative_prompt"] = NEGATIVO_CLINICO
-            try:
-                steps = int(os.environ.get("CLOUDFLARE_STEPS", "30"))
-                body["num_steps"] = max(1, min(steps, 50))
-            except Exception:
-                pass
-        r = httpx.post(
-            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json=body,
-            timeout=180,
-        )
+
+        def _body(p: str) -> dict:
+            b: dict = {"prompt": p}
+            # Los Stable Diffusion aceptan prompt negativo y pasos; FLUX no.
+            if "stable-diffusion" in model and "lightning" not in model:
+                b["negative_prompt"] = NEGATIVO_CLINICO
+                try:
+                    steps = int(os.environ.get("CLOUDFLARE_STEPS", "30"))
+                    b["num_steps"] = max(1, min(steps, 50))
+                except Exception:
+                    pass
+            return b
+
+        def _post(p: str):
+            return httpx.post(
+                f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json=_body(p),
+                timeout=180,
+            )
+
+        dest = None
+        for _ext in ("png", "jpg", "webp"):
+            _cand = _cache_path(f"{model}:{prompt}", "cloudflare", _ext)
+            if _es_imagen_valida(_cand):
+                return _cand
+        r = _post(prompt)
+        if r.status_code != 200 and "8007" in r.text and desc_fallback:
+            alt = _prompt_clinico(desc_fallback, "lineart")
+            if alt != prompt:
+                print("[imagen_terapeutica] Cloudflare filtro NSFW (8007), reintentando line-art")
+                prompt = alt
+                r = _post(prompt)
         if r.status_code != 200:
             print(f"[imagen_terapeutica] Cloudflare {r.status_code}: {r.text[:200]}")
             return None
         ctype = r.headers.get("content-type", "")
-        if "image" not in ctype and len(r.content) < 2000:
-            print(f"[imagen_terapeutica] Cloudflare no devolvió imagen: {ctype}")
+        if "image" in ctype:
+            ext, raw = _extraer_imagen_cf(r.content, ctype)
+        else:
+            try:
+                ext, raw = _extraer_imagen_cf(r.json(), ctype)
+            except Exception:
+                ext, raw = None, None
+        if not raw:
+            print(f"[imagen_terapeutica] Cloudflare no devolvió imagen: {ctype} ({len(r.content)} bytes)")
             return None
+        dest = _cache_path(f"{model}:{prompt}", "cloudflare", ext or "png")
         with open(dest, "wb") as f:
-            f.write(r.content)
+            f.write(raw)
         return dest if _es_imagen_valida(dest) else None
     except Exception:
         traceback.print_exc()
@@ -627,10 +701,12 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
         return None
 
     # Cloudflare primero (tu cuenta, gratuito y rápido), luego Wavespeed, resto
-    dest = _cache_path(f"{_cloudflare_model()}:{prompt}", "cloudflare")
-    if _es_imagen_valida(dest):
-        return dest
-    r = _ok(_via_cloudflare(prompt), "cloudflare", prompt)
+    # (el archivo cacheado puede ser .png o .jpg según lo que devuelva el modelo)
+    for _ext in ("png", "jpg", "webp"):
+        _cand = _cache_path(f"{_cloudflare_model()}:{prompt}", "cloudflare", _ext)
+        if _es_imagen_valida(_cand):
+            return _cand
+    r = _ok(_via_cloudflare(prompt, desc), "cloudflare", prompt)
     if r:
         return r
     # Wavespeed primero (key dedicada del consultorio), luego el resto
