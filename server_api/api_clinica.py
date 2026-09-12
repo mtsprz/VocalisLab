@@ -1075,7 +1075,10 @@ async def debug_status():
 # ─── GENERACIÓN DE IMAGEN (Cloudflare Workers AI - endpoint seguro) ─────
 @router.post("/api/generate-image")
 async def generate_image(request: Request):
-    """Endpoint seguro: recibe {prompt} y devuelve imagen base64 sin exponer claves CF en el cliente."""
+    """Endpoint seguro: recibe {prompt, style} y devuelve imagen base64 sin
+    exponer claves CF en el cliente. style: 'realista' (default, clínico
+    fotorrealista) o 'lineart'. Usa el modelo de CLOUDFLARE_MODEL
+    (default: FLUX.1 Schnell)."""
     try:
         body = await request.json()
     except Exception:
@@ -1085,6 +1088,11 @@ async def generate_image(request: Request):
         raise HTTPException(status_code=400, detail="prompt requerido")
     if len(prompt) > 4000:
         prompt = prompt[:4000]
+    estilo = str(body.get("style", "") or os.environ.get("ESTILO_IMAGEN", "realista")).strip().lower()
+    if not estilo.startswith("real"):
+        estilo = "lineart"
+    else:
+        estilo = "realista"
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
     if not (account and token):
@@ -1092,18 +1100,27 @@ async def generate_image(request: Request):
     try:
         import base64
         import httpx
+        import sys as _sys
+        _sys.path.insert(0, os.path.dirname(__file__))
+        from imagen_terapeutica import _prompt_clinico, _cloudflare_model, NEGATIVO_CLINICO
+        model = _cloudflare_model()
+        final_prompt = _prompt_clinico(prompt, estilo)
+        cf_body: dict = {"prompt": final_prompt}
+        if "stable-diffusion" in model and "lightning" not in model:
+            cf_body["negative_prompt"] = NEGATIVO_CLINICO
         r = httpx.post(
-            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning",
+            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json={"prompt": prompt},
+            json=cf_body,
             timeout=180,
         )
         if r.status_code != 200:
             raise HTTPException(status_code=502, detail=f"Cloudflare {r.status_code}: {r.text[:300]}")
         ctype = r.headers.get("content-type", "")
+        meta = {"ok": True, "modelo": model, "estilo": estilo}
         if "image" in ctype:
             b64 = base64.b64encode(r.content).decode()
-            return JSONResponse(content={"ok": True, "image_base64": f"data:image/png;base64,{b64}"})
+            return JSONResponse(content={**meta, "image_base64": f"data:image/png;base64,{b64}"})
         # Algunos modelos devuelven JSON con url/base64; manejar por si acaso
         try:
             data = r.json()
@@ -1112,11 +1129,11 @@ async def generate_image(request: Request):
                 val = data.get(key)
                 if isinstance(val, str) and len(val) > 1000:
                     prefix = "data:image/png;base64," if not val.startswith("data:") else ""
-                    return JSONResponse(content={"ok": True, "image_base64": prefix + val})
+                    return JSONResponse(content={**meta, "image_base64": prefix + val})
             raise ValueError("Formato inesperado")
         except Exception:
             b64 = base64.b64encode(r.content).decode()
-            return JSONResponse(content={"ok": True, "image_base64": f"data:image/png;base64,{b64}"})
+            return JSONResponse(content={**meta, "image_base64": f"data:image/png;base64,{b64}"})
     except HTTPException:
         raise
     except Exception as e:

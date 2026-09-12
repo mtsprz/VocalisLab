@@ -5,13 +5,19 @@ para los ejercicios del cuadernillo, con fallback automático al dibujo
 vectorial interno si no hay claves configuradas.
 
 Orden de proveedores:
+  0. Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN) —
+     modelo vía CLOUDFLARE_MODEL, default FLUX.1 Schnell (alta coherencia
+     anatómica; SDXL-Lightning solo si se fuerza por env).
   1. Wavespeed (WAVESPEED_API_KEY) — z-image/turbo (o WAVESPEED_MODEL).
   2. Pixazo (PIXAZO_API_KEY) — Flux Schnell vía gateway (probado end-to-end).
-     Estilo: lineart (default) o 3D hiperrealista (PIXAZO_STYLE=3d).
   3. Gemini Flash Image / Nano Banana (GEMINI_API_KEY) — gratuito.
-  3. FAL.ai (FAL_KEY) — FLUX line art.
-  4. Recraft V3 (RECRAFT_API_KEY) — style line_art.
-  5. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX.
+  4. FAL.ai (FAL_KEY) — FLUX line art.
+  5. Recraft V3 (RECRAFT_API_KEY) — style line_art.
+  6. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX.
+
+Estilo: 'realista' (default, clínico fotorrealista, vía ESTILO_IMAGEN)
+o 'lineart'. Todos los prompts exigen anatomía correcta, un solo sujeto
+centrado y prohíben texto/marcas de agua; SD de base usa prompt negativo.
 
 Sin claves → devuelve None y el cuadernillo usa los pictogramas vectoriales.
 Las imágenes se cachean en /tmp por hash del prompt (no se regeneran).
@@ -19,7 +25,20 @@ Las imágenes se cachean en /tmp por hash del prompt (no se regeneran).
 
 PROMPT_BASE = ("Minimalist 2D medical line art illustration of {desc}, clean black "
                "strokes on white background, simple pedagogical style, vector icon "
-               "style, no shading, no colors, high legibility --ar 1:1")
+               "style, anatomically correct proportions, single subject, no text, "
+               "no letters, no shading, no colors, high legibility")
+
+# Modo realista clínico: ilustración fotorrealista de calidad textbook médico.
+PROMPT_REALISTA_BASE = ("Photorealistic clinical illustration of {desc}, anatomically correct "
+                        "human anatomy with accurate proportions, medical textbook quality, "
+                        "single centered subject, soft neutral studio background, professional "
+                        "medical photography lighting, no text, no letters, no watermark, "
+                        "no logo, high detail, sharp focus")
+
+# Prompt negativo común: evita las incoherencias anatómicas típicas.
+NEGATIVO_CLINICO = ("blurry, distorted anatomy, extra limbs, extra fingers, deformed hands, "
+                    "deformed face, asymmetric eyes, text, letters, watermark, logo, "
+                    "cartoon, sketch, low quality, noisy background, collage, split image")
 
 # Descripciones específicas obligatorias por ejercicio (inglés, estilo line-art)
 IMG_DESC_POR_EJERCICIO = {
@@ -49,6 +68,33 @@ GEMINI_IMAGE_MODELS = [
     "gemini-2.5-flash-image",
     "gemini-2.0-flash-preview-image-generation",
 ]
+
+# Modelos Cloudflare Workers AI (texto→imagen). FLUX.1 Schnell por defecto:
+# muy superior en coherencia anatómica al SDXL-Lightning de 4 pasos.
+CLOUDFLARE_IMAGE_MODELS = [
+    "@cf/black-forest-labs/flux-1-schnell",
+    "@cf/bytedance/stable-diffusion-xl-lightning",
+    "@cf/stabilityai/stable-diffusion-xl-base-1.0",
+]
+
+
+def _cloudflare_model() -> str:
+    env = os.environ.get("CLOUDFLARE_MODEL", "").strip()
+    return env or CLOUDFLARE_IMAGE_MODELS[0]
+
+
+def _estilo_imagen() -> str:
+    """Estilo global: 'realista' (default, clínico fotorrealista) o 'lineart'.
+    Se puede forzar con la env ESTILO_IMAGEN."""
+    return os.environ.get("ESTILO_IMAGEN", "realista").strip().lower()
+
+
+def _prompt_clinico(desc: str, estilo: str = "") -> str:
+    """Envuelve la descripción en el template clínico del estilo pedido."""
+    est = (estilo or _estilo_imagen()).strip().lower()
+    if est.startswith("real"):
+        return PROMPT_REALISTA_BASE.format(desc=desc)
+    return PROMPT_BASE.format(desc=desc)
 
 
 def _gemini_image_models():
@@ -108,7 +154,8 @@ def _prompt_ejercicio(nombre: str, descripcion: str) -> str:
 
 
 def _via_cloudflare(prompt: str) -> str | None:
-    """Cloudflare Workers AI — @cf/bytedance/stable-diffusion-xl-lightning.
+    """Cloudflare Workers AI — modelo configurable vía CLOUDFLARE_MODEL
+    (default: FLUX.1 Schnell, alta coherencia anatómica).
     Responde binario image/png, no JSON. Gratuito con tu cuenta Cloudflare."""
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
@@ -116,13 +163,23 @@ def _via_cloudflare(prompt: str) -> str | None:
         return None
     try:
         import httpx
-        dest = _cache_path(prompt, "cloudflare")
+        model = _cloudflare_model()
+        dest = _cache_path(f"{model}:{prompt}", "cloudflare")
         if _es_imagen_valida(dest):
             return dest
+        body: dict = {"prompt": prompt}
+        # Los Stable Diffusion aceptan prompt negativo y pasos; FLUX no.
+        if "stable-diffusion" in model and "lightning" not in model:
+            body["negative_prompt"] = NEGATIVO_CLINICO
+            try:
+                steps = int(os.environ.get("CLOUDFLARE_STEPS", "30"))
+                body["num_steps"] = max(1, min(steps, 50))
+            except Exception:
+                pass
         r = httpx.post(
-            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning",
+            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json={"prompt": prompt},
+            json=body,
             timeout=180,
         )
         if r.status_code != 200:
@@ -539,10 +596,11 @@ def _pollinations_permitido() -> bool:
 
 
 def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
-                            exercise_id: str = "") -> str | None:
+                             exercise_id: str = "", estilo: str = "") -> str | None:
     """Devuelve el path local de la ilustración IA, o None si no hay proveedor
     configurado o fallan todos (el cuadernillo usa el dibujo vectorial).
 
+    estilo: 'realista' (default, clínico fotorrealista) o 'lineart'.
     Orden: 1) imagen ya asociada en DB → 2) proveedores en cascada →
     3) la recién generada se sube a Storage y se asocia (no se regenera más).
     """
@@ -551,9 +609,12 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
         db_path = buscar_imagen_guardada(ex_id)
         if db_path:
             return db_path
+    est = (estilo or _estilo_imagen()).strip().lower()
+    if not est.startswith("real"):
+        est = "lineart"
     desc = _descripcion_ejercicio(ex_id, nombre or "ejercicio vocal",
                                   descripcion or "")
-    prompt = PROMPT_BASE.format(desc=desc)
+    prompt = _prompt_clinico(desc, est)
     desc3d = IMG_DESC_3D.get(ex_id, f"speech therapy exercise: {desc}")
     prompt_3d = (f"Hyperrealistic 3D clinical render, {desc3d}, studio lighting, "
                  "medical textbook aesthetic, high detail")
@@ -566,7 +627,7 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
         return None
 
     # Cloudflare primero (tu cuenta, gratuito y rápido), luego Wavespeed, resto
-    dest = _cache_path(prompt, "cloudflare")
+    dest = _cache_path(f"{_cloudflare_model()}:{prompt}", "cloudflare")
     if _es_imagen_valida(dest):
         return dest
     r = _ok(_via_cloudflare(prompt), "cloudflare", prompt)
@@ -579,10 +640,13 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
     r = _ok(_via_wavespeed(prompt), "wavespeed", prompt)
     if r:
         return r
-    dest = _cache_path(prompt, "pixazo")
+    # En modo realista Pixazo usa el prompt 3D clínico (FLUX Schnell)
+    prompt_pix = prompt_3d if est == "realista" or _estilo_pixazo() == "3d" else prompt
+    prov_pix = "pixazo3d" if prompt_pix is prompt_3d else "pixazo"
+    dest = _cache_path(prompt_pix, prov_pix)
     if _es_imagen_valida(dest):
         return dest
-    r = _ok(_via_pixazo(prompt, prompt_3d), "pixazo", prompt)
+    r = _ok(_via_pixazo(prompt_pix, prompt_3d), prov_pix, prompt_pix)
     if r:
         return r
     if _pollinations_permitido():

@@ -4,16 +4,19 @@ import { Sparkles, Loader2, Download, Copy, CheckCircle2 } from 'lucide-react';
 const API_BASE = import.meta.env.VITE_BACKEND_URL || '';
 
 const PRESET_PROMPTS: { label: string; prompt: string }[] = [
-  { label: 'Agua / Hidratación', prompt: 'Minimalist 2D medical line art illustration of a clear glass with water and a silicone tube bubbling at 1.5 cm depth, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors, high legibility' },
-  { label: 'Respiración', prompt: 'Minimalist 2D medical line art illustration of a human torso side-view showing abdominal expansion arrows during diaphragmatic breathing, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors' },
-  { label: 'Masaje laríngeo', prompt: 'Minimalist 2D medical line art illustration of hands gently massaging the front of the neck in the laryngeal area, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors' },
-  { label: 'Glissandos', prompt: 'Minimalist 2D medical line art illustration of five ascending musical stairs with notes going up and down for vocal glissando exercise, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors' },
+  { label: 'Agua / Hidratación', prompt: 'a person holding a clear glass with water, transparent silicone tube submerged exactly 1.5 cm below the surface, realistic water bubbles rising, clinical demonstration photo' },
+  { label: 'Respiración', prompt: 'human torso side view showing diaphragmatic breathing with visible abdominal expansion, anatomically accurate musculature, clinical illustration' },
+  { label: 'Masaje laríngeo', prompt: 'hands gently massaging the front of the human neck over the laryngeal area, anatomically correct hand and neck anatomy, clinical demonstration' },
+  { label: 'Cuerdas vocales', prompt: 'superior view of healthy human vocal folds in closed phonation position, anatomically accurate laryngeal anatomy, endoscopic style medical illustration' },
+  { label: 'Glissandos', prompt: 'singer performing ascending vocal glissando with open mouth posture, side profile, anatomically correct facial anatomy, clinical demonstration photo' },
 ];
 
 export default function CloudflareImageGenerator() {
   const [prompt, setPrompt] = useState('');
+  const [estilo, setEstilo] = useState<'realista' | 'lineart'>('realista');
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
+  const [modelo, setModelo] = useState('');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -23,16 +26,18 @@ export default function CloudflareImageGenerator() {
     setLoading(true);
     setError('');
     setImageUrl('');
+    setModelo('');
     try {
       const res = await fetch(`${API_BASE}/api/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: p }),
+        body: JSON.stringify({ prompt: p, style: estilo }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Error al generar imagen');
       if (data.image_base64) {
         setImageUrl(data.image_base64);
+        if (data.modelo) setModelo(String(data.modelo).replace('@cf/', ''));
       } else {
         throw new Error('Respuesta sin imagen');
       }
@@ -65,8 +70,29 @@ export default function CloudflareImageGenerator() {
         </div>
         <div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-white">Generador de Imágenes</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Cloudflare Workers AI · Stable Diffusion XL Lightning</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Cloudflare Workers AI · FLUX.1 Schnell clínico</p>
         </div>
+      </div>
+
+      {/* Style selector */}
+      <div className="flex gap-2">
+        {([
+          { id: 'realista', label: 'Clínico realista', desc: 'Fotorrealista, anatomía precisa' },
+          { id: 'lineart', label: 'Line-art', desc: 'Trazo simple para impresión' },
+        ] as const).map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setEstilo(s.id)}
+            className={`flex-1 px-3 py-2.5 rounded-xl border text-left transition-all ${
+              estilo === s.id
+                ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 shadow-sm'
+                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}
+          >
+            <p className={`text-xs font-bold ${estilo === s.id ? 'text-violet-700 dark:text-violet-300' : 'text-slate-700 dark:text-slate-300'}`}>{s.label}</p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500">{s.desc}</p>
+          </button>
+        ))}
       </div>
 
       {/* Presets */}
@@ -87,7 +113,7 @@ export default function CloudflareImageGenerator() {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Describe la ilustración que deseas generar..."
+          placeholder="Describe la anatomía o el ejercicio (ej: vista superior de cuerdas vocales sanas en cierre fonatorio)..."
           rows={3}
           className="w-full px-4 py-3 pr-24 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm placeholder-slate-400 dark:placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 transition-shadow"
           onKeyDown={(e) => {
@@ -148,6 +174,11 @@ export default function CloudflareImageGenerator() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          {modelo && (
+            <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-black/60 text-white text-[10px] font-medium backdrop-blur-sm">
+              {modelo} · {estilo === 'realista' ? 'clínico realista' : 'line-art'}
+            </div>
+          )}
         </div>
       )}
 
