@@ -5,11 +5,12 @@ para los ejercicios del cuadernillo, con fallback automático al dibujo
 vectorial interno si no hay claves configuradas.
 
 Orden de proveedores:
-  1. Gemini Flash Image / Nano Banana (GEMINI_API_KEY) — GRATUITO con la key
-     existente. Modelos: gemini-2.5-flash-image, gemini-2.0-flash-preview-image-generation.
-  2. FAL.ai (FAL_KEY) — FLUX line art.
-  3. Recraft V3 (RECRAFT_API_KEY) — style line_art.
-  4. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX.
+  1. Pixazo (PIXAZO_API_KEY) — Flux Schnell vía gateway (probado end-to-end).
+     Estilo: lineart (default) o 3D hiperrealista (PIXAZO_STYLE=3d).
+  2. Gemini Flash Image / Nano Banana (GEMINI_API_KEY) — gratuito.
+  3. FAL.ai (FAL_KEY) — FLUX line art.
+  4. Recraft V3 (RECRAFT_API_KEY) — style line_art.
+  5. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX.
 
 Sin claves → devuelve None y el cuadernillo usa los pictogramas vectoriales.
 Las imágenes se cachean en /tmp por hash del prompt (no se regeneran).
@@ -146,6 +147,70 @@ def _via_gemini(prompt: str) -> str | None:
     return None
 
 
+PROMPT_3D_BASE = ("Hyperrealistic 3D clinical render of {desc}, soft studio lighting, "
+                  "anatomically accurate, medical textbook aesthetic, clean background, "
+                  "high detail")
+
+
+def _estilo_pixazo() -> str:
+    return os.environ.get("PIXAZO_STYLE", "lineart").strip().lower()
+
+
+def _via_pixazo(prompt: str, prompt_3d: str = "") -> str | None:
+    """Pixazo gateway (Flux Schnell). Síncrono: devuelve URL directa."""
+    key = os.environ.get("PIXAZO_API_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        import httpx
+        texto = prompt_3d if _estilo_pixazo() == "3d" and prompt_3d else prompt
+        prov = "pixazo3d" if (prompt_3d and _estilo_pixazo() == "3d") else "pixazo"
+        dest = _cache_path(texto, prov)
+        if _es_imagen_valida(dest):
+            return dest
+        r = httpx.post(
+            "https://gateway.pixazo.ai/flux-1-schnell/v1/getData",
+            headers={"Content-Type": "application/json", "Cache-Control": "no-cache",
+                      "Ocp-Apim-Subscription-Key": key},
+            json={"prompt": texto},
+            timeout=180,
+        )
+        if r.status_code != 200:
+            print(f"[imagen_terapeutica] Pixazo {r.status_code}: {r.text[:200]}")
+            return None
+        url = (r.json().get("output") or "")
+        if not url:
+            return None
+        return dest if _descargar(url, dest, timeout=90) else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _via_pollinations(prompt: str) -> str | None:
+    """Pollinations.ai — gratuito, sin key. Flux con nologo."""
+    try:
+        import httpx
+        import urllib.parse
+        dest = _cache_path(prompt, "pollinations")
+        if _es_imagen_valida(dest):
+            return dest
+        q = urllib.parse.quote(prompt[:1500])
+        url = (f"https://image.pollinations.ai/prompt/{q}"
+               "?width=1024&height=1024&model=flux&nologo=true&seed=7")
+        r = httpx.get(url, timeout=180, follow_redirects=True)
+        ctype = r.headers.get("content-type", "")
+        if r.status_code != 200 or "image" not in ctype or len(r.content) < 2000:
+            print(f"[imagen_terapeutica] Pollinations {r.status_code}: {ctype}")
+            return None
+        with open(dest, "wb") as f:
+            f.write(r.content)
+        return dest if _es_imagen_valida(dest) else None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def _via_fal(prompt: str) -> str | None:
     key = os.environ.get("FAL_KEY", "").strip()
     if not key:
@@ -254,6 +319,10 @@ def _via_replicate(prompt: str) -> str | None:
 
 def proveedores_disponibles() -> list:
     provs = []
+    if os.environ.get("PIXAZO_API_KEY", "").strip():
+        provs.append("pixazo")
+    if os.environ.get("GEMINI_API_KEY", "").strip():
+        provs.append("gemini")
     if os.environ.get("FAL_KEY", "").strip():
         provs.append("fal")
     if os.environ.get("RECRAFT_API_KEY", "").strip():
@@ -263,6 +332,29 @@ def proveedores_disponibles() -> list:
     return provs
 
 
+IMG_DESC_3D = {
+    "tubo_agua": "a person's hands holding a clear glass bottle with water, a transparent silicone tube submerged exactly 1.5 cm, realistic water bubbles, studio lighting, medical textbook aesthetic",
+    "popote_aire": "close-up 3D photorealistic render of a human face profile, blowing through a thin straw into open air, relaxed facial muscles, clean background, medical illustration detail",
+    "humming_m": "hyperrealistic 3D anatomical render of a human head side profile, soft glowing highlight on the nasolabial and mask area indicating acoustic resonance, elegant medical graphic style",
+    "frases_balanceadas": "person speaking clearly in 3D clinical render with expanding soundwave arcs extending forward, medical textbook aesthetic",
+    "rotacion_hombros": "3D anatomical render of human upper torso showing neck side bend and shoulder roll, clinical style",
+    "respiracion_abdominal": "3D anatomical render of human torso side-view showing abdominal expansion during breathing",
+}
+
+
+def imagen_ia_habilitada() -> bool:
+    """True si hay algún proveedor con key o si el modo libre está activo.
+    Pollinations (gratuito, sin key) solo se usa con POLLINATIONS_ENABLED=1
+    porque cada imagen tarda 30-90s y frenaría el PDF por defecto."""
+    if proveedores_disponibles():
+        return True
+    return os.environ.get("POLLINATIONS_ENABLED", "").strip() in ("1", "true", "True")
+
+
+def _pollinations_permitido() -> bool:
+    return os.environ.get("POLLINATIONS_ENABLED", "").strip() in ("1", "true", "True")
+
+
 def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
                             exercise_id: str = "") -> str | None:
     """Devuelve el path local de la ilustración IA, o None si no hay proveedor
@@ -270,6 +362,20 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
     desc = _descripcion_ejercicio(exercise_id, nombre or "ejercicio vocal",
                                   descripcion or "")
     prompt = PROMPT_BASE.format(desc=desc)
+    desc3d = IMG_DESC_3D.get(str(exercise_id or "").strip().lower(),
+                             f"speech therapy exercise: {desc}")
+    prompt_3d = (f"Hyperrealistic 3D clinical render, {desc3d}, studio lighting, "
+                 "medical textbook aesthetic, high detail")
+    dest = _cache_path(prompt, "pixazo")
+    if _es_imagen_valida(dest):
+        return dest
+    path = _via_pixazo(prompt, prompt_3d)
+    if path and _es_imagen_valida(path):
+        return path
+    if _pollinations_permitido():
+        path = _via_pollinations(prompt)
+        if path and _es_imagen_valida(path):
+            return path
     dest = _cache_path(prompt, "gemini")
     if _es_imagen_valida(dest):
         return dest

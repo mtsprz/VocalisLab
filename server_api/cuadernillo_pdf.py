@@ -128,6 +128,9 @@ def _sanear(texto: str) -> str:
     # Artefactos de sintaxis tipo $10=voz$ / $0=$ (restos de plantillas)
     out = re.sub(r"\$[^$\n]*\$", "", out)
     out = out.replace("$", "")
+    # Backslashes sueltos y corchetes huérfanos (sin contenido útil)
+    out = out.replace("\\", "")
+    out = re.sub(r"\[[^\[\]\w]*\]", "", out)
     out = re.sub(r"\s+", " ", out).strip()
     # Colapsa palabra duplicada exacta consecutiva ("respiración respiración")
     out = re.sub(r"(?i)\b(\w[\w\-]*)\s+\1\b", r"\1", out)
@@ -716,6 +719,74 @@ def _ilustracion(ex: dict):
     return d, "Esquema del procedimiento"
 
 
+# ─── Niveles de Instrucción y Complejización Vocal ────────────────
+_NIVEL_NOMBRE = {
+    1: "Nivel 1: Concienciación",
+    2: "Nivel 2: Ajuste TVSO",
+    3: "Nivel 3: Modulación",
+    4: "Nivel 4: Transferencia",
+}
+_NIVEL_DESC = {
+    1: "Concienciación y desbloqueo postural/respiratorio, sin carga vocal.",
+    2: "Ajuste fisiológico con tracto vocal semiocluido sostenido.",
+    3: "Modulación y flexibilidad tonal sobre TVSO y resonancia.",
+    4: "Transferencia al habla conversacional y automatización.",
+}
+_NIVEL_POR_EJERCICIO = {
+    "le_huche": 1, "shiatsu_cabeza": 1, "rotacion_hombros": 1,
+    "respiracion_abdominal": 1, "expansion_costo_lateral": 1,
+    "masaje_laringeo": 1, "pautas_rlf": 1,
+    "tubo_agua": 2, "popote_aire": 2, "vibracion_labial": 2,
+    "consonantes_fricativas": 2, "oclusion_succion": 2,
+    "soplo_escalonado": 2, "empuje_glotico": 2,
+    "escalas_vocalicas": 3, "humming_m": 3, "descenso_laringeo": 3,
+    "calentamiento": 3, "enfriamiento": 3,
+    "frases_balanceadas": 4,
+}
+_EFECTO_POR_EJERCICIO = {
+    "le_huche": "Libera tensión general y ordena la respiración",
+    "shiatsu_cabeza": "Afloja mandíbula, sienes y cuello",
+    "rotacion_hombros": "Suelta hombros y libera la laringe",
+    "respiracion_abdominal": "Aire rendidor sin quedarse sin aire",
+    "expansion_costo_lateral": "Más aire disponible al hablar",
+    "masaje_laringeo": "Ablanda la musculatura del cuello",
+    "pautas_rlf": "Protege las cuerdas del ácido",
+    "tubo_agua": "Masaje vocal por presión de aire",
+    "popote_aire": "Voz rendidora con poco esfuerzo",
+    "vibracion_labial": "Suelta la lengua y empareja la voz",
+    "consonantes_fricativas": "Lleva la voz hacia adelante",
+    "oclusion_succion": "Baja la laringe y abre la faringe",
+    "soplo_escalonado": "Ataque suave sin golpe de glotis",
+    "empuje_glotico": "Cierre firme para voces débiles",
+    "escalas_vocalicas": "Flexibilidad de agudos y graves",
+    "humming_m": "Resonancia clara en la máscara",
+    "descenso_laringeo": "Garganta abierta y relajada",
+    "calentamiento": "Prepara la voz antes de usarla",
+    "enfriamiento": "Devuelve la voz al reposo",
+    "frases_balanceadas": "Lleva lo entrenado al habla real",
+}
+
+
+def _barra_complejidad(nivel: int):
+    """Barra vectorial de 4 segmentos (rellenos según nivel)."""
+    cells, widths = [], []
+    for i in range(1, 5):
+        cells.append("")
+        widths.append(9 * mm)
+    t = Table([cells], colWidths=widths, rowHeights=[5 * mm])
+    style = [('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+             ('LEFTPADDING', (0, 0), (-1, -1), 1),
+             ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+             ('BOX', (0, 0), (-1, -1), 0.6, INK_SUAVE)]
+    for i in range(1, 5):
+        if i <= nivel:
+            style.append(('BACKGROUND', (i - 1, 0), (i - 1, 0), SECONDARY))
+        else:
+            style.append(('BACKGROUND', (i - 1, 0), (i - 1, 0), white))
+    t.setStyle(TableStyle(style))
+    return t
+
+
 # ─── Propósitos en lenguaje cotidiano por sección ─────────────────
 _PROPOSITO_SECCION = {
     "corporal": "Para aflojar el cuello, los hombros y la mandíbula, así la voz sale sin esfuerzo.",
@@ -994,18 +1065,42 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 3 * mm))
+    elements.append(Spacer(1, 2 * mm))
+
+    # Badge de Nivel de Instrucción + efecto clínico (diferenciador)
+    ex_id = str(exercise.get("id", "")).strip().lower()
+    nivel = _NIVEL_POR_EJERCICIO.get(ex_id, 2)
+    efecto = _EFECTO_POR_EJERCICIO.get(ex_id, "Entrena y cuida su voz")
+    badge = Table([[
+        Paragraph(f"<b>{_NIVEL_NOMBRE.get(nivel, 'Nivel 2: Ajuste TVSO')}</b>",
+                  ParagraphStyle('BadgeCell', parent=styles['Normal'],
+                                 fontSize=10, textColor=white, alignment=TA_CENTER)),
+        Paragraph(f"Efecto: {escape(efecto)}",
+                  ParagraphStyle('EfectoCell', parent=styles['Normal'],
+                                 fontSize=10, textColor=DARK_TEXT, alignment=TA_LEFT)),
+    ]], colWidths=[52 * mm, 120 * mm])
+    badge.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), PRIMARY),
+        ('ROUNDEDCORNERS', [3, 3, 3, 3]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(badge)
+    elements.append(Paragraph(
+        f"<i>{escape(_NIVEL_DESC.get(nivel, ''))}</i>", styles['CaptionText']))
+    elements.append(Spacer(1, 2 * mm))
 
     if desc:
         elements.append(Paragraph(escape(desc), styles['CuadBody']))
 
-    # Ilustración IA autónoma (Nano Banana/Gemini o proveedor pago);
-    # si no hay claves, dibujo vectorial. Nunca se rompe el PDF.
+    # Ilustración IA autónoma (Pixazo/Gemini/proveedor pago, o modo libre);
+    # si no hay nada configurado, dibujo vectorial. Nunca se rompe el PDF.
     try:
-        from imagen_terapeutica import generar_imagen_ejercicio, proveedores_disponibles
-        import os as _os
-        hay_ia = bool(_os.environ.get("GEMINI_API_KEY", "").strip()) or bool(proveedores_disponibles())
-        ai_img = generar_imagen_ejercicio(name, desc, ex.get("id", "")) if hay_ia else None
+        from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
+        ai_img = generar_imagen_ejercicio(name, desc, ex.get("id", "")) if imagen_ia_habilitada() else None
     except Exception:
         ai_img = None
     if ai_img:
@@ -1066,7 +1161,22 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         pasos_tabla = Paragraph("Siga la curva y el dibujo de la derecha.",
                                 styles['CuadBody'])
 
-    card = Table([[[pasos_tabla], panel_grafico]], colWidths=[108 * mm, 64 * mm])
+    complejidad = Table([[
+        Paragraph("<b>Nivel de complejidad:</b>", styles['CaptionText']),
+        _barra_complejidad(nivel),
+        Paragraph(f"<b>{nivel}/4</b>", styles['CaptionText']),
+    ]], colWidths=[52 * mm, 40 * mm, 12 * mm])
+    complejidad.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    dosis_txt = f"<b>Dosis: {duration} min/día</b>" if duration else ""
+    left_cell = [pasos_tabla, Spacer(1, 2 * mm), complejidad]
+    if dosis_txt:
+        left_cell.append(Paragraph(dosis_txt, styles['CuadBody']))
+
+    card = Table([[left_cell, panel_grafico]], colWidths=[108 * mm, 64 * mm])
     card.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 2),
