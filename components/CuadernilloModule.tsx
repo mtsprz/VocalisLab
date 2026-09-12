@@ -741,7 +741,6 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                         </div>
                       )}
                     </div>
-                  </div>
                   </label>
                   </div>
                 );
