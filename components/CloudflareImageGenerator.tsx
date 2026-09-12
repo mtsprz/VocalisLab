@@ -11,12 +11,23 @@ const PRESET_PROMPTS: { label: string; prompt: string }[] = [
   { label: 'Glissandos', prompt: 'singer performing ascending vocal glissando with open mouth posture, side profile, anatomically correct facial anatomy, clinical demonstration photo' },
 ];
 
+const CATEGORIAS = [
+  { id: '', label: 'Auto-detectar' },
+  { id: 'MANUAL_THERAPY', label: 'Terapia manual' },
+  { id: 'TVSO', label: 'TVSO / Dispositivos' },
+  { id: 'POSTURE', label: 'Postura' },
+  { id: 'RESONANCE', label: 'Resonancia' },
+  { id: 'ANATOMY', label: 'Atlas anatómico' },
+];
+
 export default function CloudflareImageGenerator() {
   const [prompt, setPrompt] = useState('');
   const [estilo, setEstilo] = useState<'realista' | 'lineart'>('realista');
+  const [categoria, setCategoria] = useState('');
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [modelo, setModelo] = useState('');
+  const [categoriaOut, setCategoriaOut] = useState('');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -27,17 +38,19 @@ export default function CloudflareImageGenerator() {
     setError('');
     setImageUrl('');
     setModelo('');
+    setCategoriaOut('');
     try {
       const res = await fetch(`${API_BASE}/api/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: p, style: estilo }),
+        body: JSON.stringify({ prompt: p, style: estilo, categoria }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Error al generar imagen');
       if (data.image_base64) {
         setImageUrl(data.image_base64);
         if (data.modelo) setModelo(String(data.modelo).replace('@cf/', ''));
+        if (data.categoria_label) setCategoriaOut(data.categoria_label);
       } else {
         throw new Error('Respuesta sin imagen');
       }
@@ -108,6 +121,26 @@ export default function CloudflareImageGenerator() {
         ))}
       </div>
 
+      {/* Category selector (motor de mediación) */}
+      <div>
+        <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Categoría clínica (mediación de prompt)</p>
+        <div className="flex flex-wrap gap-2">
+          {CATEGORIAS.map((c) => (
+            <button
+              key={c.id || 'auto'}
+              onClick={() => setCategoria(c.id)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                categoria === c.id
+                  ? 'bg-emerald-600 border-emerald-600 text-white font-semibold'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Prompt input */}
       <div className="relative">
         <textarea
@@ -176,7 +209,7 @@ export default function CloudflareImageGenerator() {
           </div>
           {modelo && (
             <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-black/60 text-white text-[10px] font-medium backdrop-blur-sm">
-              {modelo} · {estilo === 'realista' ? 'clínico realista' : 'line-art'}
+              {modelo} · {estilo === 'realista' ? 'clínico realista' : 'line-art'}{categoriaOut ? ` · ${categoriaOut}` : ''}
             </div>
           )}
         </div>

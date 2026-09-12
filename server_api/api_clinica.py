@@ -1075,10 +1075,12 @@ async def debug_status():
 # ─── GENERACIÓN DE IMAGEN (Cloudflare Workers AI - endpoint seguro) ─────
 @router.post("/api/generate-image")
 async def generate_image(request: Request):
-    """Endpoint seguro: recibe {prompt, style} y devuelve imagen base64 sin
-    exponer claves CF en el cliente. style: 'realista' (default, clínico
-    fotorrealista) o 'lineart'. Usa el modelo de CLOUDFLARE_MODEL
-    (default: FLUX.1 Schnell)."""
+    """Endpoint seguro: recibe {prompt, style, categoria} y devuelve imagen
+    base64 sin exponer claves CF en el cliente. style: 'realista' (default,
+    clínico fotorrealista) o 'lineart'. categoria: MANUAL_THERAPY | TVSO |
+    POSTURE | RESONANCE | ANATOMY (vacío = auto-detección). Todo prompt pasa
+    por el motor de mediación clínica (4 capas + negative por categoría).
+    Usa el modelo de CLOUDFLARE_MODEL (default: FLUX.1 Schnell)."""
     try:
         body = await request.json()
     except Exception:
@@ -1103,14 +1105,19 @@ async def generate_image(request: Request):
         import sys as _sys
         _sys.path.insert(0, os.path.dirname(__file__))
         from imagen_terapeutica import (
-            _prompt_clinico, _cloudflare_model, NEGATIVO_CLINICO,
+            _cloudflare_model, NEGATIVO_CLINICO,
             _extraer_imagen_cf,
         )
+        from mediacion_clinica import mediar_prompt
         model = _cloudflare_model()
-        final_prompt = _prompt_clinico(prompt, estilo)
+        # Mediación universal: 4 capas + negative por categoría (auto-detectada
+        # o forzada por el cliente). Ningún texto libre llega a la API.
+        med = mediar_prompt(prompt, str(body.get("categoria", "")), estilo)
+        final_prompt = med["prompt"]
+        negativo = med["negative_prompt"]
         cf_body: dict = {"prompt": final_prompt}
         if "stable-diffusion" in model and "lightning" not in model:
-            cf_body["negative_prompt"] = NEGATIVO_CLINICO
+            cf_body["negative_prompt"] = negativo or NEGATIVO_CLINICO
         r = httpx.post(
             f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
@@ -1118,9 +1125,12 @@ async def generate_image(request: Request):
             timeout=180,
         )
         # Filtro NSFW de Cloudflare (8007) suele rechazar "photorealistic/endoscopic":
-        # reintentar una vez con el template line-art ("diagram/illustration").
+        # reintentar una vez con mediación line-art ("diagram/illustration").
         if r.status_code != 200 and "8007" in r.text:
-            cf_body["prompt"] = _prompt_clinico(prompt, "lineart")
+            med_retry = mediar_prompt(prompt, med["categoria"], "lineart")
+            cf_body["prompt"] = med_retry["prompt"]
+            if "stable-diffusion" in model and "lightning" not in model:
+                cf_body["negative_prompt"] = med_retry["negative_prompt"]
             r = httpx.post(
                 f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
@@ -1144,6 +1154,7 @@ async def generate_image(request: Request):
         b64 = base64.b64encode(raw).decode()
         return JSONResponse(content={
             "ok": True, "modelo": model, "estilo": estilo,
+            "categoria": med["categoria"], "categoria_label": med["categoria_label"],
             "image_base64": f"data:{mime};base64,{b64}",
         })
     except HTTPException:

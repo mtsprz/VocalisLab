@@ -201,7 +201,8 @@ def _prompt_ejercicio(nombre: str, descripcion: str) -> str:
     return PROMPT_BASE.format(desc=f"{nombre}. {descripcion[:220]}".strip())
 
 
-def _via_cloudflare(prompt: str, desc_fallback: str = "") -> str | None:
+def _via_cloudflare(prompt: str, desc_fallback: str = "",
+                      negative: str = "") -> str | None:
     """Cloudflare Workers AI — modelo configurable vía CLOUDFLARE_MODEL
     (default: FLUX.1 Schnell, alta coherencia anatómica).
     Responde binario image/png o JSON con b64 anidado según el modelo.
@@ -220,7 +221,7 @@ def _via_cloudflare(prompt: str, desc_fallback: str = "") -> str | None:
             b: dict = {"prompt": p}
             # Los Stable Diffusion aceptan prompt negativo y pasos; FLUX no.
             if "stable-diffusion" in model and "lightning" not in model:
-                b["negative_prompt"] = NEGATIVO_CLINICO
+                b["negative_prompt"] = negative or NEGATIVO_CLINICO
                 try:
                     steps = int(os.environ.get("CLOUDFLARE_STEPS", "30"))
                     b["num_steps"] = max(1, min(steps, 50))
@@ -243,7 +244,8 @@ def _via_cloudflare(prompt: str, desc_fallback: str = "") -> str | None:
                 return _cand
         r = _post(prompt)
         if r.status_code != 200 and "8007" in r.text and desc_fallback:
-            alt = _prompt_clinico(desc_fallback, "lineart")
+            from mediacion_clinica import mediar_prompt as _mediar
+            alt = _mediar(desc_fallback, "", "lineart")["prompt"]
             if alt != prompt:
                 print("[imagen_terapeutica] Cloudflare filtro NSFW (8007), reintentando line-art")
                 prompt = alt
@@ -688,7 +690,13 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
         est = "lineart"
     desc = _descripcion_ejercicio(ex_id, nombre or "ejercicio vocal",
                                   descripcion or "")
-    prompt = _prompt_clinico(desc, est)
+    # Motor de mediación universal: clasifica la maniobra y ensambla el prompt
+    # en 4 capas (categoría + detalle + seguridad clínica + calidad/estilo).
+    # Ningún prompt libre llega a las APIs sin sanitización.
+    from mediacion_clinica import mediar_prompt
+    med = mediar_prompt(desc, "", est)
+    prompt = med["prompt"]
+    negativo_cat = med["negative_prompt"]
     desc3d = IMG_DESC_3D.get(ex_id, f"speech therapy exercise: {desc}")
     prompt_3d = (f"Hyperrealistic 3D clinical render, {desc3d}, studio lighting, "
                  "medical textbook aesthetic, high detail")
@@ -706,7 +714,7 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
         _cand = _cache_path(f"{_cloudflare_model()}:{prompt}", "cloudflare", _ext)
         if _es_imagen_valida(_cand):
             return _cand
-    r = _ok(_via_cloudflare(prompt, desc), "cloudflare", prompt)
+    r = _ok(_via_cloudflare(prompt, desc, negativo_cat), "cloudflare", prompt)
     if r:
         return r
     # Wavespeed primero (key dedicada del consultorio), luego el resto
