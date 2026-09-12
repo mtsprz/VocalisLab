@@ -1,79 +1,163 @@
 import React, { useState } from 'react';
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, Download, Copy, CheckCircle2 } from 'lucide-react';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+const PRESET_PROMPTS: { label: string; prompt: string }[] = [
+  { label: 'Agua / Hidratación', prompt: 'Minimalist 2D medical line art illustration of a clear glass with water and a silicone tube bubbling at 1.5 cm depth, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors, high legibility' },
+  { label: 'Respiración', prompt: 'Minimalist 2D medical line art illustration of a human torso side-view showing abdominal expansion arrows during diaphragmatic breathing, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors' },
+  { label: 'Masaje laríngeo', prompt: 'Minimalist 2D medical line art illustration of hands gently massaging the front of the neck in the laryngeal area, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors' },
+  { label: 'Glissandos', prompt: 'Minimalist 2D medical line art illustration of five ascending musical stairs with notes going up and down for vocal glissando exercise, clean black strokes on white background, simple pedagogical style, vector icon style, no shading, no colors' },
+];
 
 export default function CloudflareImageGenerator() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
-  const [image, setImage] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  const generar = async () => {
-    if (!prompt.trim()) return;
+  const generate = async () => {
+    const p = prompt.trim();
+    if (!p) return;
     setLoading(true);
     setError('');
-    setImage(null);
+    setImageUrl('');
     try {
-      const r = await fetch(`${BACKEND_URL}/api/generate-image`, {
+      const res = await fetch(`${API_BASE}/api/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({ prompt: p }),
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok || !data.ok) {
-        throw new Error(data.detail || data.error || `Error ${r.status}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Error al generar imagen');
+      if (data.image_base64) {
+        setImageUrl(data.image_base64);
+      } else {
+        throw new Error('Respuesta sin imagen');
       }
-      setImage(data.image_base64);
     } catch (e: any) {
-      setError(e.message || 'No se pudo generar la imagen');
+      setError(e.message || 'Error desconocido');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const downloadImage = () => {
+    if (!imageUrl) return;
+    const a = document.createElement('a');
+    a.href = imageUrl;
+    a.download = `imagen_${Date.now()}.png`;
+    a.click();
+  };
+
+  const copyPrompt = () => {
+    navigator.clipboard.writeText(prompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white dark:bg-[#111827] rounded-2xl border border-gray-200 dark:border-white/10 p-6 shadow-sm space-y-4">
-      <h2 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <Sparkles size={16} className="text-purple-500" /> Generador de Imágenes — Cloudflare Workers AI
-      </h2>
-      <p className="text-[11px] text-gray-500 dark:text-gray-400">
-        Escribí un prompt descriptivo. El backend lo envía a Cloudflare de forma segura (sin exponer tu API Token).
-      </p>
-
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && generar()}
-          placeholder="Ej: Minimalist line art of a glass with water, bubbling tube..."
-          className="flex-1 px-3 py-2.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-        />
-        <button
-          onClick={generar}
-          disabled={loading || !prompt.trim()}
-          className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 disabled:opacity-50 shrink-0"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          {loading ? 'Generando…' : 'Generar'}
-        </button>
+    <div className="max-w-3xl mx-auto p-6 space-y-6">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg">
+          <Sparkles className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white">Generador de Imágenes</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Cloudflare Workers AI · Stable Diffusion XL Lightning</p>
+        </div>
       </div>
 
-      {loading && (
-        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <Loader2 size={14} className="animate-spin" /> Procesando imagen en Cloudflare…
+      {/* Presets */}
+      <div className="flex flex-wrap gap-2">
+        {PRESET_PROMPTS.map((p) => (
+          <button
+            key={p.label}
+            onClick={() => setPrompt(p.prompt)}
+            className="text-xs px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors border border-slate-200 dark:border-slate-700"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Prompt input */}
+      <div className="relative">
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Describe la ilustración que deseas generar..."
+          rows={3}
+          className="w-full px-4 py-3 pr-24 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm placeholder-slate-400 dark:placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 transition-shadow"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate();
+          }}
+        />
+        <div className="absolute right-2 bottom-2 flex gap-1">
+          <button
+            onClick={copyPrompt}
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+            title="Copiar prompt"
+          >
+            {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Generate button */}
+      <button
+        onClick={generate}
+        disabled={loading || !prompt.trim()}
+        className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold text-sm shadow-lg shadow-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Generando...
+          </>
+        ) : (
+          <>
+            <Sparkles className="w-4 h-4" />
+            Generar Imagen
+          </>
+        )}
+      </button>
+
+      {/* Error */}
+      {error && (
+        <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+          {error}
         </div>
       )}
 
-      {error && (
-        <p className="text-xs text-red-600 dark:text-red-400 font-semibold flex items-center gap-1">
-          <AlertCircle size={14} /> {error}
-        </p>
+      {/* Image result */}
+      {imageUrl && (
+        <div className="relative group rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+          <img
+            src={imageUrl}
+            alt="Imagen generada"
+            className="w-full h-auto"
+          />
+          <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={downloadImage}
+              className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-sm transition-colors"
+              title="Descargar"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
-      {image && (
-        <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 p-2">
-          <img src={image} alt="Generada por Cloudflare Workers AI" className="w-full rounded-lg" />
+      {/* Skeleton while loading */}
+      {loading && !imageUrl && (
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 h-64 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-500">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <p className="text-xs font-medium">Generando imagen con Cloudflare AI...</p>
+          </div>
         </div>
       )}
     </div>
