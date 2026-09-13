@@ -837,6 +837,10 @@ def _get_styles():
          alignment=TA_CENTER)
     _add('PageNumber', parent=styles['Normal'], fontSize=9, textColor=GRAY_TEXT,
          alignment=TA_CENTER)
+    _add('CuadHelp', parent=styles['Normal'], fontSize=9, textColor=GRAY_TEXT,
+         leading=13, spaceAfter=2 * mm)
+    _add('CuadSubTitle', parent=styles['Heading3'], fontSize=11, textColor=PRIMARY,
+         spaceBefore=3 * mm, spaceAfter=1 * mm, leading=14)
     return styles
 
 
@@ -1251,52 +1255,121 @@ def _build_weekly_grid(styles):
 
 
 def _build_tme_log(styles):
-    """Tabla de registro diario de TME en segundos."""
+    """Tabla de registro diario de TME /s/ según Sección 5 del Manual 2026."""
     elements = []
-    elements.append(Paragraph("Mi Registro Diario de Aire (TME en segundos)",
+    elements.append(Paragraph("Sección 5 — Prueba de Tiempo Máximo Espiratorio (TME /s/)",
                               styles['SectionTitle']))
     elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     elements.append(Spacer(1, 2 * mm))
     elements.append(Paragraph(
-        "Una vez por día, tome aire y largue el aire con una <b>S</b> suave "
-        "todo lo que pueda. Anote cuántos segundos duró y cómo sintió su voz. "
-        "Así vemos cómo mejora su control del aire.",
+        "<b>Protocolo clínico:</b> 1) Inspirar profundo por boca y nariz · 2) Emitir /s/ con volumen cómodo y estable · "
+        "3) Cronometrar hasta que el sonido deja de ser sostenible · 4) Repetir 3 veces con 30 s de descanso · "
+        "5) Registrar las 3 mediciones y el valor mayor del día.",
         styles['CuadBody']))
+    elements.append(Spacer(1, 2 * mm))
 
-    data = [["Fecha", "Segundos logrados", "Sensación vocal", "[ ]"]]
-    for _ in range(12):
-        data.append(["", "", "", "[ ]"])
-    table = Table(data, colWidths=[32 * mm, 38 * mm, 62 * mm, 28 * mm],
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    data = [["Día", "1ª medición (s)", "2ª medición (s)", "3ª medición (s)", "Mejor valor", "Observaciones"]]
+    for d in dias:
+        data.append([d, "____ s", "____ s", "____ s", "____ s", "____________________"])
+    table = Table(data, colWidths=[24 * mm, 26 * mm, 26 * mm, 26 * mm, 24 * mm, 44 * mm],
                   repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
     ]))
     elements.append(table)
-    elements.append(Spacer(1, 3 * mm))
+    elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(
+        "<i>Referencia orientativa: Hombres sanos 20–35 s · Mujeres sanas 15–25 s · La tendencia ascendente semanal es indicador positivo.</i>",
+        styles['CuadHelp']))
     return elements
 
 
-_VHI_SIMPLE = [
-    "Mi voz me dificulta que me entiendan.",
-    "Siento que tengo que esforzarme para hablar.",
-    "Mi voz me limita en mi vida personal y social.",
-    "Pierdo el control de mi voz o se me corta.",
-    "Mi voz se cansa cuando hablo mucho.",
+_VHI_10_OFICIAL = [
+    "1. Mi voz me dificulta hacer que me escuchen en ambientes ruidosos.",
+    "2. La gente tiene dificultad para oírme en ambientes ruidosos o concurridos.",
+    "3. Mi voz me presenta problemas en mi trabajo o en mi vida personal.",
+    "4. Me siento tenso al hablar.",
+    "5. La calidad de mi voz es impredecible a lo largo del día.",
+    "6. Mi voz 'se corta' o me quedo sin aire cuando hablo.",
+    "7. Siento que necesito esforzarme para producir mi voz.",
+    "8. Mi voz suena ronca o áspera.",
+    "9. Mi voz limita mi vida personal y social.",
+    "10. Siento que la gente no comprende mi problema de voz.",
 ]
 
 
 def _build_self_assessment(styles):
-    """Autoevaluación vocal 0-10 + VHI simplificado antes/después."""
+    """Autoevaluación vocal + VHI-10 Oficial (Sección 3 del Manual Edición 2026)."""
+    elements = []
+    elements.append(Paragraph("Sección 3 — Índice de Discapacidad Vocal (VHI-10)",
+                              styles['SectionTitle']))
+    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
+    elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(
+        "Instrumento validado que mide el impacto de la disfonía en la calidad de vida. "
+        "Puntuación: 0 = Nunca · 1 = Casi nunca · 2 = A veces · 3 = Casi siempre · 4 = Siempre",
+        styles['CuadBody']))
+    elements.append(Spacer(1, 2 * mm))
+
+    vhi_data = [["N°", "Pregunta", "0", "1", "2", "3", "4"]]
+    for item in _VHI_10_OFICIAL:
+        n, q = item.split(". ", 1)
+        vhi_data.append([n, q, "[ ]", "[ ]", "[ ]", "[ ]", "[ ]"])
+    vhi_table = Table(vhi_data, colWidths=[10 * mm, 110 * mm, 10 * mm, 10 * mm, 10 * mm, 10 * mm, 10 * mm],
+                      repeatRows=1)
+    vhi_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
+    ]))
+    elements.append(vhi_table)
+    elements.append(Spacer(1, 3 * mm))
+    
+    # Cuadro de interpretación clínica
+    interp_data = [
+        ["Puntaje", "Grado de impacto", "Significado clínico"],
+        ["0 – 10", "Impacto mínimo", "Voz funcional, molestias leves"],
+        ["11 – 20", "Impacto leve-moderado", "Dificultades en situaciones demandantes"],
+        ["21 – 30", "Impacto moderado-severo", "Limitación clara en comunicación cotidiana"],
+        ["31 – 40", "Impacto severo", "Alteración importante de calidad de vida vocal"]
+    ]
+    interp_t = Table(interp_data, colWidths=[25 * mm, 45 * mm, 100 * mm])
+    interp_t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), SECONDARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7.5),
+        ('ALIGN', (0, 0), (1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(interp_t)
+    elements.append(Spacer(1, 2 * mm))
+    elements.append(Paragraph(
+        "<i>Repetición recomendada: completar cada 4–6 semanas. Una disminución ≥ 5 puntos se considera clínicamente significativa.</i>",
+        styles['CuadHelp']))
+    return elements
     elements = []
     elements.append(Paragraph("¿Cómo Va Mi Voz? (autoevaluación)",
                               styles['SectionTitle']))
@@ -1403,8 +1476,10 @@ def generar_cuadernillo_pdf(
     styles = _get_styles()
     story = []
 
-    pie_izq = _prof(profesional, "profesional_nombre")
-    pie_der = _prof(profesional, "profesional_telefono") or _prof(profesional, "profesional_email")
+    pie_izq = _prof(profesional, "profesional_nombre", "Matías Pérez · Fonoaudiólogo · M.P. 7276")
+    if "Matías Pérez" in pie_izq and "7276" not in pie_izq:
+        pie_izq = "Matías Pérez · Fonoaudiólogo · M.P. 7276"
+    pie_der = _prof(profesional, "profesional_telefono") or _prof(profesional, "profesional_email") or "Uso clínico supervisado"
     doc._prof_pie_izq = pie_izq
     doc._prof_pie_der = pie_der
 
@@ -1431,6 +1506,52 @@ def generar_cuadernillo_pdf(
     story.extend(_build_tme_log(styles))
     story.append(PageBreak())
     story.extend(_build_self_assessment(styles))
+
+    # Sección 13 — Bibliografía Académica Oficial (APA)
+    story.append(PageBreak())
+    story.append(Paragraph("Sección 13 — Bibliografía Académica (APA)", styles['SectionTitle']))
+    story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph("<i>Referencias seleccionadas por rigor científico y relevancia clínica. Formato APA.</i>", styles['CuadHelp']))
+    story.append(Spacer(1, 3 * mm))
+
+    bib_sections = [
+        ("EVALUACIÓN VOCAL", [
+            "Behrman, A. (2018). Speech and voice science (3.ª ed.). Plural Publishing.",
+            "Baken, R. J., & Orlikoff, R. F. (2011). Clinical measurement of speech and voice (2.ª ed.). Cengage Learning.",
+            "Hirano, M. (1981). Clinical examination of voice. Springer-Verlag.",
+            "Jacobson, B. H., Johnson, A., Grywalski, C., et al. (1997). The Voice Handicap Index (VHI). AJSLP, 6(3), 66–70.",
+            "Rosen, C. A., Lee, A. S., Osborne, J., et al. (2004). Validation of the Voice Handicap Index-10. Laryngoscope, 114(9), 1549–1556."
+        ]),
+        ("REHABILITACIÓN VOCAL", [
+            "Boone, D. R., McFarlane, S. C., Von Berg, S. L., & Zraick, R. I. (2020). The voice and voice therapy (10.ª ed.). Pearson.",
+            "Casiano, R. R. (2020). Manual of voice disorders: Diagnosis and management. Plural Publishing.",
+            "Chapman, J. L. (2016). Singing and teaching singing: A holistic approach to classical voice (3.ª ed.). Plural Publishing.",
+            "Stemple, J. C., Glaze, L. E., & Klaben, B. G. (2020). Clinical voice pathology (6.ª ed.). Plural Publishing.",
+            "Sataloff, R. T. (2017). Vocal health and pedagogy (3.ª ed.). Plural Publishing.",
+            "Harris, T., Harris, S., Rubin, J. S., & Howard, D. M. (2018). The voice clinic handbook (2.ª ed.). Compton Publishing.",
+            "Mathieson, L. (2018). The voice and its disorders (7.ª ed.). John Wiley & Sons."
+        ]),
+        ("HIGIENE VOCAL Y CUIDADO PREVENTIVO", [
+            "Roy, N., Merrill, R. M., Thibeault, S., et al. (2004). Prevalence of voice disorders in teachers. JSLHR, 47(2), 281–293.",
+            "Titze, I. R. (2017). Vocal health for vocal professionals. National Center for Voice and Speech.",
+            "Verdolini-Marston, K., Sandage, M., & Titze, I. R. (1994). Effect of hydration on laryngeal fatigue. J. Voice, 8(2), 138–146.",
+            "Williams, N. R. (2003). Occupational groups at risk of voice disorders. Occ. Med., 53(7), 456–460."
+        ]),
+        ("TÉCNICA VOCAL Y PEDAGOGÍA", [
+            "Estill, J. (2020). Estill voice training: Level one — Figures for voice control (Rev. ed.). Estill Voice International.",
+            "McKinney, J. C. (2005). The diagnosis and correction of vocal faults (Rev. ed.). Genevox Music Group.",
+            "Miller, R. (2004). Solutions for singers: Tools for performers and teachers. Oxford University Press.",
+            "Titze, I. R. (2017). Principles of voice production (3.ª ed.). National Center for Voice and Speech."
+        ])
+    ]
+
+    for area_title, refs in bib_sections:
+        story.append(Paragraph(f"<b>{area_title}</b>", styles['CuadSubTitle']))
+        story.append(Spacer(1, 1 * mm))
+        for r_txt in refs:
+            story.append(Paragraph(f"• {r_txt}", styles['CuadBody']))
+        story.append(Spacer(1, 2.5 * mm))
 
     if notas:
         story.append(Spacer(1, 8 * mm))

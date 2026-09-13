@@ -6,101 +6,58 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 interface Props { pacienteId: string | null; }
 
-const RIESGO_VOCAL_FONOAR = {
-  name: 'Ficha de Evaluación de Riesgo Vocal',
+const RIESGO_VOCAL_2026 = {
+  name: 'Cuestionario de Riesgo Vocal (Manual Edición 2026)',
   dimensions: [
     {
-      categoria: "Hábitos Vocales",
+      categoria: "Área A — Hábitos Vocales",
       items: [
-        { key: "R1", label: "1. ¿Habla fuerte?" },
-        { key: "R2", label: "2. ¿Es muy conversador?" },
-        { key: "R3", label: "3. ¿Hace uso prolongado de la voz?" },
-        { key: "R4", label: "4. ¿Habla en registro gruñidor?" },
-        { key: "R5", label: "5. ¿Habla susurrando?" },
-        { key: "R6", label: "6. ¿Utiliza una articulación cerrada?" },
-        { key: "R7", label: "7. ¿Hace esfuerzo al hablar?" },
-        { key: "R8", label: "8. ¿Habla con poco aire?" },
-        { key: "R9", label: "9. ¿Hace aspiraciones ruidosas al hablar?" },
-        { key: "R10", label: "10. ¿Utiliza el tipo respiratorio costal superior durante la fonación?" },
-        { key: "R11", label: "11. ¿Llega sin aire al final de la frase?" },
-        { key: "R12", label: "12. ¿Habla rápido, con pocas pausas?" },
-        { key: "R13", label: "13. ¿Habla al mismo tiempo que los demás?" },
-        { key: "R14", label: "14. ¿Habla mucho por teléfono?" },
-        { key: "R15", label: "15. ¿Habla mucho al aire libre?" },
-        { key: "R16", label: "16. ¿Habla mucho en ambientes ruidosos (vehículos, gimnasios, pub...)" },
-        { key: "R17", label: "17. ¿Carraspea en forma habitual?" },
-        { key: "R18", label: "18. ¿Ríe en reversión de la fonación?" },
-        { key: "R19", label: "19. ¿Grita con frecuencia?" },
-        { key: "R20", label: "20. ¿Grita en forma repentina y violenta?" },
-        { key: "R21", label: "21. ¿Imita voces?" },
-        { key: "R22", label: "22. ¿Canta?" },
-        { key: "R23", label: "23. ¿Canta mientras ejecuta instrumentos musicales?" },
-        { key: "R24", label: "24. ¿Imita ruidos o sonidos?" },
-        { key: "R25", label: "25. ¿Hábito mientras su cuerpo adopta múltiples posturas?" },
-        { key: "R26", label: "26. ¿Usa la voz en forma habitual a pesar de estar cursando procesos respiratorios patológicos?" },
-        { key: "R27", label: "27. ¿Usa la voz luego de una ingesta abundante?" },
-        { key: "R28", label: "28. ¿Usa la voz después de exposiciones solares?" },
-        { key: "R29", label: "29. ¿Hace uso intenso de la voz matinal?" },
-        { key: "R30", label: "30. ¿Utiliza la voz estando su interlocutor a distancia?" },
-        { key: "R31", label: "31. ¿Practica deporte en los cuales utilice la voz?" },
-        { key: "R32", label: "32. ¿Integra grupos religiosos que exigen gran uso de la voz?" }
+        { key: "A1", label: "A1. Carraspeo o tos para 'limpiar' la garganta", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "A2", label: "A2. Grito o elevo el volumen para hacerme oír", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "A3", label: "A3. Hablar por encima del ruido ambiental", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "A4", label: "A4. Hablar largos períodos sin pausas", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "A5", label: "A5. Imitaciones vocales, cambios bruscos de tono", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "A6", label: "A6. Susurro sostenido cuando la voz está cansada", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" }
       ]
     },
     {
-      categoria: "Estado Emocional",
+      categoria: "Área B — Estado Emocional",
       items: [
-        { key: "R33", label: "1. ¿Tiene preocupaciones económicas?" },
-        { key: "R34", label: "2. ¿Tiene conflictos afectivos de orden personal o familiar?" },
-        { key: "R35", label: "3. ¿Trabaja en situaciones conflictivas?" },
-        { key: "R36", label: "4. ¿Es emocionalmente hiperreactivo?" },
-        { key: "R37", label: "5. ¿Es emocionalmente reprimido?" },
-        { key: "R38", label: "6. ¿Tiene un temperamento dominante y agresivo?" },
-        { key: "R39", label: "7. ¿Se siente afectado por los problemas de los otros?" }
+        { key: "B1", label: "B1. Tensión o ansiedad al hablar en público", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "B2", label: "B2. Exigencia comunicativa sostenida en trabajo/estudio", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "B3", label: "B3. Estrés crónico o sobrecarga emocional", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "B4", label: "B4. Frustración por mi problema de voz", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "B5", label: "B5. Dificultad para expresar emociones o límites", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" }
       ]
     },
     {
-      categoria: "Condiciones Biológicas Desfavorables",
+      categoria: "Área C — Condiciones Biológicas",
       items: [
-        { key: "R40", label: "1. ¿Padece de alguna afección que disminuya su capacidad respiratoria?" },
-        { key: "R41", label: "2. ¿Es respirador bucal?" },
-        { key: "R42", label: "3. ¿Sufre procesos infecciosos o alérgicos en las vías aéreas?" },
-        { key: "R43", label: "4. ¿Tiene tos?" },
-        { key: "R44", label: "5. ¿Tiene problemas auditivos?" },
-        { key: "R45", label: "6. ¿Tiene RGE o acidez gástrica?" },
-        { key: "R46", label: "7. ¿Es estreñido?" },
-        { key: "R47", label: "8. ¿Tiene problemas posturales?" },
-        { key: "R48", label: "9. ¿Siempre tuvo una voz poco clara?" },
-        { key: "R49", label: "10. ¿Se pone ronco con facilidad después de esfuerzo vocal: campamentos, fiestas, etc.?" },
-        { key: "R50", label: "11. ¿Tiene antecedentes de ronquera en familiares?" },
-        { key: "R51", label: "12. ¿Tiene rigidez corporal, falta de flexibilidad?" }
+        { key: "C1", label: "C1. Reflujo gastrointestinal o acidez frecuente", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "C2", label: "C2. Alergias respiratorias (rinitis, asma, polinosis)", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "C3", label: "C3. Laringitis o infecciones respiratorias en el último año", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "C4", label: "C4. Bebo menos de 1,5 L de agua por día", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "C5", label: "C5. Alteraciones o tratamiento hormonal", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "C6", label: "C6. Duerme menos de 6 h o sueño no reparador", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" }
       ]
     },
     {
-      categoria: "Condiciones Ambientales Desfavorables",
+      categoria: "Área D — Condiciones Ambientales",
       items: [
-        { key: "R52", label: "1. ¿Permanece en ambientes con aire acondicionado o calefacción?" },
-        { key: "R53", label: "2. ¿Permanece en ambientes con polvo, humedad o poca ventilación?" },
-        { key: "R54", label: "3. ¿Comparte lugares con fumadores?" },
-        { key: "R55", label: "4. ¿Vive en un ambiente familiar ruidoso?" },
-        { key: "R56", label: "5. ¿Trabaja en ambiente ruidoso?" },
-        { key: "R57", label: "6. ¿Está expuesto a ruidos intensos?" },
-        { key: "R58", label: "7. ¿Convive o trabaja con personas con problemas auditivos?" }
+        { key: "D1", label: "D1. Aire acondicionado o calefacción intensa", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "D2", label: "D2. Exposición a polvo, humo, químicos, ambientes secos", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "D3", label: "D3. Entorno laboral ruidoso, debo elevar la voz", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "D4", label: "D4. Espacios reducidos con muchas personas", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" }
       ]
     },
     {
-      categoria: "Hábitos de Vida",
+      categoria: "Área E — Hábitos de Vida",
       items: [
-        { key: "R59", label: "1. ¿Se expone a cambios bruscos de temperatura?" },
-        { key: "R60", label: "2. ¿Duerme poco?" },
-        { key: "R61", label: "3. La cantidad de líquido necesaria para un profesional de la voz es de 3 litros. ¿Ud. bebe poco?" },
-        { key: "R62", label: "4. ¿Ingiere alimentos picantes?" },
-        { key: "R63", label: "5. ¿Bebe café o té en exceso?" },
-        { key: "R64", label: "6. ¿Ingiere bebidas heladas o muy calientes?" },
-        { key: "R65", label: "7. ¿Consume drogas?" },
-        { key: "R66", label: "8. ¿Ingiere alcohol?" },
-        { key: "R67", label: "9. ¿Fuma tabaco?" },
-        { key: "R68", label: "10. ¿Usa ropa ajustada?" },
-        { key: "R69", label: "11. ¿Practica deportes violentos?" }
+        { key: "E1", label: "E1. Fumo, vapeo o convivo con fumadores", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "E2", label: "E2. Consumo alcohol de forma regular", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "E3", label: "E3. Consumo excesivo de café, mate o cafeína", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "E4", label: "E4. Alimentación irregular o irritantes (picante, fritos)", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" },
+        { key: "E5", label: "E5. No realizo actividad física regular", desc: "0=Nunca · 1=A veces · 2=Frecuentemente · 3=Siempre" }
       ]
     }
   ]
@@ -114,7 +71,7 @@ const SCALES = {
       { key: 'R', label: 'Rugosidad', desc: '0=Ausente, 1=Discreta, 2=Moderada, 3=Muy intensa' },
       { key: 'B', label: 'Aspiración/Breathiness', desc: '0=Ausente, 1=Discreta, 2=Moderada, 3=Muy intensa' },
       { key: 'A', label: 'Asthenia (debilidad)', desc: '0=Ausente, 1=Discreta, 2=Moderada, 3=Muy intensa' },
-      { key: 'S', label: 'Esfuerzo', desc: '0=Ausente, 1=Discreta, 2=Moderada, 3=Muy intensa' },
+      { key: 'S', label: 'Esfuerzo/Strain', desc: '0=Ausente, 1=Discreta, 2=Moderada, 3=Muy intensa' },
     ]
   },
   RASATI: {
@@ -129,25 +86,25 @@ const SCALES = {
     ]
   },
   VHI10: {
-    name: 'VHI-10 (Índice Handicap Vocal)',
+    name: 'Índice de Discapacidad Vocal (VHI-10 Oficial)',
     items: [
-      { key: 'V1', label: 'Mi voz me dificulta hacerme entender', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V2', label: 'Siento que tengo que esforzarme para hablar', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V3', label: 'La gente no me entiende cuando hablo', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V4', label: 'Mi voz me limita vida personal y social', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V5', label: 'Me siento cohibido cuando hablo', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V6', label: 'Pierdo el control de mi voz', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V7', label: 'Tengo dificultades para proyectar mi voz', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V8', label: 'Mi voz suena débil', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V9', label: 'La gente me pide repetir lo que digo', desc: '0=Nunca ... 4=Siempre' },
-      { key: 'V10', label: 'Mi voz se cansa al hablar', desc: '0=Nunca ... 4=Siempre' },
+      { key: 'V1', label: '1. Mi voz me dificulta hacer que me escuchen en ambientes ruidosos', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V2', label: '2. La gente tiene dificultad para oírme en ambientes ruidosos o concurridos', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V3', label: '3. Mi voz me presenta problemas en mi trabajo o en mi vida personal', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V4', label: '4. Me siento tenso al hablar', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V5', label: '5. La calidad de mi voz es impredecible a lo largo del día', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V6', label: '6. Mi voz "se corta" o me quedo sin aire cuando hablo', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V7', label: '7. Siento que necesito esforzarme para producir mi voz', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V8', label: '8. Mi voz suena ronca o áspera', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V9', label: '9. Mi voz limita mi vida personal y social', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
+      { key: 'V10', label: '10. Siento que la gente no comprende mi problema de voz', desc: '0=Nunca · 1=Casi nunca · 2=A veces · 3=Casi siempre · 4=Siempre' },
     ]
   },
   TME: {
-    name: 'Tiempo Máximo de Energía (TME)',
+    name: 'Tiempo Máximo Espiratorio (TME /s/)',
     items: [
-      { key: 'TME_O', label: 'TME sostenido (segundos)', desc: '' },
-      { key: 'TME_S', label: 'TME suave (segundos)', desc: '' },
+      { key: 'TME_O', label: 'TME sostenido (segundos)', desc: 'Registro de fonación sostenida' },
+      { key: 'TME_S', label: 'TME /s/ (segundos)', desc: 'Mejor valor de 3 mediciones en espiración con /s/' },
     ]
   },
 };
@@ -158,11 +115,10 @@ export default function EscalasModule({ pacienteId }: Props) {
   const [activeDimensionIndex, setActiveDimensionIndex] = useState<number>(0);
   
   const [scores, setScores] = useState<Record<string, Record<string, number>>>(() => {
-    // Initialize risk keys R1 to R69 with 0
     const initialRisk: Record<string, number> = {};
-    for (let i = 1; i <= 69; i++) {
-      initialRisk[`R${i}`] = 0;
-    }
+    RIESGO_VOCAL_2026.dimensions.forEach(d => {
+      d.items.forEach(it => { initialRisk[it.key] = 0; });
+    });
     return {
       GRBAS: { G: 0, R: 0, B: 0, A: 0, S: 0 },
       RASATI: { R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 },
@@ -180,9 +136,9 @@ export default function EscalasModule({ pacienteId }: Props) {
 
   const blankScores = () => {
     const initialRisk: Record<string, number> = {};
-    for (let i = 1; i <= 69; i++) {
-      initialRisk[`R${i}`] = 0;
-    }
+    RIESGO_VOCAL_2026.dimensions.forEach(d => {
+      d.items.forEach(it => { initialRisk[it.key] = 0; });
+    });
     return {
       GRBAS: { G: 0, R: 0, B: 0, A: 0, S: 0 },
       RASATI: { R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 },
@@ -247,10 +203,10 @@ export default function EscalasModule({ pacienteId }: Props) {
   useEffect(() => {
     const riesgoTotal = getTotal('RiesgoVocal');
     const subtotales: Record<string, number> = {};
-    RIESGO_VOCAL_FONOAR.dimensions.forEach(dim => {
+    RIESGO_VOCAL_2026.dimensions.forEach(dim => {
       subtotales[dim.categoria] = dim.items.reduce((acc, it) => acc + (scores.RiesgoVocal[it.key] || 0), 0);
     });
-    const alertas3 = RIESGO_VOCAL_FONOAR.dimensions.flatMap(d => d.items)
+    const alertas3 = RIESGO_VOCAL_2026.dimensions.flatMap(d => d.items)
       .filter(it => (scores.RiesgoVocal[it.key] || 0) === 3)
       .map(it => it.label);
 
@@ -265,7 +221,7 @@ export default function EscalasModule({ pacienteId }: Props) {
     });
     clinical.setRiesgoVocal({
       puntaje_total: riesgoTotal,
-      grupo: riesgoTotal <= 60 ? 'Grupo 1 (Mínimo)' : riesgoTotal <= 90 ? 'Grupo 2 (Elevado)' : 'Grupo 3 (Muy Elevado)',
+      grupo: riesgoTotal <= 25 ? 'Grupo 1 (Bajo Riesgo)' : riesgoTotal <= 50 ? 'Grupo 2 (Riesgo Moderado)' : 'Grupo 3 (Alto Riesgo)',
       subtotales_dimensiones: subtotales,
       alertas_conductas_3: alertas3,
       detalle: scores.RiesgoVocal,
@@ -497,7 +453,7 @@ export default function EscalasModule({ pacienteId }: Props) {
 
         {/* Navigation Category Tabs */}
         <div className="flex flex-wrap gap-1.5 border-b border-gray-100 dark:border-gray-800 pb-2">
-          {RIESGO_VOCAL_FONOAR.dimensions.map((dim, idx) => {
+          {RIESGO_VOCAL_2026.dimensions.map((dim, idx) => {
             // Count items in this dimension
             const dimItems = dim.items;
             const dimScore = dimItems.reduce((acc, it) => acc + (scores.RiesgoVocal[it.key] || 0), 0);
@@ -525,14 +481,14 @@ export default function EscalasModule({ pacienteId }: Props) {
         {/* Items Listing for current Dimension */}
         <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
-            <h4 className="font-bold text-gray-800 dark:text-white">{RIESGO_VOCAL_FONOAR.dimensions[activeDimensionIndex].categoria}</h4>
+            <h4 className="font-bold text-gray-800 dark:text-white">{RIESGO_VOCAL_2026.dimensions[activeDimensionIndex].categoria}</h4>
             <span className="text-xs font-semibold text-gray-400">Total Dimensión: {
-              RIESGO_VOCAL_FONOAR.dimensions[activeDimensionIndex].items.reduce((acc, it) => acc + (scores.RiesgoVocal[it.key] || 0), 0)
+              RIESGO_VOCAL_2026.dimensions[activeDimensionIndex].items.reduce((acc, it) => acc + (scores.RiesgoVocal[it.key] || 0), 0)
             } pts</span>
           </div>
 
           <div className="grid grid-cols-1 gap-4 max-h-[500px] overflow-y-auto pr-2">
-            {RIESGO_VOCAL_FONOAR.dimensions[activeDimensionIndex].items.map((item, index) => {
+            {RIESGO_VOCAL_2026.dimensions[activeDimensionIndex].items.map((item, index) => {
               const currentVal = scores.RiesgoVocal[item.key] || 0;
               return (
                 <div key={item.key} className="flex flex-col md:flex-row md:items-center justify-between py-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 gap-3">
@@ -578,7 +534,7 @@ export default function EscalasModule({ pacienteId }: Props) {
               Anterior Dimensión
             </button>
             <button
-              disabled={activeDimensionIndex === RIESGO_VOCAL_FONOAR.dimensions.length - 1}
+              disabled={activeDimensionIndex === RIESGO_VOCAL_2026.dimensions.length - 1}
               onClick={() => setActiveDimensionIndex(p => p + 1)}
               className="px-4 py-2 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
             >
