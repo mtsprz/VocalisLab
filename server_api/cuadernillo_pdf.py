@@ -678,30 +678,116 @@ def _svg_antireflux():
     return d
 
 
+def _con_fondo(d):
+    """Panel institucional: fondo lavanda suave detrás del dibujo para una
+    estética cuidada y uniforme en todo el catálogo."""
+    try:
+        w, h = d.width, d.height
+    except Exception:
+        return d
+    fondo = Drawing(w, h)
+    fondo.add(Rect(0, 0, w, h, strokeColor=HexColor("#E4E0FA"),
+                   strokeWidth=0.8, fillColor=HexColor("#F5F3FF")))
+    try:
+        for sh in list(d.contents):
+            fondo.add(sh)
+    except Exception:
+        return d
+    return fondo
+
+
+def _svg_sirena():
+    """Onda sirena grande con banda de rango: glissandos."""
+    import math as _m
+    d = Drawing(150, 96)
+    _cap(d, "Glissandos sirena")
+    pts = []
+    for i in range(61):
+        x = 14 + i * 122 / 60
+        y = 46 + _m.sin(i / 60 * _m.pi * 2 * 2.5) * 20
+        pts += [x, y]
+    d.add(PolyLine(pts, strokeColor=PRIMARY, strokeWidth=2.6))
+    d.add(Line(14, 70, 14, 22, strokeColor=LIGHT_GRAY, strokeWidth=0.7))
+    d.add(String(4, 66, "ag", fontName="Helvetica", fontSize=6, fillColor=INK_SUAVE))
+    d.add(String(4, 22, "gr", fontName="Helvetica", fontSize=6, fillColor=INK_SUAVE))
+    _flecha(d, 128, 52, 142, 52)
+    _nota(d, "Suba y baje sin cortes")
+    return d
+
+
+def _svg_lectura():
+    """Libro abierto + arcos de voz proyectada: lectura y salmodia."""
+    d = Drawing(150, 96)
+    _cap(d, "Lectura en voz alta")
+    d.add(Polygon([30, 30, 30, 58, 62, 52, 62, 24, 46, 28, 46, 56],
+                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E8E6FB")))
+    d.add(Polygon([120, 30, 120, 58, 88, 52, 88, 24, 104, 28, 104, 56],
+                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E8E6FB")))
+    for r in (10, 16, 22):
+        d.add(Circle(128, 44, r, strokeColor=SECONDARY, strokeWidth=1.2, fillColor=None))
+    _nota(d, "Claro, parejo y proyectado")
+    return d
+
+
+def _svg_habla():
+    """Silueta de cabeza + globo de diálogo: habla espontánea."""
+    d = Drawing(150, 96)
+    _cap(d, "Habla espontánea")
+    d.add(Circle(52, 46, 18, strokeColor=PRIMARY, strokeWidth=1.8,
+                 fillColor=HexColor("#E8E6FB")))
+    d.add(Rect(78, 40, 52, 30, strokeColor=SECONDARY, strokeWidth=1.4,
+               fillColor=white))
+    d.add(Polygon([86, 40, 78, 30, 94, 40], fillColor=SECONDARY, strokeColor=SECONDARY))
+    for i, yy in enumerate((48, 55, 62)):
+        d.add(Line(84, yy, 124, yy, strokeColor=INK_SUAVE, strokeWidth=1.0))
+    _nota(d, "2-3 min, grabe y escuche")
+    return d
+
+
+def _svg_vocales():
+    """Cinco moldes vocálicos U-I-E-O-A con flecha de báscula laríngea."""
+    d = Drawing(150, 96)
+    _cap(d, "Moldeado U-I-E-O-A")
+    vocales = ["U", "I", "E", "O", "A"]
+    anchos = [10, 7, 9, 12, 16]
+    x = 22
+    for v, a in zip(vocales, anchos):
+        d.add(Circle(x, 44, a, strokeColor=PRIMARY, strokeWidth=1.5,
+                     fillColor=HexColor("#E8E6FB")))
+        d.add(String(x, 41, v, fontName="Helvetica-Bold", fontSize=7,
+                     fillColor=PRIMARY, textAnchor="middle"))
+        x += 24
+    d.add(Line(140, 62, 140, 26, strokeColor=ARROW_COLOR, strokeWidth=1.6))
+    _flecha(d, 140, 62, 140, 70)
+    _flecha(d, 140, 26, 140, 18)
+    _nota(d, "Laringe baja, timbre parejo")
+    return d
+
+
 _SVG_POR_EJERCICIO = {
     "rotacion_hombros": (_svg_cervical_mobility, "Movilidad cervical"),
     "respiracion_abdominal": (_svg_diaphragmatic, "Respiración con panza"),
-    "tubo_agua": (_svg_laxvox_glass, "Vaso LaxVox"),
-    "popote_aire": (_svg_straw_in_air, "Sorbete al aire"),
-    "humming_m": (_svg_facial_mask, "Máscara facial"),
-    "frases_balanceadas": (_svg_voice_projection, "Proyección vocal"),
+    "tubo_agua": (_svg_sirena, "Glissandos sirena"),
+    "popote_aire": (_svg_vocal_scales, "Escalas 3.ª–5.ª–8.ª"),
+    "humming_m": (_svg_lectura, "Lectura balanceada"),
+    "frases_balanceadas": (_svg_voice_projection, "Proyección a 3 m"),
     "calentamiento": (_svg_warmup_flow, "Rutina de entrada"),
     "enfriamiento": (_svg_cooldown_flow, "Rutina de salida"),
     "le_huche": (_svg_breathing_cycle, "Ciclo respiratorio"),
     "shiatsu_cabeza": (_svg_pressure_points, "Digitopresión"),
     "masaje_laringeo": (_svg_laryngeal_massage, "Masaje laríngeo"),
     "descenso_laringeo": (_svg_larynx_descent, "Descenso laríngeo"),
-    "oclusion_succion": (_svg_suction_straw, "Succión con sorbete"),
+    "oclusion_succion": (_svg_larynx_descent, "Báscula baja hu-hu"),
     "expansion_costo_lateral": (_svg_rib_expansion, "Expansión costal"),
     "soplo_escalonado": (_svg_stepped_blow, "Soplo escalonado"),
-    "empuje_glotico": (_svg_glottal_closure, "Cierre glótico"),
-    "vibracion_labial": (_svg_lip_trill, "Trino labial"),
-    "consonantes_fricativas": (_svg_fricative_flow, "Fricativas sonoras"),
-    "escalas_vocalicas": (_svg_vocal_scales, "Escalas vocales"),
+    "empuje_glotico": (_svg_vocales, "Moldeado U-I-E-O-A"),
+    "vibracion_labial": (_svg_facial_mask, "Resonancia anterior /m/"),
+    "consonantes_fricativas": (_svg_lectura, "Versos salmodiados"),
+    "escalas_vocalicas": (_svg_habla, "Habla espontánea"),
     "pautas_rlf": (_svg_antireflux, "Pautas antirreflujo"),
-    "oclusion_nasal": (_svg_facial_mask, "Oclusión nasal /m/"),
+    "oclusion_nasal": (_svg_lip_trill, "Oclusión nasal /m/"),
     "coordinacion_costo_abdominal": (_svg_fricative_flow, "Coordinación /s/–/z/"),
-    "glissandos": (_svg_vocal_scales, "Glissandos"),
+    "glissandos": (_svg_sirena, "Sirena vocal"),
 }
 
 
@@ -710,10 +796,21 @@ def tiene_svg_preaprobado(ex_id: str) -> bool:
     return str(ex_id or "").strip().lower() in _SVG_POR_EJERCICIO
 
 
+def _modo_imagen() -> str:
+    """Modo visual del cuadernillo: 'ai' (default, IA-primero con fallback
+    SVG) o 'svg' (solo assets pre-aprobados). Env IMAGEN_MODO; por compat
+    legacy IMAGEN_PREFERIR_SVG=1 fuerza 'svg'."""
+    m = os.environ.get("IMAGEN_MODO", "").strip().lower()
+    if m in ("svg", "ai"):
+        return m
+    if os.environ.get("IMAGEN_PREFERIR_SVG", "").strip() in ("1", "true", "True"):
+        return "svg"
+    return "ai"
+
+
 def _preferir_svg() -> bool:
-    """Directiva 2026: los assets SVG pre-aprobados tienen prioridad sobre la IA.
-    Se desactiva con IMAGEN_PREFERIR_SVG=0 (solo para ejercicios sin SVG)."""
-    return os.environ.get("IMAGEN_PREFERIR_SVG", "1").strip() in ("1", "true", "True")
+    """Compat legacy: True si el modo es solo-SVG."""
+    return _modo_imagen() == "svg"
 
 
 def _imagen_contain(path: str, box_mm: float = 56):
@@ -729,12 +826,13 @@ def _imagen_contain(path: str, box_mm: float = 56):
 
 def _ilustracion(ex: dict):
     """Ilustración única por ejercicio (cero duplicación). Fallback: esquema
-    técnico genérico rotulado con el propio ejercicio, nunca otro dibujo."""
+    técnico genérico rotulado con el propio ejercicio, nunca otro dibujo.
+    Todos los vectores salen con panel institucional de fondo."""
     ex_id = str(ex.get("id", "")).strip().lower()
     if ex_id in _SVG_POR_EJERCICIO:
         fn, cap = _SVG_POR_EJERCICIO[ex_id]
         try:
-            return fn(), cap
+            return _con_fondo(fn()), cap
         except Exception:
             pass
     # Fallback técnico específico: marco rotulado del procedimiento
@@ -747,7 +845,7 @@ def _ilustracion(ex: dict):
     d.add(String(75, 38, "abajo", fontName="Helvetica", fontSize=7,
                  fillColor=INK_SUAVE, textAnchor="middle"))
     _nota(d, nombre[:40])
-    return d, "Esquema del procedimiento"
+    return _con_fondo(d), "Esquema del procedimiento"
 
 
 # ─── Niveles de Instrucción y Complejización Vocal ────────────────
@@ -1135,14 +1233,16 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     if desc:
         elements.append(Paragraph(escape(desc), styles['CuadBody']))
 
-    # ── Visual del ejercicio (directiva 2026) ─────────────────────────
-    # 1) SVG pre-aprobado del catálogo tiene prioridad (rigor clínico total).
-    # 2) Solo si NO hay SVG y la IA está habilitada se usa imagen generada,
-    #    encajada en caja fija 1:1 DENTRO de la columna derecha (nunca a
-    #    ancho completo: eso causaba solapamientos y desbordes de página).
+    # ── Visual del ejercicio (directiva 2026, rev. estética) ──────────
+    # 1) IA-primero: ilustración mediada (diagrama vectorial clínico, sin
+    #    fotorrealismo) encajada en caja fija 1:1 DENTRO de la columna derecha.
+    #    La primera generación tarda y queda persistida en Supabase; las
+    #    siguientes reutilizan el asset (instantáneo).
+    # 2) Fallback: SVG pre-aprobado del catálogo (rigor clínico total).
+    #    Forzar solo-SVG con IMAGEN_MODO=svg.
     ex_id_vis = str(exercise.get("id", "")).strip().lower()
     ai_img = None
-    if not (_preferir_svg() and tiene_svg_preaprobado(ex_id_vis)):
+    if _modo_imagen() == "ai":
         try:
             from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
             if imagen_ia_habilitada():
@@ -1182,12 +1282,15 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         panel_grafico.append(Paragraph(
             f"<b>{duration} min por día</b>", styles['CaptionText']))
 
-    # Pasos numerados con casillas grandes para tildar (columna izquierda)
+    # Pasos numerados con casillas grandes para tildar (columna izquierda).
+    # Se elimina la numeración propia del banco ("1. ...") porque la tarjeta
+    # ya enumera (evita el duplicado "1. 1. ...").
     steps = exercise.get("steps", []) or []
     if steps:
         rows = []
         for i, step in enumerate(steps, 1):
             txt = _sanear(_simplificar(step))
+            txt = re.sub(r"^\s*\d+\.\s+", "", txt)
             rows.append([
                 _checkbox(),
                 Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText']),
