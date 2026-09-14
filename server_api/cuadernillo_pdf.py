@@ -173,6 +173,10 @@ _TILDES = [
 ]
 
 
+# Ejercicios NO fonatorios: jamás muestran curva tonal ("Su voz debe sonar
+# así"). Directiva 2026: sin curvas de tono en pautas digestivas/higiene.
+_SIN_CURVA = ("pautas_rlf",)
+
 # ─── Clasificación de curva melódica por ejercicio ─────────────────
 _CURVA_STACCATO = ("staccato", "stacatto", "punteado", "punteo")
 _CURVA_SIRENA = ("sirena", "vibraci", "trill", "fluctu", "tubo_agua", "popote_aire",
@@ -186,6 +190,8 @@ _CURVA_SOSTENIDO = ("humming", "frases_balanceadas", "respiracion_abdominal",
 
 
 def _tipo_curva(ex: dict) -> str:
+    if str(ex.get("id", "")).strip().lower() in _SIN_CURVA:
+        return ""
     blob = f"{ex.get('id', '')} {ex.get('name', '')} {ex.get('description', '')}".lower()
     if any(k in blob for k in _CURVA_STACCATO):
         return "staccato"
@@ -693,7 +699,32 @@ _SVG_POR_EJERCICIO = {
     "consonantes_fricativas": (_svg_fricative_flow, "Fricativas sonoras"),
     "escalas_vocalicas": (_svg_vocal_scales, "Escalas vocales"),
     "pautas_rlf": (_svg_antireflux, "Pautas antirreflujo"),
+    "oclusion_nasal": (_svg_facial_mask, "Oclusión nasal /m/"),
+    "coordinacion_costo_abdominal": (_svg_fricative_flow, "Coordinación /s/–/z/"),
+    "glissandos": (_svg_vocal_scales, "Glissandos"),
 }
+
+
+def tiene_svg_preaprobado(ex_id: str) -> bool:
+    """True si el ejercicio tiene asset vectorial pre-aprobado en el catálogo."""
+    return str(ex_id or "").strip().lower() in _SVG_POR_EJERCICIO
+
+
+def _preferir_svg() -> bool:
+    """Directiva 2026: los assets SVG pre-aprobados tienen prioridad sobre la IA.
+    Se desactiva con IMAGEN_PREFERIR_SVG=0 (solo para ejercicios sin SVG)."""
+    return os.environ.get("IMAGEN_PREFERIR_SVG", "1").strip() in ("1", "true", "True")
+
+
+def _imagen_contain(path: str, box_mm: float = 56):
+    """Imagen en caja fija cuadrada con aspect-ratio preservado (object-fit: contain)."""
+    from reportlab.platypus import Image as RLImage
+    from reportlab.lib.utils import ImageReader
+    iw, ih = ImageReader(path).getSize()
+    sc = min(box_mm * mm / iw, box_mm * mm / ih)
+    im = RLImage(path, width=iw * sc, height=ih * sc)
+    im.hAlign = 'CENTER'
+    return im
 
 
 def _ilustracion(ex: dict):
@@ -742,6 +773,7 @@ _NIVEL_POR_EJERCICIO = {
     "escalas_vocalicas": 3, "humming_m": 3, "descenso_laringeo": 3,
     "calentamiento": 3, "enfriamiento": 3,
     "frases_balanceadas": 4,
+    "oclusion_nasal": 2, "coordinacion_costo_abdominal": 1, "glissandos": 3,
 }
 _EFECTO_POR_EJERCICIO = {
     "le_huche": "Libera tensión general y ordena la respiración",
@@ -764,6 +796,9 @@ _EFECTO_POR_EJERCICIO = {
     "calentamiento": "Prepara la voz antes de usarla",
     "enfriamiento": "Devuelve la voz al reposo",
     "frases_balanceadas": "Lleva lo entrenado al habla real",
+    "oclusion_nasal": "Cierre suave sin esfuerzo",
+    "coordinacion_costo_abdominal": "Aire rendidor y parejo",
+    "glissandos": "Voz flexible sin quiebres",
 }
 
 
@@ -1082,7 +1117,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         Paragraph(f"Efecto: {escape(efecto)}",
                   ParagraphStyle('EfectoCell', parent=styles['Normal'],
                                  fontSize=10, textColor=DARK_TEXT, alignment=TA_LEFT)),
-    ]], colWidths=[52 * mm, 120 * mm])
+    ]], colWidths=[48 * mm, 112 * mm])
     badge.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, 0), PRIMARY),
         ('ROUNDEDCORNERS', [3, 3, 3, 3]),
@@ -1100,44 +1135,49 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     if desc:
         elements.append(Paragraph(escape(desc), styles['CuadBody']))
 
-    # Ilustración IA autónoma (Pixazo/Gemini/proveedor pago, o modo libre);
-    # si no hay nada configurado, dibujo vectorial. Nunca se rompe el PDF.
-    try:
-        from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
-        ai_img = generar_imagen_ejercicio(name, desc, exercise.get("id", "")) if imagen_ia_habilitada() else None
-    except Exception:
-        ai_img = None
-    if ai_img:
+    # ── Visual del ejercicio (directiva 2026) ─────────────────────────
+    # 1) SVG pre-aprobado del catálogo tiene prioridad (rigor clínico total).
+    # 2) Solo si NO hay SVG y la IA está habilitada se usa imagen generada,
+    #    encajada en caja fija 1:1 DENTRO de la columna derecha (nunca a
+    #    ancho completo: eso causaba solapamientos y desbordes de página).
+    ex_id_vis = str(exercise.get("id", "")).strip().lower()
+    ai_img = None
+    if not (_preferir_svg() and tiene_svg_preaprobado(ex_id_vis)):
         try:
-            from reportlab.platypus import Image as RLImage
-            from reportlab.lib.utils import ImageReader
-            iw, ih = ImageReader(ai_img).getSize()
-            max_w, max_h = 120 * mm, 70 * mm
-            sc = min(max_w / iw, max_h / ih, 1.0)
-            im = RLImage(ai_img, width=iw * sc, height=ih * sc)
-            im.hAlign = 'CENTER'
-            elements.append(im)
-            elements.append(Paragraph("Ilustración de apoyo generada para este ejercicio",
-                                      styles['CaptionText']))
-            elements.append(Spacer(1, 2 * mm))
+            from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
+            if imagen_ia_habilitada():
+                ai_img = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
         except Exception:
-            pass
+            ai_img = None
 
     # Maquetación editorial: instrucciones + casillas a la IZQUIERDA,
-    # panel gráfico (curva + ilustración única) a la DERECHA.
+    # panel gráfico (curva + UNA ilustración) a la DERECHA. Columnas con
+    # anchos estrictos para que jamás se solapen (área útil 178 mm).
     tipo = _tipo_curva(exercise)
     duration = exercise.get("duration_min", "")
     seg_label = f"{duration} min" if tipo == "sostenido" and duration else ""
-    curva = _curva_melodica(tipo, segundos=seg_label)
-    ilust, ilust_cap = _ilustracion(exercise)
 
-    panel_grafico = [
-        curva,
-        Paragraph(f"Su voz debe sonar así:<br/>{_CURVA_TITULO[tipo]}",
-                  styles['CaptionText']),
-        ilust,
-        Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']),
-    ]
+    panel_grafico = []
+    if tipo:
+        curva = _curva_melodica(tipo, segundos=seg_label)
+        panel_grafico.extend([
+            curva,
+            Paragraph(f"Su voz debe sonar así:<br/>{_CURVA_TITULO[tipo]}",
+                      styles['CaptionText']),
+        ])
+    if ai_img:
+        try:
+            panel_grafico.append(_imagen_contain(ai_img, box_mm=56))
+            panel_grafico.append(Paragraph("Ilustración de apoyo del ejercicio",
+                                           styles['CaptionText']))
+        except Exception:
+            ilust, ilust_cap = _ilustracion(exercise)
+            panel_grafico.append(ilust)
+            panel_grafico.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
+    else:
+        ilust, ilust_cap = _ilustracion(exercise)
+        panel_grafico.append(ilust)
+        panel_grafico.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
     if duration:
         panel_grafico.append(Paragraph(
             f"<b>{duration} min por día</b>", styles['CaptionText']))
@@ -1152,7 +1192,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
                 _checkbox(),
                 Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText']),
             ])
-        pasos_tabla = Table(rows, colWidths=[12 * mm, 92 * mm])
+        pasos_tabla = Table(rows, colWidths=[10 * mm, 90 * mm])
         pasos_tabla.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 3),
@@ -1169,7 +1209,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         Paragraph("<b>Nivel de complejidad:</b>", styles['CaptionText']),
         _barra_complejidad(nivel),
         Paragraph(f"<b>{nivel}/4</b>", styles['CaptionText']),
-    ]], colWidths=[52 * mm, 40 * mm, 12 * mm])
+    ]], colWidths=[46 * mm, 36 * mm, 12 * mm])
     complejidad.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('LEFTPADDING', (0, 0), (-1, -1), 1),
@@ -1180,7 +1220,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     if dosis_txt:
         left_cell.append(Paragraph(dosis_txt, styles['CuadBody']))
 
-    card = Table([[left_cell, panel_grafico]], colWidths=[108 * mm, 64 * mm])
+    card = Table([[left_cell, panel_grafico]], colWidths=[106 * mm, 62 * mm])
     card.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 2),

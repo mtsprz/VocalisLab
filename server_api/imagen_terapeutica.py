@@ -15,53 +15,55 @@ Orden de proveedores:
   5. Recraft V3 (RECRAFT_API_KEY) — style line_art.
   6. Replicate (REPLICATE_API_TOKEN) — modelo oficial FLUX.
 
-Estilo: 'realista' (default, clínico fotorrealista, vía ESTILO_IMAGEN)
-o 'lineart'. Todos los prompts exigen anatomía correcta, un solo sujeto
-centrado y prohíben texto/marcas de agua; SD de base usa prompt negativo.
+Estilo (vía ESTILO_IMAGEN o parámetro): '3d_vector' (default, ilustración
+médica 3D) o 'vector_2d' (diagrama clínico plano). Fotorrealismo PROHIBIDO en
+toda la app (directiva clínica 2026). Todos los prompts exigen anatomía correcta,
+fondo blanco puro y prohíben texto/marcas de agua; SD de base usa prompt negativo.
 
 Sin claves → devuelve None y el cuadernillo usa los pictogramas vectoriales.
 Las imágenes se cachean en /tmp por hash del prompt (no se regeneran).
 """
 
-PROMPT_BASE = ("Minimalist 2D medical line art illustration of {desc}, clean black "
-               "strokes on white background, simple pedagogical style, vector icon "
-               "style, anatomically correct proportions, single subject, no text, "
-               "no letters, no shading, no colors, high legibility")
+PROMPT_BASE = ("Medical 3D vector diagram of {desc}, minimalist clinical style, clean lines, "
+               "professional anatomical accuracy, pure white background #FFFFFF, "
+               "medical textbook illustration style, 8k, soft shadows, "
+               "institutional blue and lavender accents, no text, no labels, no watermark")
 
-# Modo realista clínico: ilustración fotorrealista de calidad textbook médico.
-PROMPT_REALISTA_BASE = ("Photorealistic clinical illustration of {desc}, anatomically correct "
-                        "human anatomy with accurate proportions, medical textbook quality, "
-                        "single centered subject, soft neutral studio background, professional "
-                        "medical photography lighting, no text, no letters, no watermark, "
-                        "no logo, high detail, sharp focus")
+# Modo diagrama médico 3D/2D vectorial (reemplaza cualquier estilo fotorrealista prohibido)
+PROMPT_REALISTA_BASE = PROMPT_BASE
 
-# Prompt negativo común: evita las incoherencias anatómicas típicas.
-NEGATIVO_CLINICO = ("blurry, distorted anatomy, extra limbs, extra fingers, deformed hands, "
-                    "deformed face, asymmetric eyes, text, letters, watermark, logo, "
-                    "cartoon, sketch, low quality, noisy background, collage, split image")
+# Prompt negativo mandatorio estricto
+NEGATIVO_CLINICO = ("photorealistic, real human photo, real skin, photographic, cinematic photo, "
+                    "extra fingers, mutated hands, deformed fingers, 6 fingers, floating hands, dislocated limbs, "
+                    "distorted anatomy, text, labels, gibberish writing, letters, words, blurry, "
+                    "noisy background, realistic faces, room background, furniture, shadows on wall")
 
-# Descripciones específicas obligatorias por ejercicio (inglés, estilo line-art)
+# Descripciones específicas por ejercicio (inglés, encuadre diagrama clínico;
+# se prefiere objeto/esquema sobre persona para evitar rostros y manos IA)
 IMG_DESC_POR_EJERCICIO = {
-    "rotacion_hombros": "human upper torso showing neck side bend and shoulder roll arrows",
-    "respiracion_abdominal": "human torso side-view showing abdominal expansion arrows during breathing",
-    "tubo_agua": "clear glass with water, submerged silicone tube at 1.5 cm depth, bubbling effect",
-    "popote_aire": "side profile of human mouth blowing through a thin straw in open air, no glass, no water",
-    "humming_m": "side view of human face with gentle vibration lines around nasolabial and mask area",
-    "frases_balanceadas": "person speaking clearly with expanding soundwave arcs extending forward 3 meters",
-    "calentamiento": "three ascending warm-up steps for voice training with arrows going up",
-    "enfriamiento": "three descending cool-down steps for voice training with arrows going down",
-    "le_huche": "person breathing deeply with relaxed shoulders, respiratory cycle arrows",
-    "shiatsu_cabeza": "head pressure points marked with dots on temples and jaw for self-massage",
-    "masaje_laringeo": "hands gently massaging the front of the neck, laryngeal area",
-    "descenso_laringeo": "wide yawn with open mouth showing lowered larynx arrow",
-    "oclusion_succion": "lips sealed around a narrow straw sucking gently",
-    "expansion_costo_lateral": "ribcage with lateral expansion arrows on lower ribs",
-    "soplo_escalonado": "stepped ascending airflow blocks from whisper to voiced sound",
-    "empuje_glotico": "two vocal folds closing firmly with inward arrows",
-    "vibracion_labial": "lips vibrating with trill motion lines",
-    "consonantes_fricativas": "teeth with continuous airflow producing v and z sounds",
-    "escalas_vocalicas": "five ascending musical stairs with notes going up and down",
-    "pautas_rlf": "inclined bed wedge pillow and clock showing no food 2.5 hours before sleep",
+    "rotacion_hombros": "upper torso vector diagram showing neck side bend and shoulder roll direction arrows",
+    "respiracion_abdominal": "torso side-view vector diagram showing abdominal expansion arrows during breathing",
+    "tubo_agua": "clear glass with water, submerged silicone tube at 1.5 cm depth, bubbling effect, no hands",
+    "popote_aire": "thin straw in open air with airflow lines, side-view mouth silhouette diagram, no glass, no water",
+    "humming_m": "head profile vector diagram with vibration highlight on nasolabial and mask area",
+    "frases_balanceadas": "head profile silhouette with expanding soundwave arcs extending forward",
+    "calentamiento": "three ascending warm-up steps diagram for voice training with arrows going up",
+    "enfriamiento": "three descending cool-down steps diagram for voice training with arrows going down",
+    "le_huche": "torso vector diagram of breathing cycle with relaxed shoulders and airflow arrows",
+    "shiatsu_cabeza": "head vector diagram with pressure point dots on temples and jaw for self-massage",
+    "masaje_laringeo": "3D medical vector diagram of correct hand placement on the front of the neck, laryngeal area",
+    "descenso_laringeo": "head profile vector diagram of wide yawn with lowered larynx arrow",
+    "oclusion_succion": "lip silhouette diagram sealed around a narrow straw",
+    "expansion_costo_lateral": "ribcage vector diagram with lateral expansion arrows on lower ribs",
+    "soplo_escalonado": "stepped ascending airflow blocks diagram from whisper to voiced sound",
+    "empuje_glotico": "vocal folds vector diagram closing firmly with inward arrows, top view",
+    "vibracion_labial": "lip vector diagram with trill motion lines",
+    "consonantes_fricativas": "teeth vector diagram with continuous airflow lines producing v and z sounds",
+    "escalas_vocalicas": "five ascending musical stairs diagram with notes going up and down",
+    "pautas_rlf": "inclined bed wedge pillow vector diagram and clock icon showing no food 2.5 hours before sleep",
+    "oclusion_nasal": "nose and lip vector diagram showing nasal resonance placement with /m/ airflow",
+    "coordinacion_costo_abdominal": "torso vector diagram showing coordinated abdominal and rib airflow with /s/ and /z/ flow lines",
+    "glissandos": "smooth ascending and descending pitch curve diagram, siren line, no text",
 }
 
 GEMINI_IMAGE_MODELS = [
@@ -84,17 +86,19 @@ def _cloudflare_model() -> str:
 
 
 def _estilo_imagen() -> str:
-    """Estilo global: 'realista' (default, clínico fotorrealista) o 'lineart'.
-    Se puede forzar con la env ESTILO_IMAGEN."""
-    return os.environ.get("ESTILO_IMAGEN", "realista").strip().lower()
+    """Estilo global canónico: '3d_vector' (default) o 'vector_2d'.
+    Se puede forzar con la env ESTILO_IMAGEN. Legacy 'realista'→3d_vector,
+    'lineart'→vector_2d (ver mediacion_clinica.normalizar_estilo)."""
+    from mediacion_clinica import normalizar_estilo
+    return normalizar_estilo(os.environ.get("ESTILO_IMAGEN", "3d_vector"))
 
 
 def _prompt_clinico(desc: str, estilo: str = "") -> str:
-    """Envuelve la descripción en el template clínico del estilo pedido."""
-    est = (estilo or _estilo_imagen()).strip().lower()
-    if est.startswith("real"):
-        return PROMPT_REALISTA_BASE.format(desc=desc)
-    return PROMPT_BASE.format(desc=desc)
+    """Compat: envuelve la descripción en el template vectorial del estilo pedido."""
+    from mediacion_clinica import normalizar_estilo, PROMPT_3D_VECTOR, PROMPT_2D_VECTOR
+    est = normalizar_estilo(estilo or _estilo_imagen())
+    template = PROMPT_2D_VECTOR if est == "vector_2d" else PROMPT_3D_VECTOR
+    return template.format(detalle=desc, reglas_cat="")  # reglas las aporta la mediación
 
 
 def _gemini_image_models():
@@ -245,9 +249,9 @@ def _via_cloudflare(prompt: str, desc_fallback: str = "",
         r = _post(prompt)
         if r.status_code != 200 and "8007" in r.text and desc_fallback:
             from mediacion_clinica import mediar_prompt as _mediar
-            alt = _mediar(desc_fallback, "", "lineart")["prompt"]
+            alt = _mediar(desc_fallback, "", "vector_2d")["prompt"]
             if alt != prompt:
-                print("[imagen_terapeutica] Cloudflare filtro NSFW (8007), reintentando line-art")
+                print("[imagen_terapeutica] Cloudflare filtro NSFW (8007), reintentando vector 2D")
                 prompt = alt
                 r = _post(prompt)
         if r.status_code != 200:
@@ -314,9 +318,9 @@ def _via_gemini(prompt: str) -> str | None:
     return None
 
 
-PROMPT_3D_BASE = ("Hyperrealistic 3D clinical render of {desc}, soft studio lighting, "
-                  "anatomically accurate, medical textbook aesthetic, clean background, "
-                  "high detail")
+PROMPT_3D_BASE = ("Medical 3D vector diagram of {desc}, minimalist clinical style, "
+                  "clean lines, professional anatomical accuracy, pure white background, "
+                  "medical textbook illustration style, 8k, soft shadows, no text, no labels")
 
 
 def _estilo_pixazo() -> str:
@@ -650,7 +654,7 @@ def proveedores_disponibles() -> list:
 
 IMG_DESC_3D = {
     "tubo_agua": "a person's hands holding a clear glass bottle with water, a transparent silicone tube submerged exactly 1.5 cm, realistic water bubbles, studio lighting, medical textbook aesthetic",
-    "popote_aire": "close-up 3D photorealistic render of a human face profile, blowing through a thin straw into open air, relaxed facial muscles, clean background, medical illustration detail",
+    "popote_aire": "stylized 3D vector diagram of a head side profile with a thin straw at the lips in open air, smooth featureless surfaces, no glass, no water",
     "humming_m": "hyperrealistic 3D anatomical render of a human head side profile, soft glowing highlight on the nasolabial and mask area indicating acoustic resonance, elegant medical graphic style",
     "frases_balanceadas": "person speaking clearly in 3D clinical render with expanding soundwave arcs extending forward, medical textbook aesthetic",
     "rotacion_hombros": "3D anatomical render of human upper torso showing neck side bend and shoulder roll, clinical style",
@@ -676,7 +680,8 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
     """Devuelve el path local de la ilustración IA, o None si no hay proveedor
     configurado o fallan todos (el cuadernillo usa el dibujo vectorial).
 
-    estilo: 'realista' (default, clínico fotorrealista) o 'lineart'.
+    estilo: '3d_vector' (default, ilustración médica 3D) o 'vector_2d'
+    (diagrama clínico plano). Fotorrealismo prohibido (directiva 2026).
     Orden: 1) imagen ya asociada en DB → 2) proveedores en cascada →
     3) la recién generada se sube a Storage y se asocia (no se regenera más).
     """
@@ -685,21 +690,18 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
         db_path = buscar_imagen_guardada(ex_id)
         if db_path:
             return db_path
-    est = (estilo or _estilo_imagen()).strip().lower()
-    if not est.startswith("real"):
-        est = "lineart"
+    from mediacion_clinica import mediar_prompt, normalizar_estilo
+    est = normalizar_estilo(estilo or _estilo_imagen())
     desc = _descripcion_ejercicio(ex_id, nombre or "ejercicio vocal",
                                   descripcion or "")
     # Motor de mediación universal: clasifica la maniobra y ensambla el prompt
     # en 4 capas (categoría + detalle + seguridad clínica + calidad/estilo).
     # Ningún prompt libre llega a las APIs sin sanitización.
-    from mediacion_clinica import mediar_prompt
     med = mediar_prompt(desc, "", est)
     prompt = med["prompt"]
     negativo_cat = med["negative_prompt"]
     desc3d = IMG_DESC_3D.get(ex_id, f"speech therapy exercise: {desc}")
-    prompt_3d = (f"Hyperrealistic 3D clinical render, {desc3d}, studio lighting, "
-                 "medical textbook aesthetic, high detail")
+    prompt_3d = PROMPT_3D_BASE.format(desc=desc3d)
 
     def _ok(path, prov, prm):
         if path and _es_imagen_valida(path):
@@ -724,8 +726,8 @@ def generar_imagen_ejercicio(nombre: str, descripcion: str = "",
     r = _ok(_via_wavespeed(prompt), "wavespeed", prompt)
     if r:
         return r
-    # En modo realista Pixazo usa el prompt 3D clínico (FLUX Schnell)
-    prompt_pix = prompt_3d if est == "realista" or _estilo_pixazo() == "3d" else prompt
+    # En modo 3D Pixazo usa el prompt vectorial 3D (FLUX Schnell)
+    prompt_pix = prompt_3d if est == "3d_vector" or _estilo_pixazo() == "3d" else prompt
     prov_pix = "pixazo3d" if prompt_pix is prompt_3d else "pixazo"
     dest = _cache_path(prompt_pix, prov_pix)
     if _es_imagen_valida(dest):

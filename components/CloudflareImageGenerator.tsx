@@ -4,11 +4,11 @@ import { Sparkles, Loader2, Download, Copy, CheckCircle2 } from 'lucide-react';
 const API_BASE = import.meta.env.VITE_BACKEND_URL || '';
 
 const PRESET_PROMPTS: { label: string; prompt: string }[] = [
-  { label: 'Agua / Hidratación', prompt: 'a person holding a clear glass with water, transparent silicone tube submerged exactly 1.5 cm below the surface, realistic water bubbles rising, clinical demonstration photo' },
-  { label: 'Respiración', prompt: 'human torso side view showing diaphragmatic breathing with visible abdominal expansion, anatomically accurate musculature, clinical illustration' },
-  { label: 'Masaje laríngeo', prompt: 'hands gently massaging the front of the human neck over the laryngeal area, anatomically correct hand and neck anatomy, clinical demonstration' },
-  { label: 'Cuerdas vocales', prompt: 'superior view of healthy human vocal folds in closed phonation position, anatomically accurate laryngeal anatomy, endoscopic style medical illustration' },
-  { label: 'Glissandos', prompt: 'singer performing ascending vocal glissando with open mouth posture, side profile, anatomically correct facial anatomy, clinical demonstration photo' },
+  { label: 'Agua / Hidratación', prompt: 'clear water glass with a thin silicone tube submerged 1.5 cm, simple water bubbles, minimalist clinical vector diagram, white background' },
+  { label: 'Respiración', prompt: 'human torso side-view vector diagram showing abdominal expansion arrows during diaphragmatic breathing, clean clinical lines' },
+  { label: 'Masaje laríngeo', prompt: '3D medical vector diagram of hand placement on the front of the neck over the laryngeal area, clean anatomical lines' },
+  { label: 'Cuerdas vocales', prompt: 'superior view diagram of healthy vocal folds in closed position, clean 3D medical atlas render, white background' },
+  { label: 'Glissandos', prompt: 'musical ascending-descending pitch curve diagram with smooth siren line, minimalist clinical vector style' },
 ];
 
 const CATEGORIAS = [
@@ -22,7 +22,7 @@ const CATEGORIAS = [
 
 export default function CloudflareImageGenerator() {
   const [prompt, setPrompt] = useState('');
-  const [estilo, setEstilo] = useState<'realista' | 'lineart'>('realista');
+  const [estilo, setEstilo] = useState<'3d_vector' | 'vector_2d'>('3d_vector');
   const [categoria, setCategoria] = useState('');
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
@@ -83,15 +83,15 @@ export default function CloudflareImageGenerator() {
         </div>
         <div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-white">Generador de Imágenes</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Cloudflare Workers AI · FLUX.1 Schnell clínico</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Cloudflare Workers AI · FLUX.1 Schnell · Ilustración médica (sin fotorrealismo)</p>
         </div>
       </div>
 
-      {/* Style selector */}
+      {/* Style selector (directiva 2026: solo estilos vectoriales clínicos) */}
       <div className="flex gap-2">
         {([
-          { id: 'realista', label: 'Clínico realista', desc: 'Fotorrealista, anatomía precisa' },
-          { id: 'lineart', label: 'Line-art', desc: 'Trazo simple para impresión' },
+          { id: '3d_vector', label: 'Ilustración 3D médica', desc: 'Diagrama 3D clínico, fondo blanco' },
+          { id: 'vector_2d', label: 'Vector 2D clínico', desc: 'Diagrama plano para impresión' },
         ] as const).map((s) => (
           <button
             key={s.id}
@@ -209,7 +209,7 @@ export default function CloudflareImageGenerator() {
           </div>
           {modelo && (
             <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-black/60 text-white text-[10px] font-medium backdrop-blur-sm">
-              {modelo} · {estilo === 'realista' ? 'clínico realista' : 'line-art'}{categoriaOut ? ` · ${categoriaOut}` : ''}
+              {modelo} · {estilo === '3d_vector' ? 'ilustración 3D médica' : 'vector 2D clínico'}{categoriaOut ? ` · ${categoriaOut}` : ''}
             </div>
           )}
         </div>
