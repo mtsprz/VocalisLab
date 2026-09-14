@@ -10,7 +10,7 @@ import traceback
 from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -709,6 +709,136 @@ async def listar_cuadernillos(
         filters["paciente_id"] = paciente_id
     data = _db_select("cuadernillos_paciente", filters=filters, order="fecha_creacion", limit=limit)
     return JSONResponse(content=data)
+
+
+# ─── MOTOR DE PLANTILLAS Y VARIABLES (Figma / Canva / HTML Headless) ───
+
+@router.post("/api/cuadernillo/variables-plantilla")
+async def variables_plantilla_cuadernillo(request: Request):
+    """Devuelve las variables estructuradas del cuadernillo ({{paciente_nombre}},
+    {{vhi10_score}}, {{ejercicios}}, etc.) para inyectar en Figma, Canva o HTML.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    paciente_id = body.get("paciente_id", "")
+    titulo = body.get("titulo", "Cuadernillo Terapéutico Vocal")
+    sesiones = int(body.get("cantidad_sesiones", 8))
+    ejercicios = body.get("ejercicios", [])
+    contrato = body.get("contrato", {})
+    notas = body.get("notas", "")
+    profesional = body.get("profesional", {})
+
+    paciente_nombre = "Paciente Sin Especificar"
+    evaluacion_dict = {}
+
+    if paciente_id and supabase:
+        try:
+            p_res = supabase.table("pacientes").select("nombre_completo").eq("id", paciente_id).execute()
+            if p_res.data and p_res.data[0].get("nombre_completo"):
+                paciente_nombre = p_res.data[0]["nombre_completo"]
+            
+            # Obtener última evaluación para métricas
+            e_res = supabase.table("evaluaciones_clinicas").select("*").eq("paciente_id", paciente_id).order("fecha", desc=True).limit(1).execute()
+            if e_res.data:
+                evaluacion_dict = e_res.data[0]
+        except Exception as e:
+            print(f"[api_clinica] Error leyendo paciente/evaluación para variables: {e}")
+
+    from plantillas_engine import extraer_variables_cuadernillo
+    vars_dict = extraer_variables_cuadernillo(
+        paciente_nombre=paciente_nombre,
+        titulo=titulo,
+        sesiones=sesiones,
+        ejercicios=ejercicios,
+        contrato=contrato,
+        notas=notas,
+        profesional=profesional,
+        evaluacion=evaluacion_dict,
+    )
+    return JSONResponse(content={"ok": True, "variables": vars_dict})
+
+
+@router.post("/api/cuadernillo/exportar-plantilla")
+async def exportar_plantilla_cuadernillo(request: Request):
+    """Exporta el cuadernillo usando el motor especificado en 'motor':
+    - 'canva': Dispara Autofill en Canva Connect API
+    - 'figma': Exporta frame vectorial de Figma
+    - 'html_headless': Devuelve HTML/CSS vectorial ultra-rápido para impresión
+    - 'reportlab_vector' (default): Motor vectorial interno de 19 páginas
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    motor = str(body.get("motor", "reportlab_vector")).strip().lower()
+    paciente_id = body.get("paciente_id", "")
+    paciente_nombre = body.get("paciente_nombre", "Paciente Sin Especificar")
+    titulo = body.get("titulo", "Cuadernillo Terapéutico Vocal")
+    sesiones = int(body.get("cantidad_sesiones", 8))
+    ejercicios = body.get("ejercicios", [])
+    contrato = body.get("contrato", {})
+    notas = body.get("notas", "")
+    profesional = body.get("profesional", {})
+
+    from plantillas_engine import (
+        extraer_variables_cuadernillo,
+        CanvaConnectEngine,
+        FigmaRESTEngine,
+        HTMLTemplateEngine,
+    )
+    
+    vars_dict = extraer_variables_cuadernillo(
+        paciente_nombre=paciente_nombre,
+        titulo=titulo,
+        sesiones=sesiones,
+        ejercicios=ejercicios,
+        contrato=contrato,
+        notas=notas,
+        profesional=profesional,
+    )
+
+    if motor == "canva":
+        canva = CanvaConnectEngine()
+        if not canva.esta_configurado():
+            raise HTTPException(status_code=400, detail="Canva Connect no configurado: faltan CANVA_API_KEY y CANVA_TEMPLATE_ID en servidor")
+        pdf_url = await canva.generar_cuadernillo_autofill(vars_dict)
+        if not pdf_url:
+            raise HTTPException(status_code=502, detail="Error o timeout al generar PDF en Canva Connect API")
+        return JSONResponse(content={"ok": True, "motor": "canva", "pdf_url": pdf_url})
+
+    elif motor == "figma":
+        figma = FigmaRESTEngine()
+        node_id = body.get("figma_node_id", os.environ.get("FIGMA_NODE_ID", ""))
+        if not figma.esta_configurado() or not node_id:
+            raise HTTPException(status_code=400, detail="Figma REST API no configurado: faltan FIGMA_ACCESS_TOKEN, FIGMA_FILE_KEY o node_id")
+        pdf_url = await figma.exportar_frame_pdf(node_id)
+        if not pdf_url:
+            raise HTTPException(status_code=502, detail="Error exportando frame de Figma")
+        return JSONResponse(content={"ok": True, "motor": "figma", "pdf_url": pdf_url})
+
+    elif motor == "html_headless":
+        html_code = HTMLTemplateEngine.renderizar_html_clinico(vars_dict)
+        return JSONResponse(content={"ok": True, "motor": "html_headless", "html_code": html_code})
+
+    else:
+        # Fallback predeterminado: Motor vectorial interno de 19 páginas (cuadernillo_pdf.py)
+        from cuadernillo_pdf import generar_cuadernillo_pdf
+        pdf_path = generar_cuadernillo_pdf(
+            paciente_nombre=paciente_nombre,
+            titulo=titulo,
+            sesiones=sesiones,
+            ejercicios=ejercicios,
+            contrato=contrato,
+            notas=notas,
+            profesional=profesional,
+        )
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"Cuadernillo_{paciente_nombre.replace(' ', '_')}.pdf",
+        )
 
 
 # ─── AGENDA / TURNOS ────────────────────────────────────────
