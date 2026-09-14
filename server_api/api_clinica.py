@@ -1076,10 +1076,11 @@ async def debug_status():
 @router.post("/api/generate-image")
 async def generate_image(request: Request):
     """Endpoint seguro: recibe {prompt, style, categoria} y devuelve imagen
-    base64 sin exponer claves CF en el cliente. style: 'realista' (default,
-    clínico fotorrealista) o 'lineart'. categoria: MANUAL_THERAPY | TVSO |
-    POSTURE | RESONANCE | ANATOMY (vacío = auto-detección). Todo prompt pasa
-    por el motor de mediación clínica (4 capas + negative por categoría).
+    base64 sin exponer claves CF en el cliente. style: '3d_vector' (default,
+    ilustración médica 3D) o 'vector_2d' (diagrama clínico plano).
+    Fotorrealismo prohibido (directiva 2026). categoria: MANUAL_THERAPY |
+    TVSO | POSTURE | RESONANCE | ANATOMY (vacío = auto-detección). Todo prompt
+    pasa por el motor de mediación clínica (4 capas + negative por categoría).
     Usa el modelo de CLOUDFLARE_MODEL (default: FLUX.1 Schnell)."""
     try:
         body = await request.json()
@@ -1090,11 +1091,7 @@ async def generate_image(request: Request):
         raise HTTPException(status_code=400, detail="prompt requerido")
     if len(prompt) > 4000:
         prompt = prompt[:4000]
-    estilo = str(body.get("style", "") or os.environ.get("ESTILO_IMAGEN", "realista")).strip().lower()
-    if not estilo.startswith("real"):
-        estilo = "lineart"
-    else:
-        estilo = "realista"
+    estilo_in = str(body.get("style", "") or os.environ.get("ESTILO_IMAGEN", "3d_vector"))
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
     if not (account and token):
@@ -1108,10 +1105,12 @@ async def generate_image(request: Request):
             _cloudflare_model, NEGATIVO_CLINICO,
             _extraer_imagen_cf,
         )
-        from mediacion_clinica import mediar_prompt
+        from mediacion_clinica import mediar_prompt, normalizar_estilo
         model = _cloudflare_model()
         # Mediación universal: 4 capas + negative por categoría (auto-detectada
         # o forzada por el cliente). Ningún texto libre llega a la API.
+        # Estilo canónico: 3d_vector (default) o vector_2d. Fotorrealismo prohibido.
+        estilo = normalizar_estilo(estilo_in)
         med = mediar_prompt(prompt, str(body.get("categoria", "")), estilo)
         final_prompt = med["prompt"]
         negativo = med["negative_prompt"]
@@ -1124,10 +1123,10 @@ async def generate_image(request: Request):
             json=cf_body,
             timeout=180,
         )
-        # Filtro NSFW de Cloudflare (8007) suele rechazar "photorealistic/endoscopic":
-        # reintentar una vez con mediación line-art ("diagram/illustration").
+        # Filtro NSFW de Cloudflare (8007): reintentar una vez con mediación
+        # vectorial 2D ("diagram/illustration"), que el filtro acepta mejor.
         if r.status_code != 200 and "8007" in r.text:
-            med_retry = mediar_prompt(prompt, med["categoria"], "lineart")
+            med_retry = mediar_prompt(prompt, med["categoria"], "vector_2d")
             cf_body["prompt"] = med_retry["prompt"]
             if "stable-diffusion" in model and "lightning" not in model:
                 cf_body["negative_prompt"] = med_retry["negative_prompt"]

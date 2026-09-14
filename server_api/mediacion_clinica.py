@@ -1,17 +1,14 @@
 """VocalisLab Pro — Motor de mediación universal de prompts clínicos.
 
+ESTILO VISUAL UNIFICADO Y OBLIGATORIO:
+- Estilo: "Medical 3D vector diagram" o "Clean 2D clinical vector illustration"
+- Prohibido: fotorrealismo, fotos de personas reales, piel real, texto/etiquetas dentro de la imagen
+- Paleta: Azul institucional, gris médico, blanco puro, acentos lavanda/púrpura
+- Fondo: Blanco puro (#FFFFFF) o transparente, sin fondos de habitaciones ni desenfoques
+
 Toda descripción de maniobra o ejercicio fonoaudiológico (TVSO, terapia
 manual, postura, resonancia, articulación o atlas anatómico) pasa por este
-pipeline ANTES de llegar a cualquier API de generación (Cloudflare/Pixazo/
-Gemini/SDXL). Prohibido enviar prompts libres sin sanitización clínica.
-
-Arquitectura en 4 capas:
-    [Categoría del ejercicio] + [Detalle específico] +
-    [Capa de seguridad clínica] + [Calidad y estilo visual]
-
-Cada categoría aporta sus reglas de prompt obligatorias y su negative
-prompt integrado. El clasificador detecta la categoría por keywords ES/EN;
-si no hay coincidencias se usa GENERAL (clínico neutro).
+pipeline ANTES de llegar a cualquier API de generación.
 """
 
 import unicodedata
@@ -21,12 +18,11 @@ import unicodedata
 CATEGORIAS = {
     "TVSO": {
         "label": "TVSO y dispositivos",
-        "reglas": ("flexible silicone tube entering the container from above, "
-                   "tube tip shallowly submerged 1-2 cm below the water surface, "
-                   "realistic bubbles, natural hand grip holding the glass at rest "
-                   "on a desk, correct object physics, no floating objects"),
-        "negativo": ("floating test tube, laboratory equipment, submerged sealed "
-                     "tube, naked torso, 6 fingers, tube floating in water"),
+        "reglas": ("flexible silicone straw/tube entering clear water glass from above, "
+                   "shallowly submerged tip 1-2 cm below water surface, realistic water bubbles, "
+                   "clean 3D medical vector illustration of semi-occluded vocal tract exercise"),
+        "negativo": ("floating test tube, laboratory equipment, submerged sealed tube, "
+                     "naked torso, 6 fingers, tube floating in water"),
         "keywords": ["tubo", "tube", "laxvox", "lax vox", "titze", "vaso",
                      "burbuj", "bubbl", "pajita", "popote", "sorbete", "straw",
                      "agua", "water", "resistencia", "soplo", "blow",
@@ -35,11 +31,12 @@ CATEGORIAS = {
     },
     "MANUAL_THERAPY": {
         "label": "Terapia manual / Palpación",
-        "reglas": ("non-invasive external physical therapy contact, hands gently "
-                   "touching intact skin on the outer neck and jaw surface, fully "
-                   "clothed person, no internal anatomy visible, calm clinical setting"),
+        "reglas": ("non-invasive external physical therapy contact diagram, stylized 3D vector "
+                   "hands gently touching intact skin on outer neck and jaw area, modest neutral "
+                   "medical gray garment shapes, clean anatomical boundaries, no facial detail"),
         "negativo": ("dissection, internal organs, open skin, surgery, blood, "
-                     "extra fingers, distorted hands, naked torso, surgical tools"),
+                     "extra fingers, distorted hands, naked torso, surgical tools, floating hands, "
+                     "realistic face, photographic skin texture"),
         "keywords": ["masaje", "massage", "palpaci", "palpat",
                      "cuello", "neck", "cervical", "mandibul", "jaw",
                      "descompresi", "decompress", "descenso laringeo",
@@ -49,12 +46,11 @@ CATEGORIAS = {
     },
     "ANATOMY": {
         "label": "Diagrama anatómico 3D",
-        "reglas": ("clean 3D digital medical atlas render, isolated anatomical "
-                   "model of the larynx and vocal folds, educational diagram, "
-                   "pure white background, no human hands, no real skin, "
-                   "no body context"),
-        "negativo": ("human hands, real skin, blood, surgical tools, realistic "
-                     "body context, photograph of a person, endoscopic gore"),
+        "reglas": ("clean 3D digital medical atlas render, isolated anatomical model "
+                   "of the larynx and vocal folds, educational 3D diagram, pure white background, "
+                   "institutional blue and lavender medical color palette, no human hands, no real skin"),
+        "negativo": ("human hands, real skin, blood, surgical tools, realistic body context, "
+                     "photograph of a person, endoscopic gore, text, labels, gibberish writing"),
         "keywords": ["atlas", "diagrama", "diagram", "anatom", "laringoscop",
                      "endoscop", "tracto vocal", "vocal tract", "cuerdas vocales",
                      "vocal folds", "vocal cords", "cricotiroide", "tiroides",
@@ -63,13 +59,12 @@ CATEGORIAS = {
     },
     "RESONANCE": {
         "label": "Resonancia y articulación",
-        "reglas": ("close-up of a face in side profile, relaxed jaw and facial "
-                   "muscles, natural closed-lip posture or gentle vowel "
-                   "articulation, subtle acoustic highlight on the facial mask "
-                   "and lips area"),
-        "negativo": ("exaggerated face, medical mask, interior mouth view with "
-                     "hands, distorted lips, open screaming mouth, instruments "
-                     "inside mouth"),
+        "reglas": ("stylized 3D vector diagram of head and face in side profile, smooth featureless "
+                   "surfaces, relaxed jaw posture lines, natural closed-lip shape, "
+                   "clean anatomical lines, subtle lavender resonance highlight on facial mask area"),
+        "negativo": ("exaggerated face, medical mask, interior mouth view with hands, "
+                     "distorted lips, open screaming mouth, instruments inside mouth, "
+                     "realistic eyes, photographic skin"),
         "keywords": ["humming", "/m/", "resonan", "nasal", "mascara facial",
                      "mascara", "colocacion", "articulaci", "vocales", "vowels",
                      "frases", "proyecci", "anterior", "labios", "lips",
@@ -77,11 +72,11 @@ CATEGORIAS = {
     },
     "POSTURE": {
         "label": "Postura y biomecánica",
-        "reglas": ("medium or full-body view of a standing or sitting person, "
-                   "neutral everyday clothing, neutral spinal alignment, clear "
-                   "biomechanical posture, clean studio background"),
-        "negativo": ("floating limbs, bad posture, cropped head, unnatural "
-                     "angles, contortionist, naked torso"),
+        "reglas": ("stylized 3D vector diagram of human torso in side view showing rib cage and "
+                   "abdominal expansion zones, smooth mannequin-like surfaces, modest neutral shapes, "
+                   "biomechanical alignment guides, minimalist clinical style, clean lines, white background"),
+        "negativo": ("floating limbs, bad posture, cropped head, unnatural angles, "
+                     "contortionist, naked torso, real skin photo, realistic face"),
         "keywords": ["postura", "posture", "respiraci", "breathing", "diafragma",
                      "diaphragm", "costo", "abdominal", "expansion", "apoyo",
                      "alineaci", "alignment", "biomecanica", "relajacion corporal",
@@ -90,29 +85,54 @@ CATEGORIAS = {
     },
     "GENERAL": {
         "label": "Ejercicio clínico general",
-        "reglas": ("person demonstrating a speech therapy exercise in a clinical "
-                   "setting, natural posture, fully clothed"),
-        "negativo": ("surgery, blood, naked torso, distorted anatomy"),
+        "reglas": ("stylized medical 3D vector diagram of a speech therapy exercise setup, "
+                   "minimalist clinical style, clean lines, professional anatomical accuracy, "
+                   "smooth mannequin-like surfaces, no facial detail"),
+        "negativo": ("surgery, blood, naked torso, distorted anatomy, real photo, realistic face"),
         "keywords": [],
     },
 }
 
-# Desempate cuando dos categorías puntúan igual (más específico primero).
 _PRIORIDAD = ["TVSO", "MANUAL_THERAPY", "ANATOMY", "RESONANCE", "POSTURE"]
 
-# ─── Capas globales ──────────────────────────────────────────────────
+# ─── Capas globales de Estilo y Seguridad ───────────────────────────
+# Fotorrealismo PROHIBIDO en toda la app (directiva clínica 2026):
+# solo "Medical 3D vector" o "Flat 2D clinical vector", fondo blanco puro.
 
-CAPA_SEGURIDAD = ("clinical demonstration, fully clothed person, professional "
-                  "medical environment, bright studio lighting")
-CAPA_ANATOMIA = ("anatomically correct hands with exactly 5 fingers, intact "
-                 "skin, clear physical boundaries between body parts")
-CAPA_CALIDAD_REALISTA = ("photorealistic 8k, sharp focus, single centered "
-                         "subject, no text, no letters, no watermark, no logo")
-CAPA_CALIDAD_LINEA = ("minimalist 2D medical line art, clean black strokes on "
-                      "white background, no text, no letters, no shading, "
-                      "no colors")
-NEGATIVO_BASE = ("extra fingers, deformed hands, missing joints, open neck, "
-                 "surgical cut, blood, low quality, blurred, collage, split image")
+PROMPT_3D_VECTOR = (
+    "Medical 3D vector diagram of {detalle}, {reglas_cat}, minimalist clinical style, "
+    "clean lines, professional anatomical accuracy, pure white background #FFFFFF, "
+    "medical textbook illustration style, 8k, soft shadows, institutional blue "
+    "and lavender accents, no text, no labels, no watermark"
+)
+
+PROMPT_2D_VECTOR = (
+    "Flat 2D clinical vector diagram of {detalle}, {reglas_cat}, minimalist medical "
+    "infographic style, clean geometric lines, professional anatomical accuracy, "
+    "pure white background #FFFFFF, institutional blue, medical gray and lavender "
+    "palette, no text, no labels, no watermark, no shading"
+)
+
+# Alias legacy: el estilo por defecto histórico se mapea al vector 3D médico.
+PROMPT_POSITIVO_MASTER = PROMPT_3D_VECTOR
+
+PROMPT_NEGATIVO_MANDATORIO = (
+    "photorealistic, real human photo, real skin, photographic, cinematic photo, "
+    "real person, photo background, consulting room, bedroom, furniture, bokeh, "
+    "extra fingers, mutated hands, deformed fingers, 6 fingers, floating hands, "
+    "dislocated limbs, distorted anatomy, text, labels, gibberish writing, letters, "
+    "words, captions, arrows with text, blurry, noisy background, realistic faces"
+)
+
+
+def normalizar_estilo(estilo: str = "") -> str:
+    """Canoniza el estilo visual. Solo dos valores posibles:
+    '3d_vector' (default, ilustración médica 3D) o 'vector_2d' (diagrama plano).
+    Los valores legacy 'realista'→3d_vector y 'lineart'→vector_2d se migran solos."""
+    est = str(estilo or "").strip().lower()
+    if "line" in est or est in ("vector_2d", "2d", "flat", "plano"):
+        return "vector_2d"
+    return "3d_vector"
 
 
 def _norm(texto: str) -> str:
@@ -121,8 +141,7 @@ def _norm(texto: str) -> str:
 
 
 def clasificar_maniobra(texto: str) -> str:
-    """Devuelve la categoría (clave de CATEGORIAS) por scoring de keywords.
-    Sin coincidencias → GENERAL."""
+    """Devuelve la categoría (clave de CATEGORIAS) por scoring de keywords."""
     t = _norm(texto)
     if not t.strip():
         return "GENERAL"
@@ -134,25 +153,25 @@ def clasificar_maniobra(texto: str) -> str:
     return mejor
 
 
-def mediar_prompt(detalle: str, categoria: str = "", estilo: str = "realista") -> dict:
-    """Ensambla el prompt clínico en 4 capas + negative por categoría.
-
-    Nunca devuelve el detalle en crudo: siempre sale con capa de seguridad,
-    capa anatómica y capa de calidad. Retorna dict con
-    {categoria, categoria_label, prompt, negative_prompt}.
+def mediar_prompt(detalle: str, categoria: str = "", estilo: str = "3d_vector") -> dict:
+    """Ensambla el prompt clínico en la arquitectura de 4 capas con estilo médico
+    vectorial 3D o plano 2D (fotorrealismo prohibido, sin texto en la imagen).
+    Retorna dict con {categoria, categoria_label, estilo, prompt, negative_prompt}.
     """
     detalle = str(detalle or "").strip()[:1500]
     cat = (categoria or "").strip().upper()
     if cat not in CATEGORIAS:
         cat = clasificar_maniobra(detalle)
     reglas = CATEGORIAS[cat]
-    est = (estilo or "realista").strip().lower()
-    calidad = CAPA_CALIDAD_REALISTA if est.startswith("real") else CAPA_CALIDAD_LINEA
-    prompt = f"{detalle}, {reglas['reglas']}, {CAPA_SEGURIDAD}, {CAPA_ANATOMIA}, {calidad}"
-    negativo = f"{reglas['negativo']}, {NEGATIVO_BASE}"
+    est = normalizar_estilo(estilo)
+    template = PROMPT_2D_VECTOR if est == "vector_2d" else PROMPT_3D_VECTOR
+    prompt = template.format(detalle=detalle, reglas_cat=reglas["reglas"])
+    negativo = f"{reglas['negativo']}, {PROMPT_NEGATIVO_MANDATORIO}"
+
     return {
         "categoria": cat,
         "categoria_label": reglas["label"],
+        "estilo": est,
         "prompt": prompt,
         "negative_prompt": negativo,
     }
