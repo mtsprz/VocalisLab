@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind, MessageCircle, Mail, X, Send } from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind, MessageCircle, Mail, X, Send, Zap } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
+import { useAuth } from './AuthContext';
 import { firmaProfesional } from './clinicalUtils';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -296,9 +297,13 @@ const DEFAULT_SECTIONS: Section[] = [
 
 export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Props) {
   const clinical = useClinical();
+  const { user } = useAuth();
+  const [enviandoWA, setEnviandoWA] = useState(false);
+  const [enviandoMail, setEnviandoMail] = useState(false);
+  const [msgEnvio, setMsgEnvio] = useState('');
   const [sections, setSections] = useState<Section[]>(DEFAULT_SECTIONS);
   const [presets, setPresets] = useState<Preset[]>(DEFAULT_PRESETS);
-  const [selectedPreset, setSelectedPreset] = useState('');
+  const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
   const [selectedExercises, setSelectedExercises] = useState<string[]>(initialExerciseIds || []);
   const [titulo, setTitulo] = useState('Cuadernillo Terapéutico Vocal');
   const [sesiones, setSesiones] = useState(8);
@@ -408,20 +413,34 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   };
 
   const applyPreset = (presetId: string) => {
-    setSelectedPreset(presetId);
-    const preset = presets.find(p => p.id === presetId);
-    if (preset) {
-      setSelectedExercises(preset.exercise_ids);
-      setSesiones(preset.sesiones_recomendadas);
-      setTitulo(`Cuadernillo — ${preset.name}`);
+    // Multi-select: combina 2+ presets (unión sin duplicados)
+    const next = selectedPresets.includes(presetId)
+      ? selectedPresets.filter(id => id !== presetId)
+      : [...selectedPresets, presetId];
+    setSelectedPresets(next);
+    const activos = presets.filter(p => next.includes(p.id));
+    const union: string[] = [];
+    activos.forEach(p => p.exercise_ids.forEach(eid => {
+      if (!union.includes(eid)) union.push(eid);
+    }));
+    setSelectedExercises(union);
+    if (activos.length > 0) {
+      setSesiones(Math.max(...activos.map(p => p.sesiones_recomendadas)));
+      const nombres = activos.map(p => p.name).join(' + ');
+      setTitulo(`Cuadernillo — ${nombres.slice(0, 90)}`);
     }
+  };
+
+  const limpiarPresets = () => {
+    setSelectedPresets([]);
+    setSelectedExercises([]);
   };
 
   const toggleExercise = (id: string) => {
     setSelectedExercises(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
-    setSelectedPreset('');
+    setSelectedPresets([]);
   };
 
   const getAllExercises = (): Exercise[] => {
@@ -443,9 +462,9 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     setExportMsg('');
     try {
       const selected = getSelectedDetails();
-      const presetData = presets.find(p => p.id === selectedPreset);
+      const presetsActivos = presets.filter(p => selectedPresets.includes(p.id));
       const contrato = {
-        frecuencia: presetData?.frecuencia || '2 veces por semana',
+        frecuencia: presetsActivos.map(p => p.frecuencia).join(' / ') || '2 veces por semana',
         duracion_sesion: '30 minutos',
         pautas_ausencias: 'Avisar con 24h de anticipación.',
       };
@@ -550,6 +569,80 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     setShowEmailModal(true);
   };
 
+  const pdfUrlABase64 = async (): Promise<string> => {
+    const blob = await (await fetch(pdfUrl)).blob();
+    return await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result).split(',')[1]);
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+  };
+
+  const enviarWhatsAppDirecto = async () => {
+    if (!pdfUrl || !pacienteTelefono) {
+      alert('Generá el PDF y verificá que el paciente tenga teléfono.');
+      return;
+    }
+    setEnviandoWA(true);
+    setMsgEnvio('');
+    try {
+      const b64 = await pdfUrlABase64();
+      const r = await fetch(`${BACKEND_URL}/api/whatsapp/enviar-cuadernillo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: pacienteTelefono,
+          pdf_base64: b64,
+          filename: `${titulo.replace(/\s+/g, '_')}.pdf`,
+          caption: mensajeClinico().slice(0, 1000),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Error enviando WhatsApp');
+      setMsgEnvio(`WhatsApp enviado ✓ (${data.message_id || 'ok'})`);
+    } catch (e: any) {
+      setMsgEnvio(`WhatsApp: ${e.message || 'error'}. Probá el botón WhatsApp manual.`);
+    } finally {
+      setEnviandoWA(false);
+    }
+  };
+
+  const enviarEmailDirecto = async () => {
+    if (!pdfUrl || !pacienteEmail) {
+      alert('Generá el PDF y verificá que el paciente tenga email.');
+      return;
+    }
+    if (!user?.id) {
+      alert('Iniciá sesión con Google para enviar por Gmail.');
+      return;
+    }
+    setEnviandoMail(true);
+    setMsgEnvio('');
+    try {
+      const b64 = await pdfUrlABase64();
+      const r = await fetch(`${BACKEND_URL}/api/gmail/enviar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          to: pacienteEmail,
+          subject: titulo,
+          body: mensajeClinico(),
+          pdf_base64: b64,
+          filename: `${titulo.replace(/\s+/g, '_')}.pdf`,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Error enviando email');
+      setMsgEnvio(`Email enviado ✓ a ${pacienteEmail}`);
+    } catch (e: any) {
+      setMsgEnvio(`Email: ${e.message || 'error'}`);
+    } finally {
+      setEnviandoMail(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6">
       {/* Header Banner */}
@@ -626,51 +719,91 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
               >
                 <Mail size={16} /> Email
               </button>
+              <button
+                onClick={enviarWhatsAppDirecto}
+                disabled={enviandoWA}
+                className="px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-xs flex items-center gap-2 shadow-lg transition-all disabled:opacity-50"
+                title="Enviar PDF directo por WhatsApp Cloud API (sin descargar)"
+              >
+                {enviandoWA ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />} WA Directo
+              </button>
+              <button
+                onClick={enviarEmailDirecto}
+                disabled={enviandoMail}
+                className="px-4 py-2.5 rounded-xl bg-indigo-700 hover:bg-indigo-600 text-white font-semibold text-xs flex items-center gap-2 shadow-lg transition-all disabled:opacity-50"
+                title="Enviar PDF directo por Gmail (sin descargar)"
+              >
+                {enviandoMail ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Email Directo
+              </button>
             </>
+          )}
+          {msgEnvio && (
+            <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 w-full">{msgEnvio}</p>
           )}
         </div>
         </div>
       </div>
 
-      {/* Presets por Patología (Clinical Quick Pick) */}
+      {/* Presets por Patología (multi-select, agrupados por categoría) */}
       <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
-            <Settings size={16} className="text-indigo-500" /> Presets Clínicos por Patología Cordal ({presets.length})
+            <Settings size={16} className="text-indigo-500" /> Presets Clínicos por Patología ({presets.length})
           </h3>
-          <span className="text-[11px] text-gray-500 dark:text-gray-400">
-            Haz clic en un preset para cargar los ejercicios y dosificación recomendada
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 dark:text-gray-400">
+              Podés combinar 2 o más presets: se unen los ejercicios
+            </span>
+            {selectedPresets.length > 0 && (
+              <button
+                onClick={limpiarPresets}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                Limpiar ({selectedPresets.length})
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {presets.map(p => {
-            const isSelected = selectedPreset === p.id;
-            return (
-              <button
-                key={p.id}
-                onClick={() => applyPreset(p.id)}
-                className={`text-left p-3.5 rounded-xl border text-xs transition-all duration-200 flex flex-col justify-between ${
-                  isSelected
-                    ? 'bg-indigo-600/15 border-indigo-500 text-indigo-950 dark:text-white ring-2 ring-indigo-500/30 shadow-md'
-                    : 'bg-gray-50/70 dark:bg-white/[0.03] border-gray-200 dark:border-white/10 hover:border-indigo-400/50 hover:bg-indigo-50/50 dark:hover:bg-white/[0.06] text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <p className="font-bold text-gray-900 dark:text-white text-xs">{p.name}</p>
-                    {isSelected && <CheckCircle2 size={14} className="text-indigo-500 shrink-0" />}
-                  </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">{p.description}</p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-gray-200 dark:border-white/5 flex items-center justify-between text-[10px] text-gray-400">
-                  <span className="font-semibold text-indigo-600 dark:text-indigo-400">{p.exercise_ids.length} ejercicios</span>
-                  <span>{p.sesiones_recomendadas} ses. • {p.frecuencia}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        {['funcionales', 'organicas', 'minimas_estructurales', 'congenitas', 'mantenimiento'].map(cat => {
+          const grupo = presets.filter(p => (p.categoria || 'mantenimiento') === cat);
+          if (!grupo.length) return null;
+          return (
+            <div key={cat} className="mb-4 last:mb-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-2">
+                {CATEGORIA_LABELS[cat] || cat} ({grupo.length})
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {grupo.map(p => {
+                  const isSelected = selectedPresets.includes(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => applyPreset(p.id)}
+                      className={`text-left p-3.5 rounded-xl border text-xs transition-all duration-200 flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-indigo-600/15 border-indigo-500 text-indigo-950 dark:text-white ring-2 ring-indigo-500/30 shadow-md'
+                          : 'bg-gray-50/70 dark:bg-white/[0.03] border-gray-200 dark:border-white/10 hover:border-indigo-400/50 hover:bg-indigo-50/50 dark:hover:bg-white/[0.06] text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <p className="font-bold text-gray-900 dark:text-white text-xs">{p.name}</p>
+                          {isSelected && <CheckCircle2 size={14} className="text-indigo-500 shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">{p.description}</p>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-200 dark:border-white/5 flex items-center justify-between text-[10px] text-gray-400">
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">{p.exercise_ids.length} ejercicios</span>
+                        <span>{p.sesiones_recomendadas} ses. • {p.frecuencia}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Expansión IA del banco (Farías/Le Huche/Titze) + moderación */}

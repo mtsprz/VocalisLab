@@ -430,6 +430,7 @@
   "presets": [
     {
       "id": "dmt_1",
+      "categoria": "funcionales",
       "name": "DMT Tipo I — Hiperfunción Isométrica",
       "description": "Isometría laríngea con laringe elevada y tensión. Foco en Le Huche, descontracturación cervical y descenso laríngeo.",
       "exercise_ids": ["le_huche", "shiatsu_cabeza", "rotacion_hombros", "masaje_laringeo", "descenso_laringeo", "respiracion_abdominal", "tubo_agua", "calentamiento"],
@@ -438,6 +439,7 @@
     },
     {
       "id": "dmt_2",
+      "categoria": "funcionales",
       "name": "DMT Tipo II — Contracción Supraglótica",
       "description": "Aproximación excesiva de bandas ventriculares. Foco en ensanchamiento faríngeo, SOVTE en tubo de agua y soplo aspirado.",
       "exercise_ids": ["le_huche", "descenso_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "vibracion_labial", "enfriamiento"],
@@ -445,15 +447,98 @@
       "frecuencia": "2 a 3 veces por semana"
     },
     {
+      "id": "dmt_3_4",
+      "categoria": "funcionales",
+      "name": "DMT Tipo III–IV — Contracción Global / Anteroposterior",
+      "description": "Compresión esfinteriana global con voz estrangulada. Foco en desactivación tensional, descenso laríngeo y SOVTE suave.",
+      "exercise_ids": ["le_huche", "masaje_laringeo", "descenso_laringeo", "oclusion_nasal", "tubo_agua", "humming_m", "enfriamiento"],
+      "sesiones_recomendadas": 14,
+      "frecuencia": "2 a 3 veces por semana"
+    },
+    {
+      "id": "disfonia_funcional",
+      "categoria": "funcionales",
+      "name": "Disfonía Funcional Hipofuncional / Psicógena",
+      "description": "Voz débil sin lesión estructural. Foco en apoyo respiratorio, aducción suave y transferencia sin esfuerzo.",
+      "exercise_ids": ["respiracion_abdominal", "coordinacion_costo_abdominal", "oclusion_nasal", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 10,
+      "frecuencia": "2 veces por semana"
+    },
+    {
+      "id": "disfonia_espasmodica",
+      "categoria": "funcionales",
+      "name": "Disfonía Espasmódica Aductora (apoyo)",
+      "description": "Espasmos aductores intermitentes. Foco en relajación, respiración fluida y SOVTE suave. Evitar esfuerzo de empuje.",
+      "exercise_ids": ["le_huche", "respiracion_abdominal", "masaje_laringeo", "descenso_laringeo", "tubo_agua", "enfriamiento"],
+      "sesiones_recomendadas": 12,
+      "frecuencia": "1 a 2 veces por semana"
+    },
+    {
+      "id": "puberfonia",
+      "categoria": "funcionales",
+      "name": "Puberfonía / Disfonía Mutacional",
+      "description": "Persistencia de registro agudo post-puberal. Foco en descenso laríngeo, glissandos descendentes y estabilización modal.",
+      "exercise_ids": ["descenso_laringeo", "glissandos", "escalas_vocalicas", "oclusion_nasal", "humming_m", "frases_balanceadas"],
+      "sesiones_recomendadas": 10,
+      "frecuencia": "2 veces por semana"
+    },
+    {
       "id": "nodo_cordial",
+      "categoria": "organicas",
       "name": "Nódulos Cordales / Lesiones Exofíticas",
-      "description": "Edema en punto nodular por microtrauma. Foco en reeducación respiratoria, ataque suave, SOVTE y descontracturación.",
+      "description": "Edema en punto nodular por microtrauma. Foco en reeducación respiratoria, ataque suave, SOVTE y descontracturación. Sin empuje.",
       "exercise_ids": ["le_huche", "masaje_laringeo", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 14,
       "frecuencia": "2 a 3 veces por semana"
     },
     {
+      "id": "polipo_vocal",
+      "categoria": "organicas",
+      "name": "Pólipo Vocal (apoyo pre/post)",
+      "description": "Lesión exofítica unilateral. Foco en economía vocal, SOVTE suave y resonancia. Sin empuje ni esfuerzo.",
+      "exercise_ids": ["le_huche", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 12,
+      "frecuencia": "2 veces por semana"
+    },
+    {
+      "id": "quiste_cuerda",
+      "categoria": "organicas",
+      "name": "Quiste de Cuerda Vocal (apoyo)",
+      "description": "Lesión subepitelial con rigidez local. Foco en flexibilidad suave, SOVTE y descarga tensional. Sin empuje.",
+      "exercise_ids": ["masaje_laringeo", "respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
+      "sesiones_recomendadas": 12,
+      "frecuencia": "2 veces por semana"
+    },
+    {
+      "id": "laringitis_cronica",
+      "categoria": "organicas",
+      "name": "Laringitis Crónica / Irritativa",
+      "description": "Inflamación persistente por irritantes o RLF. Foco en higiene, hidratación y fonación suave.",
+      "exercise_ids": ["pautas_rlf", "respiracion_abdominal", "descenso_laringeo", "tubo_agua", "humming_m", "enfriamiento"],
+      "sesiones_recomendadas": 8,
+      "frecuencia": "1 a 2 veces por semana"
+    },
+    {
+      "id": "granuloma_contacto",
+      "categoria": "organicas",
+      "name": "Granuloma / Úlcera de Contacto",
+      "description": "Lesión posterior por golpe glótico o intubación. Foco en ataque suave, higiene digestiva y descarga.",
+      "exercise_ids": ["pautas_rlf", "respiracion_abdominal", "descenso_laringeo", "soplo_escalonado", "humming_m", "enfriamiento"],
+      "sesiones_recomendadas": 10,
+      "frecuencia": "1 a 2 veces por semana"
+    },
+    {
+      "id": "papilomatosis_postqx",
+      "categoria": "organicas",
+      "name": "Papilomatosis Post-Quirúrgica (apoyo)",
+      "description": "Rehabilitación suave post-microcirugía. Foco en cicatrización flexible, SOVTE de baja carga y reposo relativo.",
+      "exercise_ids": ["respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
+      "sesiones_recomendadas": 10,
+      "frecuencia": "1 a 2 veces por semana"
+    },
+    {
       "id": "paralisis_cordal",
+      "categoria": "organicas",
       "name": "Parálisis Cordal / Incompetencia Glótica",
       "description": "Déficit de cierre cordal. Foco en apoyo costodiafragmático, consonantes fricativas sonoras y resonancia anterior.",
       "exercise_ids": ["empuje_glotico", "respiracion_abdominal", "expansion_costo_lateral", "consonantes_fricativas", "popote_aire", "escalas_vocalicas", "humming_m"],
@@ -462,6 +547,7 @@
     },
     {
       "id": "presbifonia",
+      "categoria": "organicas",
       "name": "Presbifonía / Atrofia Cordal",
       "description": "Atrofia cordal senil con arqueamiento. Foco en incremento de tonicidad con popote estrecho y proyección vocal.",
       "exercise_ids": ["expansion_costo_lateral", "popote_aire", "vibracion_labial", "consonantes_fricativas", "escalas_vocalicas", "frases_balanceadas", "calentamiento"],
@@ -469,7 +555,44 @@
       "frecuencia": "2 veces por semana"
     },
     {
+      "id": "sulcus_vergeture",
+      "categoria": "minimas_estructurales",
+      "name": "Sulcus / Vergeture (AME)",
+      "description": "Alteración mínima estructural con rigidez de cubierta. Foco en flexibilidad, SOVTE y coordinación aerodinámica.",
+      "exercise_ids": ["respiracion_abdominal", "coordinacion_costo_abdominal", "tubo_agua", "humming_m", "escalas_vocalicas", "enfriamiento"],
+      "sesiones_recomendadas": 14,
+      "frecuencia": "2 veces por semana"
+    },
+    {
+      "id": "sinequia_puente",
+      "categoria": "minimas_estructurales",
+      "name": "Sinequia / Puente Mucoso (AME)",
+      "description": "Adherencia de borde libre. Foco en vibración simétrica suave y elongación sin trauma.",
+      "exercise_ids": ["tubo_agua", "vibracion_labial", "humming_m", "glissandos", "enfriamiento"],
+      "sesiones_recomendadas": 14,
+      "frecuencia": "2 veces por semana"
+    },
+    {
+      "id": "ectasias_varices",
+      "categoria": "minimas_estructurales",
+      "name": "Ectasias / Várices Cordales (AME)",
+      "description": "Fragilidad vascular con riesgo hemorrágico. Foco en economía vocal estricta, sin esfuerzo ni empuje.",
+      "exercise_ids": ["respiracion_abdominal", "tubo_agua", "humming_m", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 10,
+      "frecuencia": "1 a 2 veces por semana"
+    },
+    {
+      "id": "anomalias_congenitas",
+      "categoria": "congenitas",
+      "name": "Anomalías Congénitas (apoyo terapéutico)",
+      "description": "Laringomalacia, diafragma laríngeo, quiste sacular. Apoyo coordinado con ORL: respiración, descenso suave y SOVTE liviano.",
+      "exercise_ids": ["respiracion_abdominal", "descenso_laringeo", "tubo_agua", "humming_m", "frases_balanceadas", "enfriamiento"],
+      "sesiones_recomendadas": 12,
+      "frecuencia": "1 a 2 veces por semana"
+    },
+    {
       "id": "fonastenia",
+      "categoria": "funcionales",
       "name": "Fonastenia / Fatiga Vocal Ocupacional",
       "description": "Cansancio vocal en docentes y profesionales. Foco en economía vocal (SOVTE), resonancia y pausas vocales.",
       "exercise_ids": ["rotacion_hombros", "respiracion_abdominal", "tubo_agua", "popote_aire", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
@@ -478,7 +601,8 @@
     },
     {
       "id": "rlf",
-      "name": "Reflujo Laringofaringeo (RLF)",
+      "categoria": "organicas",
+      "name": "Reflujo Laringofaríngeo (RLF)",
       "description": "Irritación interaritenoidea con carraspeo crónico. Foco en higiene digestiva estricta, hidratación y vibración suave.",
       "exercise_ids": ["pautas_rlf", "descenso_laringeo", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 8,
@@ -486,6 +610,7 @@
     },
     {
       "id": "edema_reinke",
+      "categoria": "organicas",
       "name": "Edema de Reinke / Degeneración Polipoidea",
       "description": "Aumento de masa y laxitud en espacio de Reinke. Foco en disminución de impacto, resonancia y SOVTE.",
       "exercise_ids": ["le_huche", "masaje_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "calentamiento", "enfriamiento"],
@@ -494,6 +619,7 @@
     },
     {
       "id": "preparacion_vocal",
+      "categoria": "mantenimiento",
       "name": "Acondicionamiento y Mantenimiento Vocal",
       "description": "Rutina completa de preparación y cuidado para profesionales de la voz hablada y cantada.",
       "exercise_ids": ["rotacion_hombros", "le_huche", "respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
