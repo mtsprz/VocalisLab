@@ -192,6 +192,17 @@ class FigmaRESTEngine:
 
 # ─── 3. HTML/CSS Headless Engine (Solución Nativa para Docker) ────────
 
+def html_a_pdf_bytes(html_code: str) -> Optional[bytes]:
+    """Compila HTML editorial a PDF vectorial con WeasyPrint (open-source,
+    100% server-side, sin cuotas ni APIs externas). Devuelve bytes o None."""
+    try:
+        from weasyprint import HTML
+        return HTML(string=html_code).write_pdf()
+    except Exception as e:
+        print(f"[plantillas_engine] WeasyPrint no disponible o falló: {e}")
+        return None
+
+
 class HTMLTemplateEngine:
     """Generador HTML/CSS/SVG Headless nativo. Convierte plantillas HTML
     diseñadas en Figma/Canva e inyecta las variables clínicas directamente,
@@ -207,8 +218,8 @@ class HTMLTemplateEngine:
             <div class="exercise-card">
               <div class="card-header">
                 <span class="ex-number">{ex['numero']}</span>
-                <h3>{ex['nombre']}</h3>
                 <span class="ex-dosis">{ex['duracion']}</span>
+                <h3>{ex['nombre']}</h3>
               </div>
               <p class="ex-desc">{ex['descripcion']}</p>
               <ul class="steps-list">
@@ -224,17 +235,17 @@ class HTMLTemplateEngine:
   <title>{variables['cuadernillo_titulo']}</title>
   <style>
     @page {{ size: A4; margin: 15mm; }}
-    body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; background: #ffffff; line-height: 1.5; }}
+    body {{ font-family: Helvetica, Arial, sans-serif; color: #1e293b; background: #ffffff; line-height: 1.5; font-size: 13px; }}
     .header {{ text-align: center; border-bottom: 2px solid #7c4dff; padding-bottom: 12px; margin-bottom: 20px; }}
     .header h1 {{ color: #1a237e; font-size: 24px; margin: 0; }}
     .header p {{ color: #64748b; font-size: 12px; margin: 4px 0 0 0; }}
     .meta-box {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 13px; }}
     .exercise-card {{ border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #ffffff; page-break-inside: avoid; }}
-    .card-header {{ display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px; }}
-    .ex-number {{ background: #7c4dff; color: #ffffff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; }}
-    .card-header h3 {{ margin: 0; color: #1a237e; font-size: 16px; flex: 1; }}
-    .ex-dosis {{ background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }}
-    .ex-desc {{ font-size: 12px; color: #475569; font-style: italic; margin-bottom: 10px; }}
+    .card-header {{ border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px; }}
+    .ex-number {{ background: #7c4dff; color: #ffffff; width: 24px; height: 24px; border-radius: 50%; font-weight: bold; font-size: 12px; text-align: center; line-height: 24px; float: left; margin-right: 10px; }}
+    .card-header h3 {{ margin: 0 0 0 34px; color: #1a237e; font-size: 16px; }}
+    .ex-dosis {{ background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; float: right; }}
+    .ex-desc {{ font-size: 12px; color: #475569; font-style: italic; margin-bottom: 10px; clear: both; }}
     .steps-list {{ list-style: none; padding: 0; margin: 0; font-size: 13px; }}
     .steps-list li {{ padding: 4px 0; border-bottom: 1px dashed #f1f5f9; }}
     .checkbox {{ color: #7c4dff; font-weight: bold; margin-right: 6px; }}

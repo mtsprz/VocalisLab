@@ -305,7 +305,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [notas, setNotas] = useState('');
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
-  const [motorExport, setMotorExport] = useState<'reportlab_vector' | 'html_headless' | 'canva' | 'figma'>('reportlab_vector');
+  const [motorExport, setMotorExport] = useState<'reportlab_vector' | 'html_pdf' | 'canva' | 'figma'>('reportlab_vector');
   const [exportMsg, setExportMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -466,18 +466,31 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             profesional,
           }),
         });
+        const ctype0 = r.headers.get('content-type', '');
+        if (motorExport === 'html_pdf') {
+          if (r.ok && ctype0.includes('pdf')) {
+            const blob = await r.blob();
+            setPdfUrl(URL.createObjectURL(blob));
+            setExportMsg('PDF editorial generado (open-source, automático).');
+          } else {
+            const data = await r.json().catch(() => null);
+            if (data && (data as any).html_code) {
+              // Fallback: WeasyPrint no disponible → vista HTML imprimible
+              const w = window.open('', '_blank');
+              if (w) {
+                w.document.write((data as any).html_code);
+                w.document.close();
+                setExportMsg('Vista editorial abierta: usá Imprimir → Guardar como PDF.');
+              }
+            } else {
+              throw new Error((data as any)?.detail || 'Error exportando plantilla');
+            }
+          }
+          setGenerating(false);
+          return;
+        }
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || 'Error exportando plantilla');
-        if (motorExport === 'html_headless' && data.html_code) {
-          const w = window.open('', '_blank');
-          if (w) {
-            w.document.write(data.html_code);
-            w.document.close();
-            setExportMsg('Vista editorial abierta: usá Imprimir → Guardar como PDF.');
-          } else {
-            setExportMsg('El navegador bloqueó la ventana emergente.');
-          }
-        } else if (data.pdf_url) {
           window.open(data.pdf_url, '_blank');
           setExportMsg(`PDF generado con ${motorExport === 'canva' ? 'Canva' : 'Figma'}.`);
         } else {
@@ -556,7 +569,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
           <div className="flex items-center gap-1 bg-slate-900/60 border border-indigo-500/20 rounded-xl p-1">
             {([
               { id: 'reportlab_vector', label: 'Vector interno' },
-              { id: 'html_headless', label: 'HTML editorial' },
+              { id: 'html_pdf', label: 'PDF editorial' },
               { id: 'canva', label: 'Canva' },
               { id: 'figma', label: 'Figma' },
             ] as const).map((m) => (
@@ -570,7 +583,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                 }`}
                 title={
                   m.id === 'reportlab_vector' ? 'PDF vectorial de 19 páginas (motor interno)' :
-                  m.id === 'html_headless' ? 'Vista HTML imprimible (rápida, sin cuota)' :
+                  m.id === 'html_pdf' ? 'PDF editorial automático open-source (WeasyPrint, sin cuotas)' :
                   m.id === 'canva' ? 'Autofill en plantilla Canva (requiere CANVA_API_KEY)' :
                   'Exportar frame Figma a PDF (requiere FIGMA_ACCESS_TOKEN)'
                 }

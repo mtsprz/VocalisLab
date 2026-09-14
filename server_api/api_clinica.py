@@ -822,6 +822,22 @@ async def exportar_plantilla_cuadernillo(request: Request):
         html_code = HTMLTemplateEngine.renderizar_html_clinico(vars_dict)
         return JSONResponse(content={"ok": True, "motor": "html_headless", "html_code": html_code})
 
+    elif motor == "html_pdf":
+        # PDF editorial 100% automático y open-source (WeasyPrint, sin APIs ni cuotas)
+        from plantillas_engine import HTMLTemplateEngine as _HTE, html_a_pdf_bytes
+        import tempfile as _tf
+        html_code = _HTE.renderizar_html_clinico(vars_dict)
+        pdf_bytes = html_a_pdf_bytes(html_code)
+        if not pdf_bytes:
+            return JSONResponse(content={"ok": True, "motor": "html_headless",
+                                         "html_code": html_code,
+                                         "aviso": "WeasyPrint no disponible: se devuelve HTML para impresión manual"})
+        tmp = _tf.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp.write(pdf_bytes)
+        tmp.close()
+        return FileResponse(tmp.name, media_type="application/pdf",
+                            filename=f"Cuadernillo_{paciente_nombre.replace(' ', '_')}.pdf")
+
     else:
         # Fallback predeterminado: Motor vectorial interno de 19 páginas (cuadernillo_pdf.py)
         from cuadernillo_pdf import generar_cuadernillo_pdf
