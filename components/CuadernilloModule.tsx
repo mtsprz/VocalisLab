@@ -305,6 +305,8 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [notas, setNotas] = useState('');
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
+  const [motorExport, setMotorExport] = useState<'reportlab_vector' | 'html_headless' | 'canva' | 'figma'>('reportlab_vector');
+  const [exportMsg, setExportMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailBody, setEmailBody] = useState('');
@@ -438,6 +440,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       return;
     }
     setGenerating(true);
+    setExportMsg('');
     try {
       const selected = getSelectedDetails();
       const presetData = presets.find(p => p.id === selectedPreset);
@@ -446,6 +449,43 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         duracion_sesion: '30 minutos',
         pautas_ausencias: 'Avisar con 24h de anticipación.',
       };
+      // Motores editoriales externos (Canva / Figma / HTML) vía plantillas_engine
+      if (motorExport !== 'reportlab_vector') {
+        const r = await fetch(`${BACKEND_URL}/api/cuadernillo/exportar-plantilla`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            motor: motorExport,
+            paciente_id: pacienteId || '',
+            paciente_nombre: pacienteNombre || 'Paciente Sin Especificar',
+            titulo,
+            cantidad_sesiones: sesiones,
+            ejercicios: selected,
+            contrato,
+            notas,
+            profesional,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Error exportando plantilla');
+        if (motorExport === 'html_headless' && data.html_code) {
+          const w = window.open('', '_blank');
+          if (w) {
+            w.document.write(data.html_code);
+            w.document.close();
+            setExportMsg('Vista editorial abierta: usá Imprimir → Guardar como PDF.');
+          } else {
+            setExportMsg('El navegador bloqueó la ventana emergente.');
+          }
+        } else if (data.pdf_url) {
+          window.open(data.pdf_url, '_blank');
+          setExportMsg(`PDF generado con ${motorExport === 'canva' ? 'Canva' : 'Figma'}.`);
+        } else {
+          throw new Error('Respuesta sin PDF ni HTML');
+        }
+        setGenerating(false);
+        return;
+      }
       const fd = new FormData();
       fd.append('paciente_id', pacienteId || '');
       fd.append('titulo', titulo);
@@ -512,6 +552,36 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             Presets clínicos por patología cordal y biomecánica laríngea (DMT, Nódulos, Parálisis, Presbifonía, RLF, SOVTE) adaptados según Farías (2012, 2016) y Le Huche.
           </p>
         </div>
+        <div className="flex flex-col gap-2 items-stretch">
+          <div className="flex items-center gap-1 bg-slate-900/60 border border-indigo-500/20 rounded-xl p-1">
+            {([
+              { id: 'reportlab_vector', label: 'Vector interno' },
+              { id: 'html_headless', label: 'HTML editorial' },
+              { id: 'canva', label: 'Canva' },
+              { id: 'figma', label: 'Figma' },
+            ] as const).map((m) => (
+              <button
+                key={m.id}
+                onClick={() => { setMotorExport(m.id); setPdfUrl(''); setExportMsg(''); }}
+                className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                  motorExport === m.id
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+                title={
+                  m.id === 'reportlab_vector' ? 'PDF vectorial de 19 páginas (motor interno)' :
+                  m.id === 'html_headless' ? 'Vista HTML imprimible (rápida, sin cuota)' :
+                  m.id === 'canva' ? 'Autofill en plantilla Canva (requiere CANVA_API_KEY)' :
+                  'Exportar frame Figma a PDF (requiere FIGMA_ACCESS_TOKEN)'
+                }
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {exportMsg && (
+            <p className="text-[10px] text-emerald-300 text-right">{exportMsg}</p>
+          )}
         <div className="flex items-center gap-3">
           <button
             onClick={handleGenerate}
@@ -545,6 +615,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
               </button>
             </>
           )}
+        </div>
         </div>
       </div>
 
