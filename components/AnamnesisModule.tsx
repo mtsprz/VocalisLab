@@ -4,6 +4,7 @@ import {
   AlertCircle, CheckCircle2, Stethoscope, User, Activity, Volume2, Save
 } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
+import InformeOrlUpload from './InformeOrlUpload';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -555,6 +556,25 @@ export default function AnamnesisModule({ pacienteId }: Props) {
           <span>{error}</span>
         </div>
       )}
+
+      {/* 1b. INFORME ORL (OCR) — antes de los campos, vuelca a Diagnóstico ORL */}
+      <InformeOrlUpload
+        pacienteId={pacienteId}
+        onVolcado={({ diagnostico, metodo, texto }) => {
+          if (diagnostico) setDiagnosticoOrl(diagnostico);
+          if (metodo) setMetodoExploracion(metodo);
+          const bloque = `[Informe ORL]\n${texto}`.trim();
+          const nuevoResumen = resumenClinico
+            ? `${resumenClinico}\n\n${bloque}`
+            : bloque;
+          setResumenClinico(nuevoResumen);
+          guardarContextoClinico({
+            diagnostico_orl: diagnostico || diagnosticoOrl,
+            metodo_exploracion: metodo || metodoExploracion,
+            resumen_clinico: nuevoResumen,
+          });
+        }}
+      />
 
       {/* 2. CAMPOS CLÍNICOS GUIADOS PRINCIPALES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

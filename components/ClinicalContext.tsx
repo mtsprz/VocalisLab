@@ -201,12 +201,13 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
         markStep('pacientes');
       }
     } catch {}
+    let anamnesisBase: any = null;
     try {
       const ra = await fetch(`${BACKEND_URL}/api/anamnesis?paciente_id=${pacienteId}`);
       if (ra.ok) {
         const a = await ra.json();
         if (a && a.id) {
-          setAnamnesis({
+          anamnesisBase = {
             motivo_consulta: a.motivo_consulta || '',
             diagnostico_orl: a.diagnostico_orl || '',
             metodo_exploracion: a.metodo_exploracion || '',
@@ -214,8 +215,31 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
             factores_riesgo: a.factores_riesgo || {},
             resumen_clinico: a.resumen_clinico || '',
             transcripcion: a.transcripcion_audio || '',
-          });
+          };
+          setAnamnesis(anamnesisBase);
           markStep('anamnesis');
+        }
+      }
+    } catch {}
+    try {
+      // Informes ORL: si la anamnesis no trae diagnóstico, usar el último validado
+      const ri = await fetch(`${BACKEND_URL}/api/informes-orl?paciente_id=${pacienteId}&limit=5`);
+      if (ri.ok) {
+        const informes = await ri.json();
+        const val = Array.isArray(informes)
+          ? informes.find((x: any) => x.estado === 'validado' && x.diagnostico_principal)
+            || informes.find((x: any) => x.diagnostico_principal)
+          : null;
+        if (val) {
+          const base = anamnesisBase || {};
+          const metodoBase = base.metodo_exploracion || '';
+          setAnamnesis({
+            ...base,
+            diagnostico_orl: base.diagnostico_orl || val.diagnostico_principal || '',
+            metodo_exploracion: (metodoBase && metodoBase !== 'Nasal')
+              ? metodoBase
+              : (val.metodo_exploracion || metodoBase),
+          });
         }
       }
     } catch {}

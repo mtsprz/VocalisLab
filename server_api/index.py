@@ -22,6 +22,7 @@ from google_auth import router as google_auth_router
 from google_calendar import router as google_calendar_router
 from ai_clinical import router as ai_clinical_router
 from externo_ocr import router as externo_ocr_router
+from informes_orl_ocr import router as informes_orl_router
 from teleconsulta_zoom import router as teleconsulta_zoom_router
 from whatsapp_cloud import router as whatsapp_cloud_router
 from gmail_api import router as gmail_api_router
@@ -366,6 +367,7 @@ app.include_router(google_auth_router)
 app.include_router(google_calendar_router)
 app.include_router(ai_clinical_router)
 app.include_router(externo_ocr_router)
+app.include_router(informes_orl_router)
 app.include_router(teleconsulta_zoom_router)
 app.include_router(whatsapp_cloud_router)
 app.include_router(gmail_api_router)
