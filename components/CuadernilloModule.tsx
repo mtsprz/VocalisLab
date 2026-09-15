@@ -34,7 +34,16 @@ interface Preset {
   exercise_ids: string[];
   sesiones_recomendadas: number;
   frecuencia: string;
+  categoria?: string;
 }
+
+const CATEGORIA_LABELS: Record<string, string> = {
+  funcionales: 'Patologías funcionales',
+  organicas: 'Patologías orgánicas',
+  congenitas: 'Patologías congénitas',
+  minimas_estructurales: 'Alteraciones mínimas estructurales',
+  mantenimiento: 'Mantenimiento y prevención',
+};
 
 const DEFAULT_PRESETS: Preset[] = [
   {
