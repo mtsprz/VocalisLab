@@ -15,9 +15,11 @@ from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
+# Modelos con visión vigentes en Groq (Llama 4 dados de baja en 2026).
+# Se puede sobrescribir con GROQ_VISION_MODEL="m1,m2".
 VISION_MODELS = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "qwen/qwen3.6-27b",
+    "qwen/qwen3.8-27b",
 ]
 
 EXTRACTION_PROMPT = """Sos un extractor de informes otorrinolaringológicos. Analizá este informe

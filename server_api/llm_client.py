@@ -6,13 +6,13 @@ sobrescribir con la variable de entorno GROQ_MODEL (lista separada por comas).
 """
 import os
 
+# Modelos vigentes en Groq a Sep-2026 (llama-3.1, llama-4 y qwen3-32b
+# fueron dados de baja; reemplazos oficiales de Groq).
 DEFAULT_GROQ_MODELS = [
-    "llama-3.1-8b-instant",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "meta-llama/llama-4-maverick-17b-128e-instruct",
-    "moonshotai/kimi-k2-instruct",
-    "qwen/qwen3-32b",
     "openai/gpt-oss-20b",
+    "moonshotai/kimi-k2-instruct",
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-120b",
 ]
 
 
