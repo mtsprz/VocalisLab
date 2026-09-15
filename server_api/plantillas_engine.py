@@ -236,11 +236,12 @@ class HTMLTemplateEngine:
   <style>
     @page {{ size: A4; margin: 15mm; }}
     body {{ font-family: Helvetica, Arial, sans-serif; color: #1e293b; background: #ffffff; line-height: 1.5; font-size: 13px; }}
-    .header {{ text-align: center; border-bottom: 2px solid #7c4dff; padding-bottom: 12px; margin-bottom: 20px; }}
+    .header {{ text-align: center; border-bottom: 3px solid #1a237e; padding-bottom: 12px; margin-bottom: 6px; }}
     .header h1 {{ color: #1a237e; font-size: 24px; margin: 0; }}
-    .header p {{ color: #64748b; font-size: 12px; margin: 4px 0 0 0; }}
-    .meta-box {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 13px; }}
-    .exercise-card {{ border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #ffffff; page-break-inside: avoid; }}
+    .header .sub {{ color: #7c4dff; font-size: 13px; font-weight: bold; margin: 4px 0 0 0; }}
+    .header p {{ color: #64748b; font-size: 11px; margin: 2px 0 0 0; }}
+    .contract {{ background: #f5f3ff; border-left: 4px solid #7c4dff; padding: 10px 12px; margin: 12px 0 20px 0; font-size: 12px; }}
+    .exercise-card {{ border: 1px solid #cbd5e1; border-left: 5px solid #1a237e; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #ffffff; page-break-inside: avoid; }}
     .card-header {{ border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px; }}
     .ex-number {{ background: #7c4dff; color: #ffffff; width: 24px; height: 24px; border-radius: 50%; font-weight: bold; font-size: 12px; text-align: center; line-height: 24px; float: left; margin-right: 10px; }}
     .card-header h3 {{ margin: 0 0 0 34px; color: #1a237e; font-size: 16px; }}
@@ -254,14 +255,22 @@ class HTMLTemplateEngine:
 </head>
 <body>
   <div class="header">
-    <h1>{variables['cuadernillo_titulo']}</h1>
+    <h1>Consultorio de Voz</h1>
+    <p class="sub">Lic. Matías Pérez — Fonoaudiólogo · M.P. 7276</p>
+    <p>Manual de Entrenamiento y Rehabilitación Vocal · Edición 2026</p>
+    <h1 style="font-size: 19px; margin-top: 8px;">{variables['cuadernillo_titulo']}</h1>
     <p>{variables['profesional_nombre']} — {variables['profesional_matricula']}</p>
   </div>
 
   <div class="meta-box">
-    <strong>Paciente:</strong> {variables['paciente_nombre']} &nbsp;|&nbsp; 
-    <strong>Fecha:</strong> {variables['fecha_creacion']} &nbsp;|&nbsp; 
+    <strong>Paciente:</strong> {variables['paciente_nombre']} &nbsp;|&nbsp;
+    <strong>Fecha:</strong> {variables['fecha_creacion']} &nbsp;|&nbsp;
     <strong>Sesiones recomendadas:</strong> {variables['cantidad_sesiones']}
+  </div>
+
+  <div class="contract">
+    <strong>Contrato terapéutico:</strong> frecuencia {variables['frecuencia_sesiones']} ·
+    sesiones de {variables['duracion_sesion_min']} min. {variables['notas_profesional']}
   </div>
 
   <div class="exercises-container">

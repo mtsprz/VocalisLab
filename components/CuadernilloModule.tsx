@@ -510,6 +510,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         }
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || 'Error exportando plantilla');
+        if (data.pdf_url) {
           window.open(data.pdf_url, '_blank');
           setExportMsg(`PDF generado con ${motorExport === 'canva' ? 'Canva' : 'Figma'}.`);
         } else {
@@ -538,8 +539,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       } else {
         alert(data.error || 'Error generando el PDF del cuadernillo');
       }
-    } catch (e) {
-      alert('Error de conexión generando cuadernillo.');
+    } catch (e: any) {
+      const msg = e?.message || 'Error de conexión generando cuadernillo.';
+      setExportMsg(msg);
+      alert(msg);
     }
     setGenerating(false);
   };

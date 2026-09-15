@@ -1170,6 +1170,44 @@ def _build_contract(styles, contrato):
     return elements
 
 
+def _preguntar_ilustraciones(ejercicios, timeout_por_img: int = 170):
+    """Genera (o recupera de caché/Supabase) las ilustraciones IA de todos los
+    ejercicios EN PARALELO. Devuelve {exercise_id: path_local}. Nunca lanza."""
+    out: dict = {}
+    try:
+        from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
+        if not imagen_ia_habilitada():
+            return out
+    except Exception:
+        return out
+
+    def _una(ex):
+        try:
+            ex = dict(ex or {})
+            eid = str(ex.get("id", "")).strip().lower()
+            if not eid:
+                return None, None
+            p = generar_imagen_ejercicio(ex.get("name", ""), ex.get("description", ""), eid)
+            return eid, p
+        except Exception:
+            return None, None
+
+    try:
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(max_workers=4) as pool:
+            futs = [pool.submit(_una, ex) for ex in (ejercicios or [])]
+            for f in futs:
+                try:
+                    eid, p = f.result(timeout=timeout_por_img)
+                except Exception:
+                    continue
+                if eid and p:
+                    out[eid] = p
+    except Exception:
+        pass
+    return out
+
+
 def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     """Tarjeta pedagógica: encabezado + propósito + curva + pictograma + pasos con casillas."""
     elements = []
@@ -1236,19 +1274,26 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     # ── Visual del ejercicio (directiva 2026, rev. estética) ──────────
     # 1) IA-primero: ilustración mediada (diagrama vectorial clínico, sin
     #    fotorrealismo) encajada en caja fija 1:1 DENTRO de la columna derecha.
-    #    La primera generación tarda y queda persistida en Supabase; las
-    #    siguientes reutilizan el asset (instantáneo).
+    #    Se prefiere la pre-generada en paralelo (clave _ai_pre); si falta, se
+    #    intenta al vuelo una sola vez. Todo fallo → SVG (jamás rompe el PDF).
     # 2) Fallback: SVG pre-aprobado del catálogo (rigor clínico total).
     #    Forzar solo-SVG con IMAGEN_MODO=svg.
     ex_id_vis = str(exercise.get("id", "")).strip().lower()
-    ai_img = None
-    if _modo_imagen() == "ai":
+    ai_img = exercise.get("_ai_pre") or None
+    if not ai_img and _modo_imagen() == "ai":
         try:
             from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
             if imagen_ia_habilitada():
                 ai_img = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
         except Exception:
             ai_img = None
+    try:
+        if ai_img:
+            from imagen_terapeutica import _es_imagen_valida as _img_ok
+            if not _img_ok(ai_img):
+                ai_img = None
+    except Exception:
+        pass
 
     # Maquetación editorial: instrucciones + casillas a la IZQUIERDA,
     # panel gráfico (curva + UNA ilustración) a la DERECHA. Columnas con
@@ -1638,8 +1683,18 @@ def generar_cuadernillo_pdf(
         "Siga los pasos en orden y tilde cada casilla cuando lo complete.",
         styles['CuadBody']))
 
+    # Pre-generación PARALELA de ilustraciones IA (4 hilos): en serie, cada
+    # imagen Cloudflare tarda 60-120 s y el cuadernillo nunca terminaría.
+    # Cada fallo individual → SVG pre-aprobado (el PDF jamás falla global).
+    ilustraciones = _preguntar_ilustraciones(ejercicios)
+
     for idx, ex in enumerate(ejercicios, 1):
         ex = dict(ex or {})
+        # Ilustración pre-generada en paralelo (clave _ai_pre); si falta, la
+        # tarjeta la genera al vuelo o usa el SVG pre-aprobado.
+        _ai = (ilustraciones or {}).get(str(ex.get("id", "")).strip().lower())
+        if _ai:
+            ex["_ai_pre"] = _ai
         story.extend(_build_exercise_card(styles, ex, idx,
                                           seccion_id=str(ex.get("seccion_id", ""))))
 

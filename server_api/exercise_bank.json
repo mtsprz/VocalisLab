@@ -483,6 +483,15 @@
       "frecuencia": "2 veces por semana"
     },
     {
+      "id": "cantante_tvso",
+      "categoria": "funcionales",
+      "name": "Voz Cantada / Singer (SOVTE y rango)",
+      "description": "Cantantes con fatiga o restricción de rango. Foco en tracto semiocluido, glissandos, escalas y calentamiento/enfriamiento.",
+      "exercise_ids": ["rotacion_hombros", "respiracion_abdominal", "tubo_agua", "popote_aire", "vibracion_labial", "glissandos", "escalas_vocalicas", "oclusion_nasal", "humming_m", "calentamiento", "enfriamiento"],
+      "sesiones_recomendadas": 10,
+      "frecuencia": "2 veces por semana"
+    },
+    {
       "id": "nodo_cordial",
       "categoria": "organicas",
       "name": "Nódulos Cordales / Lesiones Exofíticas",
