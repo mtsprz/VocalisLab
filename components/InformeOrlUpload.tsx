@@ -40,7 +40,8 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
   const [texto, setTexto] = useState('');
   const [diagnostico, setDiagnostico] = useState('');
   const [metodo, setMetodo] = useState('');
-  const [hallazgos, setHallazgos] = useState<string[]>([]);
+  const [estructurales, setEstructurales] = useState('');
+  const [funcionales, setFuncionales] = useState('');
   const [confianza, setConfianza] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [archivoNombre, setArchivoNombre] = useState('');
@@ -74,11 +75,12 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
       if (!r.ok || !data.ok) {
         throw new Error(data.error || data.detail || `Error del servidor (${r.status})`);
       }
-      setTexto(data.texto_extraido || '');
+      setTexto(data.texto_transcrito_crudo || data.texto_extraido || '');
       setDiagnostico(data.diagnostico_principal || '');
       setMetodo(data.metodo_exploracion || '');
-      setHallazgos(data.datos_estructurados?.hallazgos || []);
-      setConfianza(data.confianza || '');
+      setEstructurales(data.hallazgos_estructurales || '');
+      setFuncionales(data.hallazgos_funcionales || '');
+      setConfianza(data.confianza_extraccion || data.confianza || '');
       setObservaciones(data.observaciones || '');
       setArchivoNombre(file.name);
       setArchivoMime(file.type);
@@ -106,7 +108,14 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
       fd.append('archivo_nombre', archivoNombre);
       fd.append('mime', archivoMime);
       fd.append('texto_extraido', texto);
-      fd.append('datos_estructurados', JSON.stringify({ hallazgos }));
+      fd.append('texto_transcrito_crudo', texto);
+      fd.append('hallazgos_estructurales', estructurales);
+      fd.append('hallazgos_funcionales', funcionales);
+      fd.append('datos_estructurados', JSON.stringify({
+        texto_transcrito_crudo: texto,
+        hallazgos_estructurales: estructurales,
+        hallazgos_funcionales: funcionales,
+      }));
       fd.append('diagnostico_principal', diagnostico);
       fd.append('metodo_exploracion', metodo);
       fd.append('confianza', confianza || 'media');
@@ -129,7 +138,8 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
       clinical.markStep('anamnesis');
       onVolcado?.({ diagnostico, metodo, texto });
       await cargarHistorial();
-      setTexto(''); setDiagnostico(''); setMetodo(''); setHallazgos([]);
+      setTexto(''); setDiagnostico(''); setMetodo('');
+      setEstructurales(''); setFuncionales('');
       setSaved(true);
       setTimeout(() => setSaved(false), 4000);
     } catch (err: any) {
@@ -234,19 +244,36 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
                 </div>
               </div>
 
-              {hallazgos.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {hallazgos.map((h, i) => (
-                    <span key={i} className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-700 dark:text-indigo-300">
-                      {h}
-                    </span>
-                  ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="p-2.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
+                  <label className="block text-[10px] font-bold text-indigo-700 dark:text-indigo-300 mb-1">
+                    Hallazgos estructurales (anatómicos — editable)
+                  </label>
+                  <textarea
+                    value={estructurales}
+                    onChange={e => setEstructurales(e.target.value)}
+                    rows={3}
+                    placeholder="Ej: pliegues vocales, bordes, mucosa, subglotis…"
+                    className="w-full bg-transparent text-xs text-gray-800 dark:text-gray-100 focus:outline-none resize-y"
+                  />
                 </div>
-              )}
+                <div className="p-2.5 rounded-xl bg-violet-500/5 border border-violet-500/20">
+                  <label className="block text-[10px] font-bold text-violet-700 dark:text-violet-300 mb-1">
+                    Hallazgos funcionales (movilidad — editable)
+                  </label>
+                  <textarea
+                    value={funcionales}
+                    onChange={e => setFuncionales(e.target.value)}
+                    rows={3}
+                    placeholder="Ej: hiperfunción, constricción, hiato, movilidad cordal…"
+                    className="w-full bg-transparent text-xs text-gray-800 dark:text-gray-100 focus:outline-none resize-y"
+                  />
+                </div>
+              </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1">
-                  Texto extraído (revisá y corregí antes de guardar)
+                  Transcripción cruda (revisá y corregí antes de guardar)
                 </label>
                 <textarea
                   value={texto}

@@ -43,6 +43,11 @@ def generar_recomendacion_terapeutica(
     riesgo_grupo = riesgo_vocal.get("grupo", "Grupo 1")
     riesgo_alertas = riesgo_vocal.get("alertas_conductas_3", [])
     subtotales = riesgo_vocal.get("subtotales_dimensiones", {})
+    # Factores prioritarios: ítems con 2 o 3 → ejes del plan terapéutico
+    prioritarios = riesgo_vocal.get("factores_prioritarios", []) or []
+    prioritarios_txt = "; ".join(
+        f"{p.get('label', '')} ({p.get('puntaje', '')})" for p in prioritarios[:12]
+    ) if prioritarios else ""
 
     # Escalas
     grbas = escalas.get("grbas", {})
@@ -107,6 +112,7 @@ DATOS DEL CASO CLÍNICO:
   * Puntaje Total: {riesgo_total}/207 -> {riesgo_grupo}
   * Subtotales: {json.dumps(subtotales, ensure_ascii=False)}
   * Conductas críticas puntuadas con 3 (Mucho/Siempre): {', '.join(riesgo_alertas) if riesgo_alertas else 'Ninguna puntual'}
+  * Factores prioritarios a trabajar en el plan (puntaje 2 o 3): {prioritarios_txt if prioritarios_txt else 'Ninguno'}
 - Evaluación Perceptual y Dinámica:
   * GRBAS: {json.dumps(grbas)}
   * RASATI: {json.dumps(rasati)}
@@ -212,6 +218,8 @@ Genera la recomendación terapéutica precisa.
     ]
     if riesgo_alertas:
         pautas.insert(0, f"Control prioritario de las conductas de riesgo de grado 3: {', '.join(riesgo_alertas[:3])}.")
+    if prioritarios_txt:
+        pautas.insert(0, f"Factores prioritarios del plan (puntaje 2-3): {prioritarios_txt}.")
 
     # Reglas de seguridad del manual (Farías): exofíticas + S/O
     alertas_seguridad = []
