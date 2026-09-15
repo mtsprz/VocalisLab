@@ -72,7 +72,8 @@ def _extract_json(text: str) -> dict:
     return json.loads(text[start:end])
 
 
-def _vision_extract(image_b64: str, mime: str) -> dict:
+def _vision_extract(image_b64: str, mime: str, prompt: str = None,
+                    max_tokens: int = 3000) -> dict:
     from groq import Groq
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
@@ -86,13 +87,13 @@ def _vision_extract(image_b64: str, mime: str) -> dict:
                 messages=[{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": EXTRACTION_PROMPT},
+                        {"type": "text", "text": prompt or EXTRACTION_PROMPT},
                         {"type": "image_url",
                          "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
                     ],
                 }],
                 temperature=0.1,
-                max_tokens=3000,
+                max_tokens=max_tokens,
             )
             return _extract_json(resp.choices[0].message.content or "")
         except Exception as e:
@@ -100,6 +101,66 @@ def _vision_extract(image_b64: str, mime: str) -> dict:
             print(f"[informes_orl] Modelo visión {model} falló: {str(e)[:150]}")
             continue
     raise last_err
+
+
+def _pdf_render_paginas(data: bytes, max_paginas: int = 3, dpi: int = 200) -> list:
+    """Renderiza las primeras páginas de un PDF escaneado a PNG (bytes).
+
+    Permite leer PDFs generados por apps de escaneo del celular, que no
+    traen capa de texto. Requiere pymupdf (sin dependencias del sistema).
+    """
+    try:
+        import pymupdf as fitz
+    except ImportError:
+        try:
+            import fitz
+        except ImportError:
+            raise RuntimeError("Soporte de PDF escaneado no instalado en el servidor")
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception as e:
+        raise RuntimeError(f"No se pudo abrir el PDF: {str(e)[:150]}")
+    if getattr(doc, "needs_pass", False):
+        raise RuntimeError("El PDF está protegido con contraseña")
+    paginas = []
+    for i in range(min(len(doc), max_paginas)):
+        try:
+            pix = doc.load_page(i).get_pixmap(dpi=dpi)
+            paginas.append(pix.tobytes("png"))
+        except Exception as e:
+            print(f"[informes_orl] No se pudo renderizar página {i + 1}: {str(e)[:120]}")
+    doc.close()
+    if not paginas:
+        raise RuntimeError("No se pudieron renderizar las páginas del PDF")
+    return paginas
+
+
+def _fusionar_paginas(parsed_list: list) -> dict:
+    """Fusiona la extracción de N páginas en un único resultado."""
+    textos, hallazgos = [], []
+    out = {"hallazgos": []}
+    confianzas = []
+    for idx, p in enumerate(parsed_list, 1):
+        t = (p.get("texto_extraido") or "").strip()
+        if t:
+            textos.append(f"--- Página {idx} ---\n{t}")
+        for h in p.get("hallazgos") or []:
+            if h and h not in hallazgos:
+                hallazgos.append(h)
+        for k in ("diagnostico_principal", "metodo_exploracion",
+                  "conducta_sugerida_orl", "fecha_informe", "profesional_orl"):
+            if not out.get(k) and p.get(k):
+                out[k] = p[k]
+        if p.get("confianza"):
+            confianzas.append(str(p.get("confianza")).lower())
+    out["texto_extraido"] = "\n\n".join(textos)
+    out["hallazgos"] = hallazgos
+    out["confianza"] = ("baja" if "baja" in confianzas
+                        else "media" if confianzas else "media")
+    obs = [p.get("observaciones") for p in parsed_list if p.get("observaciones")]
+    obs.append(f"PDF escaneado: {len(parsed_list)} página(s) procesadas con visión IA.")
+    out["observaciones"] = " ".join(o for o in obs if o)
+    return out
 
 
 def _pdf_to_text(data: bytes) -> str:
@@ -159,21 +220,28 @@ async def ocr_informe_orl(archivo: UploadFile = File(...)):
     try:
         if es_pdf:
             texto = _pdf_to_text(data)
-            if len(texto.strip()) < 100:
-                return JSONResponse(content={
-                    "ok": False,
-                    "error": "El PDF no contiene texto extraíble (parece escaneado). Subí una foto o captura de pantalla del informe.",
-                })
-            from llm_client import groq_chat
-            prompt = (EXTRACTION_PROMPT
-                      + "\n\nTEXTO DEL INFORME:\n" + texto[:8000])
-            raw, model = groq_chat(
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=3000,
-            )
-            parsed = _extract_json(raw)
-            out = _payload(parsed, "pdf-texto", model, archivo.filename or "")
+            if len(texto.strip()) >= 100:
+                from llm_client import groq_chat
+                prompt = (EXTRACTION_PROMPT
+                          + "\n\nTEXTO DEL INFORME:\n" + texto[:8000])
+                raw, model = groq_chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=3000,
+                )
+                parsed = _extract_json(raw)
+                formato = "pdf-texto"
+            else:
+                # PDF escaneado (típico de apps de escaneo del celular):
+                # renderizar páginas a imagen y leerlas con visión IA.
+                paginas = _pdf_render_paginas(data)
+                parsed_list = []
+                for png in paginas:
+                    parsed_list.append(_vision_extract(
+                        base64.b64encode(png).decode(), "image/png"))
+                parsed = _fusionar_paginas(parsed_list)
+                model = "vision"
+                formato = "pdf-escaneado"
         else:
             mime = "image/jpeg"
             if fname.endswith(".png") or "png" in ctype:
@@ -182,7 +250,10 @@ async def ocr_informe_orl(archivo: UploadFile = File(...)):
                 mime = "image/webp"
             image_b64 = base64.b64encode(data).decode()
             parsed = _vision_extract(image_b64, mime)
-            out = _payload(parsed, "imagen", "vision", archivo.filename or "")
+            model = "vision"
+            formato = "imagen"
+
+        out = _payload(parsed, formato, model, archivo.filename or "")
 
         if not out["texto_extraido"] or len(out["texto_extraido"]) < 20:
             return JSONResponse(content={
