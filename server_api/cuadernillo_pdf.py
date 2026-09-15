@@ -1302,30 +1302,83 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     duration = exercise.get("duration_min", "")
     seg_label = f"{duration} min" if tipo == "sostenido" and duration else ""
 
-    panel_grafico = []
-    if tipo:
-        curva = _curva_melodica(tipo, segundos=seg_label)
-        panel_grafico.extend([
-            curva,
-            Paragraph(f"Su voz debe sonar así:<br/>{_CURVA_TITULO[tipo]}",
-                      styles['CaptionText']),
-        ])
+# ─── ILUSTRACIÓN GRANDE (prioridad: IA pre-generada → IA al vuelo → SVG pre-aprobado) ───
+    ex_id_vis = str(exercise.get("id", "")).strip().lower()
+    ai_img = exercise.get("_ai_pre") or None
+    if not ai_img and _modo_imagen() == "ai":
+        try:
+            from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
+            if imagen_ia_habilitada():
+                ai_img = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
+        except Exception:
+            ai_img = None
+    try:
+        if ai_img:
+            from imagen_terapeutica import _es_imagen_valida as _img_ok
+            if not _img_ok(ai_img):
+                ai_img = None
+    except Exception:
+        pass
+
+    # Ilustración a tamaño grande (85mm de ancho, aspecto preservado)
+    ilustracion_elements = []
     if ai_img:
         try:
-            panel_grafico.append(_imagen_contain(ai_img, box_mm=56))
-            panel_grafico.append(Paragraph("Ilustración de apoyo del ejercicio",
-                                           styles['CaptionText']))
+            ilustracion_elements.append(_imagen_contain(ai_img, box_mm=85))
+            ilustracion_elements.append(Paragraph("Ilustración generada por IA para este ejercicio",
+                                                  styles['CaptionText']))
         except Exception:
             ilust, ilust_cap = _ilustracion(exercise)
-            panel_grafico.append(ilust)
-            panel_grafico.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
+            ilustracion_elements.append(_con_fondo(ilust))
+            ilustracion_elements.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
     else:
         ilust, ilust_cap = _ilustracion(exercise)
-        panel_grafico.append(ilust)
-        panel_grafico.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
+        ilustracion_elements.append(_con_fondo(ilust))
+        ilustracion_elements.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
+
+    # Wrap illustration in a nice bordered box
+    ilustracion_table = Table([[ilustracion_elements]], colWidths=[85 * mm])
+    ilustracion_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1.2, PRIMARY),
+        ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+        ('BACKGROUND', (0, 0), (-1, -1), HexColor("#F8F5FF")),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    elements.append(ilustracion_table)
+    elements.append(Spacer(1, 4 * mm))
+
+    # 5. Curva melódica + Dosis en una fila
+    tipo = _tipo_curva(exercise)
+    duration = exercise.get("duration_min", "")
+    seg_label = f"{duration} min" if tipo == "sostenido" and duration else ""
+
+    curva_y_dosis = []
+    if tipo:
+        curva = _curva_melodica(tipo, segundos=seg_label)
+        curva_y_dosis.append(curva)
+        curva_y_dosis.append(Paragraph(f"Su voz debe sonar así:<br/>{_CURVA_TITULO[tipo]}",
+                                       styles['CaptionText']))
     if duration:
-        panel_grafico.append(Paragraph(
-            f"<b>{duration} min por día</b>", styles['CaptionText']))
+        curva_y_dosis.append(Paragraph(f"<b>⏱  {duration} min por día</b>",
+                                       styles['CaptionText']))
+
+    curva_table = Table([[curva_y_dosis]], colWidths=[158 * mm])
+    curva_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1.2, PRIMARY),
+        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+        ('BACKGROUND', (0, 0), (-1, -1), HexColor("#F8F5FF")),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    elements.append(curva_table)
+    elements.append(Spacer(1, 4 * mm))
 
     # Pasos numerados con casillas grandes para tildar (columna izquierda).
     # Se elimina la numeración propia del banco ("1. ...") porque la tarjeta
@@ -1368,7 +1421,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     if dosis_txt:
         left_cell.append(Paragraph(dosis_txt, styles['CuadBody']))
 
-    card = Table([[left_cell, panel_grafico]], colWidths=[106 * mm, 62 * mm])
+    card = Table([[left_cell, ilustracion_table]], colWidths=[100 * mm, 58 * mm])
     card.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 2),
