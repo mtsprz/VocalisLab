@@ -92,7 +92,7 @@ const RIESGO_VOCAL_2026 = {
       items: [
         { key: "E1", label: "1. ¿Se expone a cambios bruscos de temperatura?", desc: "0=Nada, nunca · 1=Poco, a veces · 2=Bastante, a menudo · 3=Mucho, siempre" },
         { key: "E2", label: "2. ¿Duerme poco?", desc: "0=Nada, nunca · 1=Poco, a veces · 2=Bastante, a menudo · 3=Mucho, siempre" },
-        { key: "E3", label: "3. ¿Ingiere poca agua? (3 litros diarios para profesional de la voz)", desc: "0=Nada, nunca · 1=Poco, a veces · 2=Bastante, a menudo · 3=Mucho, siempre" },
+        { key: "E3", label: "3. ¿Ingiere poca agua? (Considerando que la cantidad necesaria para un profesional de la voz es de 3 litros diarios)", desc: "0=Nada, nunca · 1=Poco, a veces · 2=Bastante, a menudo · 3=Mucho, siempre" },
         { key: "E4", label: "4. ¿Ingiere alimentos picantes?", desc: "0=Nada, nunca · 1=Poco, a veces · 2=Bastante, a menudo · 3=Mucho, siempre" },
         { key: "E5", label: "5. ¿Bebe café o té en exceso?", desc: "0=Nada, nunca · 1=Poco, a veces · 2=Bastante, a menudo · 3=Mucho, siempre" },
         { key: "E6", label: "6. ¿Ingiere bebidas heladas o muy calientes?", desc: "0=Nada, nunca · 1=Poco, a veces · 2=Bastante, a menudo · 3=Mucho, siempre" },
@@ -277,7 +277,7 @@ export default function EscalasModule({ pacienteId }: Props) {
     clinical.setRiesgoVocal({
       puntaje_total: riesgoTotal,
       puntaje_maximo: 207,
-      grupo: riesgoTotal <= 60 ? 'Grupo 1 (Bajo Riesgo)' : riesgoTotal <= 90 ? 'Grupo 2 (Riesgo Moderado)' : 'Grupo 3 (Alto Riesgo)',
+      grupo: riesgoTotal <= 69 ? 'Grupo 1 (Bajo Riesgo)' : riesgoTotal <= 138 ? 'Grupo 2 (Riesgo Moderado)' : 'Grupo 3 (Alto Riesgo)',
       subtotales_dimensiones: subtotales,
       alertas_conductas_3: alertas3,
       factores_prioritarios: prioritarios,
@@ -302,13 +302,13 @@ export default function EscalasModule({ pacienteId }: Props) {
   };
 
   const getRiesgoVocalInterpretation = (total: number) => {
-    if (total <= 60) {
+    if (total <= 69) {
       return {
         label: 'Grupo 1 (Mínimo)',
         color: 'text-green-700 bg-green-50 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-900',
         diagnostico: "Riesgo vocal mínimo. Conoce y respeta los límites de su sistema fonatorio. Si presenta alteración, probablemente sea de origen orgánico e independiente del uso vocal."
       };
-    } else if (total <= 90) {
+    } else if (total <= 138) {
       return {
         label: 'Grupo 2 (Elevado)',
         color: 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900',
