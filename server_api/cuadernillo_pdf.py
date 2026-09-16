@@ -19,7 +19,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, HRFlowable, KeepTogether
+    PageBreak, HRFlowable, CondPageBreak
 )
 from reportlab.graphics.shapes import Drawing, Line, String, PolyLine, Circle, Rect, Polygon
 
@@ -954,8 +954,8 @@ def _get_styles():
          alignment=TA_JUSTIFY, leading=17, spaceAfter=2 * mm)
     _add('PropositoText', parent=styles['Normal'], fontSize=13, textColor=PRIMARY,
          alignment=TA_LEFT, leading=17, spaceAfter=2 * mm)
-    _add('StepText', parent=styles['Normal'], fontSize=16, textColor=DARK_TEXT,
-         leading=21, spaceAfter=2 * mm)
+    _add('StepText', parent=styles['Normal'], fontSize=12, textColor=DARK_TEXT,
+         leading=15, spaceAfter=1 * mm)
     _add('CaptionText', parent=styles['Normal'], fontSize=10, textColor=GRAY_TEXT,
          alignment=TA_CENTER, leading=12)
     _add('GridText', parent=styles['Normal'], fontSize=8, textColor=DARK_TEXT,
@@ -1216,9 +1216,14 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         seccion_id, "Para entrenar y cuidar su voz todos los días.")
     icono = _ICONO_SECCION.get(seccion_id, "V")
 
+    # Si quedan < 70 mm en la página, el ejercicio arranca en la siguiente:
+    # evita encabezados huérfanos al pie. El resto fluye partido entre filas
+    # (nunca a mitad de renglón) en vez de forzar saltos con blancos.
+    elements.append(CondPageBreak(70 * mm))
+
     # Encabezado de tarjeta: ícono + título + propósito
     header_data = [[
-        Paragraph(f"<font size=22 color='#ffffff'><b>{icono}</b></font>",
+        Paragraph(f"<font size=18 color='#ffffff'><b>{icono}</b></font>",
                   ParagraphStyle('IconCell', parent=styles['Normal'],
                                  alignment=TA_CENTER, textColor=white)),
         [
@@ -1227,18 +1232,18 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
                       styles['PropositoText']),
         ],
     ]]
-    header_table = Table(header_data, colWidths=[18 * mm, 140 * mm])
+    header_table = Table(header_data, colWidths=[16 * mm, 142 * mm])
     header_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, 0), SECONDARY),
         ('ROUNDEDCORNERS', [4, 4, 4, 4]),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 3),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 2 * mm))
+    elements.append(Spacer(1, 1 * mm))
 
     # Badge de Nivel de Instrucción + efecto clínico (diferenciador)
     ex_id = str(exercise.get("id", "")).strip().lower()
@@ -1256,26 +1261,24 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         ('BACKGROUND', (0, 0), (0, 0), PRIMARY),
         ('ROUNDEDCORNERS', [3, 3, 3, 3]),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     elements.append(badge)
     elements.append(Paragraph(
         f"<i>{escape(_NIVEL_DESC.get(nivel, ''))}</i>", styles['CaptionText']))
-    elements.append(Spacer(1, 2 * mm))
+    elements.append(Spacer(1, 1 * mm))
 
     if desc:
         elements.append(Paragraph(escape(desc), styles['CuadBody']))
 
-    # ── Visual del ejercicio (directiva 2026, rev. estética) ──────────
-    # 1) IA-primero: ilustración mediada (diagrama vectorial clínico, sin
-    #    fotorrealismo) encajada en caja fija 1:1 DENTRO de la columna derecha.
-    #    Se prefiere la pre-generada en paralelo (clave _ai_pre); si falta, se
-    #    intenta al vuelo una sola vez. Todo fallo → SVG (jamás rompe el PDF).
-    # 2) Fallback: SVG pre-aprobado del catálogo (rigor clínico total).
-    #    Forzar solo-SVG con IMAGEN_MODO=svg.
+    # ── Columna derecha: UNA ilustración + UNA curva, tamaño columna ──
+    # En modo 'svg' (default) siempre el diagrama vectorial pre-aprobado
+    # (~53 mm de ancho natural: entra justo en la columna de 56 mm).
+    # En modo 'ai' opt-in: IA encajada a 50 mm con fallback SVG.
+    # Sin bloques full-width duplicados ni desbordes de columna.
     ex_id_vis = str(exercise.get("id", "")).strip().lower()
     ai_img = exercise.get("_ai_pre") or None
     if not ai_img and _modo_imagen() == "ai":
@@ -1293,90 +1296,26 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     except Exception:
         pass
 
-    # Maquetación editorial: instrucciones + casillas a la IZQUIERDA,
-    # panel gráfico (curva + UNA ilustración) a la DERECHA. Columnas con
-    # anchos estrictos para que jamás se solapen (área útil 178 mm).
-    tipo = _tipo_curva(exercise)
-    duration = exercise.get("duration_min", "")
-    seg_label = f"{duration} min" if tipo == "sostenido" and duration else ""
-
-# ─── ILUSTRACIÓN GRANDE (prioridad: IA pre-generada → IA al vuelo → SVG pre-aprobado) ───
-    ex_id_vis = str(exercise.get("id", "")).strip().lower()
-    ai_img = exercise.get("_ai_pre") or None
-    if not ai_img and _modo_imagen() == "ai":
-        try:
-            from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
-            if imagen_ia_habilitada():
-                ai_img = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
-        except Exception:
-            ai_img = None
-    try:
-        if ai_img:
-            from imagen_terapeutica import _es_imagen_valida as _img_ok
-            if not _img_ok(ai_img):
-                ai_img = None
-    except Exception:
-        pass
-
-    # Ilustración a tamaño grande (85mm de ancho, aspecto preservado)
-    ilustracion_elements = []
+    ilust_flow = []
     if ai_img:
         try:
-            ilustracion_elements.append(_imagen_contain(ai_img, box_mm=85))
-            ilustracion_elements.append(Paragraph("Ilustración generada por IA para este ejercicio",
-                                                  styles['CaptionText']))
+            ilust_flow.append(_imagen_contain(ai_img, box_mm=50))
+            ilust_flow.append(Paragraph("Ilustración de apoyo", styles['CaptionText']))
         except Exception:
-            ilust, ilust_cap = _ilustracion(exercise)
-            ilustracion_elements.append(_con_fondo(ilust))
-            ilustracion_elements.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
-    else:
+            ai_img = None
+    if not ai_img:
         ilust, ilust_cap = _ilustracion(exercise)
-        ilustracion_elements.append(_con_fondo(ilust))
-        ilustracion_elements.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
+        ilust_flow.append(_con_fondo(ilust))
+        ilust_flow.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
 
-    # Wrap illustration in a nice bordered box
-    ilustracion_table = Table([[ilustracion_elements]], colWidths=[85 * mm])
-    ilustracion_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1.2, PRIMARY),
-        ('ROUNDEDCORNERS', [6, 6, 6, 6]),
-        ('BACKGROUND', (0, 0), (-1, -1), HexColor("#F8F5FF")),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    elements.append(ilustracion_table)
-    elements.append(Spacer(1, 4 * mm))
-
-    # 5. Curva melódica + Dosis en una fila
     tipo = _tipo_curva(exercise)
     duration = exercise.get("duration_min", "")
     seg_label = f"{duration} min" if tipo == "sostenido" and duration else ""
-
-    curva_y_dosis = []
     if tipo:
-        curva = _curva_melodica(tipo, segundos=seg_label)
-        curva_y_dosis.append(curva)
-        curva_y_dosis.append(Paragraph(f"Su voz debe sonar así:<br/>{_CURVA_TITULO[tipo]}",
-                                       styles['CaptionText']))
-    if duration:
-        curva_y_dosis.append(Paragraph(f"<b>⏱  {duration} min por día</b>",
-                                       styles['CaptionText']))
-
-    curva_table = Table([[curva_y_dosis]], colWidths=[158 * mm])
-    curva_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1.2, PRIMARY),
-        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
-        ('BACKGROUND', (0, 0), (-1, -1), HexColor("#F8F5FF")),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    elements.append(curva_table)
-    elements.append(Spacer(1, 4 * mm))
+        ilust_flow.append(Spacer(1, 2 * mm))
+        ilust_flow.append(_curva_melodica(tipo, segundos=seg_label))
+        ilust_flow.append(Paragraph(f"Su voz debe sonar así:<br/>{_CURVA_TITULO[tipo]}",
+                                    styles['CaptionText']))
 
     # Pasos numerados con casillas grandes para tildar (columna izquierda).
     # Se elimina la numeración propia del banco ("1. ...") porque la tarjeta
@@ -1391,11 +1330,11 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
                 _checkbox(),
                 Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText']),
             ])
-        pasos_tabla = Table(rows, colWidths=[10 * mm, 90 * mm])
+        pasos_tabla = Table(rows, colWidths=[10 * mm, 86 * mm])
         pasos_tabla.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             ('LINEBELOW', (0, 0), (-1, -2), 0.4, LIGHT_GRAY),
             ('LEFTPADDING', (0, 0), (-1, -1), 1),
             ('RIGHTPADDING', (0, 0), (-1, -1), 1),
@@ -1419,15 +1358,17 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     if dosis_txt:
         left_cell.append(Paragraph(dosis_txt, styles['CuadBody']))
 
-    card = Table([[left_cell, ilustracion_table]], colWidths=[100 * mm, 58 * mm])
+    # Tarjeta 2 columnas estrictas (izq: pasos | der: dibujo + curva).
+    # Sin KeepTogether: el flujo natural parte la tarjeta solo si excede
+    # la página, evitando saltos gigantes y páginas casi vacías.
+    card = Table([[left_cell, ilust_flow]], colWidths=[102 * mm, 56 * mm])
     card.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('BOX', (0, 0), (-1, -1), 0.6, LIGHT_GRAY),
-        ('LINEBELOW', (0, 0), (-1, 0), 0, white),
         ('BACKGROUND', (1, 0), (1, 0), FONDO_SUAVE),
     ]))
     elements.append(card)
@@ -1450,9 +1391,9 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
                 ])))
 
-    elements.append(Spacer(1, 4 * mm))
-    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
-    elements.append(Spacer(1, 4 * mm))
+    elements.append(Spacer(1, 2 * mm))
+    elements.append(HRFlowable(width="100%", color=LIGHT_GRAY, thickness=0.5))
+    elements.append(Spacer(1, 3 * mm))
     return elements
 
 
@@ -1742,11 +1683,6 @@ def generar_cuadernillo_pdf(
     else:
         ilustraciones = {}
 
-    # Altura útil de página (A4 menos márgenes): las tarjetas que excedan
-    # se dejan fluir partidas en vez de romper el layout con KeepTogether.
-    alto_util = A4[1] - (18 + 25) * mm
-    ancho_util = A4[0] - (16 + 16) * mm
-
     for idx, ex in enumerate(ejercicios, 1):
         ex = dict(ex or {})
         # Ilustración pre-generada en paralelo (clave _ai_pre); si falta, la
@@ -1754,25 +1690,16 @@ def generar_cuadernillo_pdf(
         _ai = (ilustraciones or {}).get(str(ex.get("id", "")).strip().lower())
         if _ai:
             ex["_ai_pre"] = _ai
-        tarjeta = _build_exercise_card(styles, ex, idx,
-                                       seccion_id=str(ex.get("seccion_id", "")))
-        # 1 ejercicio = 1 contenedor no separable (si entra en la página).
-        # Si excede la altura útil, se deja fluir partida (evita LayoutError).
-        bloque = KeepTogether(tarjeta)
-        try:
-            _, alto = bloque.wrap(ancho_util, alto_util)
-            if alto <= alto_util:
-                story.append(bloque)
-            else:
-                story.extend(tarjeta)
-        except Exception:
-            story.extend(tarjeta)
+        story.extend(_build_exercise_card(styles, ex, idx,
+                                          seccion_id=str(ex.get("seccion_id", ""))))
 
+    # Hojas de seguimiento: fluyen juntas y compactas (sin saltos forzados
+    # entre grillas: weekly + TME + autoevaluación comparten las hojas finales).
     story.append(PageBreak())
     story.extend(_build_weekly_grid(styles))
-    story.append(PageBreak())
+    story.append(Spacer(1, 4 * mm))
     story.extend(_build_tme_log(styles))
-    story.append(PageBreak())
+    story.append(Spacer(1, 4 * mm))
     story.extend(_build_self_assessment(styles))
 
     # Sección 13 — Bibliografía Académica Oficial (APA)

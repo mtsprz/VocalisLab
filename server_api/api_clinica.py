@@ -763,10 +763,10 @@ async def variables_plantilla_cuadernillo(request: Request):
 @router.post("/api/cuadernillo/exportar-plantilla")
 async def exportar_plantilla_cuadernillo(request: Request):
     """Exporta el cuadernillo usando el motor especificado en 'motor':
-    - 'canva': Dispara Autofill en Canva Connect API
     - 'figma': Exporta frame vectorial de Figma
     - 'html_headless': Devuelve HTML/CSS vectorial ultra-rápido para impresión
-    - 'reportlab_vector' (default): Motor vectorial interno de 19 páginas
+    - 'reportlab_vector' (default): Motor vectorial interno
+    (Motor 'canva': discontinuado — responde 410.)
     """
     try:
         body = await request.json()
@@ -784,7 +784,6 @@ async def exportar_plantilla_cuadernillo(request: Request):
 
     from plantillas_engine import (
         extraer_variables_cuadernillo,
-        CanvaConnectEngine,
         FigmaRESTEngine,
         HTMLTemplateEngine,
     )
@@ -800,23 +799,7 @@ async def exportar_plantilla_cuadernillo(request: Request):
     )
 
     if motor == "canva":
-        canva = CanvaConnectEngine()
-        if not canva.esta_configurado():
-            raise HTTPException(status_code=400, detail="Canva no configurado: faltan CANVA_CLIENT_ID, CANVA_CLIENT_SECRET o CANVA_TEMPLATE_ID en el servidor (Render → Environment).")
-        try:
-            from canva_auth import get_valid_access_token
-            get_valid_access_token()
-        except Exception as e:
-            from canva_auth import redirect_uri
-            raise HTTPException(status_code=401, detail={
-                "message": f"Canva no conectado vía OAuth: {e}",
-                "auth_url_endpoint": "/api/canva/auth/url",
-                "redirect_uri": redirect_uri(),
-            })
-        pdf_url = await canva.generar_cuadernillo_autofill(vars_dict)
-        if not pdf_url:
-            raise HTTPException(status_code=502, detail="Error o timeout al generar PDF en Canva Connect API (revisá el log del servidor y que el brand template tenga autofill).")
-        return JSONResponse(content={"ok": True, "motor": "canva", "pdf_url": pdf_url})
+        raise HTTPException(status_code=410, detail="Motor Canva discontinuado: exige cuenta Enterprise y rompía el flujo. Usá 'reportlab_vector' (vector interno) o 'html_pdf' (PDF editorial).")
 
     elif motor == "figma":
         figma = FigmaRESTEngine()

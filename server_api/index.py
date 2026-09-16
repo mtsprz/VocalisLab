@@ -26,7 +26,6 @@ from informes_orl_ocr import router as informes_orl_router
 from teleconsulta_zoom import router as teleconsulta_zoom_router
 from whatsapp_cloud import router as whatsapp_cloud_router
 from gmail_api import router as gmail_api_router
-from canva_auth import router as canva_auth_router
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "vocal_pathology_db.json")
 
@@ -372,7 +371,6 @@ app.include_router(informes_orl_router)
 app.include_router(teleconsulta_zoom_router)
 app.include_router(whatsapp_cloud_router)
 app.include_router(gmail_api_router)
-app.include_router(canva_auth_router)
 
 
 @app.get("/api/health")
