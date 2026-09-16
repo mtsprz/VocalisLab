@@ -87,72 +87,129 @@ def extraer_variables_cuadernillo(
 # ─── 1. Cliente Canva Connect API (Autofill) ──────────────────────────
 
 class CanvaConnectEngine:
-    """Conector con la API oficial de Canva Connect (Autofill API).
-    Completa automáticamente una plantilla máster prediseñada en Canva.
+    """Conector con la API oficial de Canva Connect (Autofill + Export).
+
+    Auth: OAuth 2.0 con PKCE — el access token del usuario se obtiene en
+    /api/canva/auth/url y se guarda en Supabase (canva_tokens). Aquí solo
+    se usa el token vigente (con refresh automático).
+
+    Flujo: POST /rest/v1/autofills → poll → design_id →
+           POST /rest/v1/exports {format pdf} → poll → urls[0].
     """
     def __init__(self):
-        self.api_key = os.environ.get("CANVA_API_KEY", "").strip()
         self.template_id = os.environ.get("CANVA_TEMPLATE_ID", "").strip()
-        self.base_url = "https://api.canva.com/v1"
+        self.base_url = "https://api.canva.com/rest/v1"
 
     def esta_configurado(self) -> bool:
-        return bool(self.api_key and self.template_id)
+        """Credenciales OAuth + template presentes en el servidor."""
+        from canva_auth import credenciales_presentes
+        return bool(credenciales_presentes() and self.template_id)
+
+    def _headers(self, token: str) -> dict:
+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    async def _poll_job(self, client, path: str, token: str,
+                        intentos: int = 24, espera: float = 5.0) -> Optional[dict]:
+        import asyncio
+        for _ in range(intentos):
+            await asyncio.sleep(espera)
+            try:
+                poll = await client.get(f"{self.base_url}{path}",
+                                        headers=self._headers(token), timeout=20.0)
+            except Exception as e:
+                print(f"[plantillas_engine] Poll Canva {path}: {e}")
+                continue
+            if poll.status_code != 200:
+                print(f"[plantillas_engine] Poll Canva {path} {poll.status_code}: {poll.text[:200]}")
+                continue
+            job = (poll.json().get("job") or {})
+            status = job.get("status")
+            if status == "success":
+                return job
+            if status == "failed":
+                print(f"[plantillas_engine] Job Canva fallido {path}: {str(job.get('error'))[:300]}")
+                return None
+        print(f"[plantillas_engine] Timeout esperando job Canva {path}")
+        return None
+
+    def _texto(self, v: Any) -> dict:
+        return {"type": "text", "text": str(v or "")[:10000]}
 
     async def generar_cuadernillo_autofill(self, variables: Dict[str, Any]) -> Optional[str]:
-        """Envía el payload de variables a Canva y devuelve la URL del PDF vectorial."""
+        """Autofill del brand template + exportación a PDF. Devuelve la URL del PDF."""
         if not self.esta_configurado():
-            print("[plantillas_engine] Canva Connect no configurado (falta CANVA_API_KEY / CANVA_TEMPLATE_ID)")
+            print("[plantillas_engine] Canva: faltan CANVA_CLIENT_ID/SECRET o CANVA_TEMPLATE_ID")
             return None
-            
+        try:
+            from canva_auth import get_valid_access_token
+            token = get_valid_access_token()
+        except Exception as e:
+            print(f"[plantillas_engine] Canva sin token OAuth: {e}")
+            return None
+
         try:
             async with httpx.AsyncClient() as client:
-                # 1. Solicitar Autofill Job
+                # 1. Autofill job desde el brand template
+                data_fields = {
+                    "paciente_nombre": self._texto(variables.get("paciente_nombre")),
+                    "cuadernillo_titulo": self._texto(variables.get("cuadernillo_titulo")),
+                    "profesional_nombre": self._texto(variables.get("profesional_nombre")),
+                    "profesional_matricula": self._texto(variables.get("profesional_matricula")),
+                    "profesional_contacto": self._texto(variables.get("profesional_contacto")),
+                    "fecha_creacion": self._texto(variables.get("fecha_creacion")),
+                    "cantidad_sesiones": self._texto(variables.get("cantidad_sesiones")),
+                    "notas_profesional": self._texto(variables.get("notas_profesional")),
+                    "vhi10_score": self._texto(variables.get("vhi10_score")),
+                    "riesgo_total_score": self._texto(variables.get("riesgo_total_score")),
+                }
                 res = await client.post(
-                    f"{self.base_url}/autofill",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
-                    },
+                    f"{self.base_url}/autofills",
+                    headers=self._headers(token),
                     json={
                         "brand_template_id": self.template_id,
-                        "title": f"Cuadernillo_{variables['paciente_nombre']}",
-                        "data": {
-                            "paciente_nombre": {"type": "text", "text": variables["paciente_nombre"]},
-                            "cuadernillo_titulo": {"type": "text", "text": variables["cuadernillo_titulo"]},
-                            "profesional_nombre": {"type": "text", "text": variables["profesional_nombre"]},
-                            "profesional_matricula": {"type": "text", "text": variables["profesional_matricula"]},
-                            "notas_profesional": {"type": "text", "text": variables["notas_profesional"]},
-                        }
+                        "title": f"Cuadernillo_{variables.get('paciente_nombre', 'Paciente')}"[:255],
+                        "data": data_fields,
                     },
-                    timeout=30.0
+                    timeout=30.0,
                 )
                 if res.status_code not in (200, 201, 202):
-                    print(f"[plantillas_engine] Error Canva Autofill {res.status_code}: {res.text[:200]}")
+                    print(f"[plantillas_engine] Error Canva Autofill {res.status_code}: {res.text[:300]}")
                     return None
-                    
-                data = res.json()
-                job_id = (data.get("job") or {}).get("id") or data.get("id")
+                job_id = (res.json().get("job") or {}).get("id")
                 if not job_id:
                     return None
-                    
-                # 2. Polling del estado de exportación a PDF
-                for _ in range(10):
-                    import asyncio
-                    await asyncio.sleep(2)
-                    poll = await client.get(
-                        f"{self.base_url}/autofill/{job_id}",
-                        headers={"Authorization": f"Bearer {self.api_key}"},
-                        timeout=15.0
-                    )
-                    if poll.status_code == 200:
-                        p_data = poll.json()
-                        status = (p_data.get("job") or {}).get("status")
-                        if status == "success":
-                            pdf_url = ((p_data.get("job") or {}).get("result") or {}).get("pdf_url")
-                            return pdf_url
-            return None
+
+                # 2. Esperar el diseño autofilled
+                job = await self._poll_job(client, f"/autofills/{job_id}", token)
+                if not job:
+                    return None
+                designs = ((job.get("result") or {}).get("designs") or [])
+                if not designs or not designs[0].get("id"):
+                    print(f"[plantillas_engine] Autofill sin designs: {str(job)[:300]}")
+                    return None
+                design_id = designs[0]["id"]
+
+                # 3. Exportar el diseño a PDF
+                exp = await client.post(
+                    f"{self.base_url}/exports",
+                    headers=self._headers(token),
+                    json={"design_id": design_id, "format": {"type": "pdf"}},
+                    timeout=30.0,
+                )
+                if exp.status_code not in (200, 201, 202):
+                    print(f"[plantillas_engine] Error Canva Export {exp.status_code}: {exp.text[:300]}")
+                    return None
+                exp_id = (exp.json().get("job") or {}).get("id")
+                if not exp_id:
+                    return None
+                exp_job = await self._poll_job(client, f"/exports/{exp_id}", token)
+                if not exp_job:
+                    return None
+                urls = ((exp_job.get("result") or {}).get("urls") or [])
+                return urls[0] if urls else None
         except Exception as e:
             print(f"[plantillas_engine] Excepción en Canva Engine: {e}")
+            traceback.print_exc()
             return None
 
 
@@ -234,7 +291,9 @@ class HTMLTemplateEngine:
   <meta charset="UTF-8">
   <title>{variables['cuadernillo_titulo']}</title>
   <style>
-    @page {{ size: A4; margin: 15mm; }}
+    @page {{ size: A4; margin: 15mm 15mm 24mm 15mm;
+      @bottom-center {{ content: "{variables['firma_institucional']} · Página " counter(page) " de " counter(pages);
+        font-size: 9px; color: #94a3b8; font-family: Helvetica, Arial, sans-serif; }} }}
     body {{ font-family: Helvetica, Arial, sans-serif; color: #1e293b; background: #ffffff; line-height: 1.5; font-size: 13px; }}
     .header {{ text-align: center; border-bottom: 3px solid #1a237e; padding-bottom: 12px; margin-bottom: 6px; }}
     .header h1 {{ color: #1a237e; font-size: 24px; margin: 0; }}
@@ -277,9 +336,9 @@ class HTMLTemplateEngine:
     {ejercicios_html}
   </div>
 
-  <div class="footer">
-    {variables['firma_institucional']} · Uso exclusivo en terapia fonoaudiológica supervisada.
-  </div>
+  <p style="font-size: 10px; color: #94a3b8; margin-top: 24px;">
+    Uso exclusivo en terapia fonoaudiológica supervisada.
+  </p>
 </body>
 </html>"""
         return html_doc

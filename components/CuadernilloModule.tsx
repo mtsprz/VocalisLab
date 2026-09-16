@@ -321,6 +321,31 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [pdfUrl, setPdfUrl] = useState('');
   const [motorExport, setMotorExport] = useState<'reportlab_vector' | 'html_pdf' | 'canva' | 'figma'>('reportlab_vector');
   const [exportMsg, setExportMsg] = useState('');
+  const [canvaConectado, setCanvaConectado] = useState<boolean | null>(null);
+
+  const checkCanvaStatus = async () => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/canva/status`);
+      const d = await r.json().catch(() => ({}));
+      setCanvaConectado(r.ok ? !!d.conectado : false);
+    } catch {
+      setCanvaConectado(false);
+    }
+  };
+
+  const conectarCanva = async () => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/canva/auth/url`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || 'Canva no configurado en el servidor');
+      if (d.url) {
+        window.open(d.url, '_blank', 'width=600,height=700');
+        setExportMsg('Autorizá en Canva y volvé: el estado se actualiza solo.');
+      }
+    } catch (e: any) {
+      setExportMsg(e.message || 'No se pudo iniciar la conexión con Canva');
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailBody, setEmailBody] = useState('');
@@ -518,7 +543,16 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
           return;
         }
         const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || 'Error exportando plantilla');
+        if (r.status === 401 && data?.detail && typeof data.detail === 'object') {
+          // Canva sin OAuth: abrir autorización y avisar
+          try {
+            const ra = await fetch(`${BACKEND_URL}/api/canva/auth/url`);
+            const da = await ra.json().catch(() => ({}));
+            if (da.url) window.open(da.url, '_blank', 'width=600,height=700');
+          } catch {}
+          throw new Error('Canva no conectado: autorizá en la ventana emergente y reintentá.');
+        }
+        if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Error exportando plantilla');
         if (data.pdf_url) {
           window.open(data.pdf_url, '_blank');
           setExportMsg(`PDF generado con ${motorExport === 'canva' ? 'Canva' : 'Figma'}.`);
@@ -680,7 +714,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             ] as const).map((m) => (
               <button
                 key={m.id}
-                onClick={() => { setMotorExport(m.id); setPdfUrl(''); setExportMsg(''); }}
+                onClick={() => { setMotorExport(m.id); setPdfUrl(''); setExportMsg(''); if (m.id === 'canva') checkCanvaStatus(); }}
                 className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
                   motorExport === m.id
                     ? 'bg-indigo-600 text-white shadow'
@@ -689,7 +723,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                 title={
                   m.id === 'reportlab_vector' ? 'PDF vectorial de 19 páginas (motor interno)' :
                   m.id === 'html_pdf' ? 'PDF editorial automático open-source (WeasyPrint, sin cuotas)' :
-                  m.id === 'canva' ? 'Autofill en plantilla Canva (requiere CANVA_API_KEY)' :
+                  m.id === 'canva' ? 'Autofill en plantilla Canva (requiere conectar vía OAuth)' :
                   'Exportar frame Figma a PDF (requiere FIGMA_ACCESS_TOKEN)'
                 }
               >
@@ -697,6 +731,21 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
               </button>
             ))}
           </div>
+          {motorExport === 'canva' && (
+            <div className="flex items-center justify-end gap-2">
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                canvaConectado ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+              }`}>
+                {canvaConectado ? '● Canva conectado' : canvaConectado === false ? '○ Canva no conectado' : '… verificando'}
+              </span>
+              <button
+                onClick={conectarCanva}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/10 text-white hover:bg-white/20 transition-all"
+              >
+                Conectar Canva
+              </button>
+            </div>
+          )}
           {exportMsg && (
             <p className="text-[10px] text-emerald-300 text-right">{exportMsg}</p>
           )}

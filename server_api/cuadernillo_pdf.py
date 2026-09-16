@@ -19,7 +19,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, HRFlowable
+    PageBreak, HRFlowable, KeepTogether
 )
 from reportlab.graphics.shapes import Drawing, Line, String, PolyLine, Circle, Rect, Polygon
 
@@ -797,15 +797,13 @@ def tiene_svg_preaprobado(ex_id: str) -> bool:
 
 
 def _modo_imagen() -> str:
-    """Modo visual del cuadernillo: 'ai' (default, IA-primero con fallback
-    SVG) o 'svg' (solo assets pre-aprobados). Env IMAGEN_MODO; por compat
-    legacy IMAGEN_PREFERIR_SVG=1 fuerza 'svg'."""
+    """Modo visual del cuadernillo: 'svg' (default, solo diagramas
+    vectoriales pre-aprobados, cero artefactos de IA) o 'ai' (IA-primero
+    con fallback SVG, opt-in explícito). Env IMAGEN_MODO."""
     m = os.environ.get("IMAGEN_MODO", "").strip().lower()
     if m in ("svg", "ai"):
         return m
-    if os.environ.get("IMAGEN_PREFERIR_SVG", "").strip() in ("1", "true", "True"):
-        return "svg"
-    return "ai"
+    return "svg"
 
 
 def _preferir_svg() -> bool:
@@ -1736,20 +1734,39 @@ def generar_cuadernillo_pdf(
         "Siga los pasos en orden y tilde cada casilla cuando lo complete.",
         styles['CuadBody']))
 
-    # Pre-generación PARALELA de ilustraciones IA (4 hilos): en serie, cada
-    # imagen Cloudflare tarda 60-120 s y el cuadernillo nunca terminaría.
-    # Cada fallo individual → SVG pre-aprobado (el PDF jamás falla global).
-    ilustraciones = _preguntar_ilustraciones(ejercicios)
+    # Pre-generación PARALELA de ilustraciones IA (4 hilos): SOLO en modo
+    # 'ai' explícito. En modo 'svg' (default) se omite por completo: cero
+    # llamadas a la IA, cero artefactos, PDF rápido y determinista.
+    if _modo_imagen() == "ai":
+        ilustraciones = _preguntar_ilustraciones(ejercicios)
+    else:
+        ilustraciones = {}
+
+    # Altura útil de página (A4 menos márgenes): las tarjetas que excedan
+    # se dejan fluir partidas en vez de romper el layout con KeepTogether.
+    alto_util = A4[1] - (18 + 25) * mm
+    ancho_util = A4[0] - (16 + 16) * mm
 
     for idx, ex in enumerate(ejercicios, 1):
         ex = dict(ex or {})
         # Ilustración pre-generada en paralelo (clave _ai_pre); si falta, la
-        # tarjeta la genera al vuelo o usa el SVG pre-aprobado.
+        # tarjeta la genera al vuelo (solo modo 'ai') o usa el SVG pre-aprobado.
         _ai = (ilustraciones or {}).get(str(ex.get("id", "")).strip().lower())
         if _ai:
             ex["_ai_pre"] = _ai
-        story.extend(_build_exercise_card(styles, ex, idx,
-                                          seccion_id=str(ex.get("seccion_id", ""))))
+        tarjeta = _build_exercise_card(styles, ex, idx,
+                                       seccion_id=str(ex.get("seccion_id", "")))
+        # 1 ejercicio = 1 contenedor no separable (si entra en la página).
+        # Si excede la altura útil, se deja fluir partida (evita LayoutError).
+        bloque = KeepTogether(tarjeta)
+        try:
+            _, alto = bloque.wrap(ancho_util, alto_util)
+            if alto <= alto_util:
+                story.append(bloque)
+            else:
+                story.extend(tarjeta)
+        except Exception:
+            story.extend(tarjeta)
 
     story.append(PageBreak())
     story.extend(_build_weekly_grid(styles))

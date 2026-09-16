@@ -802,10 +802,20 @@ async def exportar_plantilla_cuadernillo(request: Request):
     if motor == "canva":
         canva = CanvaConnectEngine()
         if not canva.esta_configurado():
-            raise HTTPException(status_code=400, detail="Canva Connect no configurado: faltan CANVA_API_KEY y CANVA_TEMPLATE_ID en servidor")
+            raise HTTPException(status_code=400, detail="Canva no configurado: faltan CANVA_CLIENT_ID, CANVA_CLIENT_SECRET o CANVA_TEMPLATE_ID en el servidor (Render → Environment).")
+        try:
+            from canva_auth import get_valid_access_token
+            get_valid_access_token()
+        except Exception as e:
+            from canva_auth import redirect_uri
+            raise HTTPException(status_code=401, detail={
+                "message": f"Canva no conectado vía OAuth: {e}",
+                "auth_url_endpoint": "/api/canva/auth/url",
+                "redirect_uri": redirect_uri(),
+            })
         pdf_url = await canva.generar_cuadernillo_autofill(vars_dict)
         if not pdf_url:
-            raise HTTPException(status_code=502, detail="Error o timeout al generar PDF en Canva Connect API")
+            raise HTTPException(status_code=502, detail="Error o timeout al generar PDF en Canva Connect API (revisá el log del servidor y que el brand template tenga autofill).")
         return JSONResponse(content={"ok": True, "motor": "canva", "pdf_url": pdf_url})
 
     elif motor == "figma":
