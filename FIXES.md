@@ -8,6 +8,33 @@ página, problema, fix. Un fix que rompe un test anterior = regresión.
   cuadernillo.css, svg/ ×13, validators.py), `tests/`, `fixtures/` ×3.
 - Motor único WeasyPrint. ReportLab congelado (no se toca).
 
+## 2026-09-17 — Ronda 1: revisión visual fixture_a (11 págs, §9)
+- p1 Portada: B1 ✓ (4 campos reales), sin footer ✓.
+- p2 Contrato+leyenda+tarjeta 1: C1 ✓ (2 firmas), D1 ✓ (4 líneas),
+  E1–E6 ✓ (número+código únicos, dosis, para_que, checkbox CSS, 1 chip
+  de nivel, ilustración de familia + caption).
+- p3–p7 tarjetas 2–12: E1–E6 ✓ en todas; E7 ✓ (STOP solo en 7.3
+  "Stop si siento mareo").
+- p8 Horario: thead presente, 16 filas 07–22 ✓ F1/F2.
+- p9 TME Lun–Dom + nota de referencia ✓.
+- p10 VHI-10: chip "33 pts (2026-09-16)" + 10 ítems + tabla de puntajes +
+  nota 4–6 semanas ✓ F3; oraciones prellenadas ✓ F4.
+- p11 Biblio 2 columnas + cierre G1 ✓.
+- Global: A1 ✓ (footer + "Página X de 11" en p2–p11), A2 ✓ (sin solapes),
+  A3 ✓ (tarjetas/tablas íntegras), A5 ✓ (sin placeholders), G2 ✓ (11 ≤ 14).
+- A4 grises: paleta usa forma + etiquetas además de color (diseño apto).
+- Sin violaciones → sin diff en esta ronda.
+
+## Nota de entorno local (render)
+- Windows + MSYS2 (Pango 1.58.2 / HarfBuzz 14.4.0, snapshot 2026):
+  Access Violation en `hb_face_reference` al dibujar texto (todas las
+  fuentes, incluso Arial). ldd limpio: es deriva ABI upstream, no dirt local.
+- Consecuencia: t1–t5/t9/t10 (requieren PDF) NO corren en esta PC;
+  t6/t7/t8 verdes local. El loop visual y pytest completo corren en
+  Docker/CI (Render ya trae Pango Debian estable).
+- Mitigaciones aplicadas sin éxito: GSETTINGS_BACKEND=memory,
+  caché fontconfig construida, WeasyPrint 66, stack consistente.
+
 ## Lint de catálogo (t7 — §8.6)
 - El lint `validators.lint_catalog` corre sobre `exercise_bank.json` y
   REPORTA sin reescribir (§8.6, §2.3).
