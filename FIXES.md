@@ -29,11 +29,16 @@ página, problema, fix. Un fix que rompe un test anterior = regresión.
 - Windows + MSYS2 (Pango 1.58.2 / HarfBuzz 14.4.0, snapshot 2026):
   Access Violation en `hb_face_reference` al dibujar texto (todas las
   fuentes, incluso Arial). ldd limpio: es deriva ABI upstream, no dirt local.
-- Consecuencia: t1–t5/t9/t10 (requieren PDF) NO corren en esta PC;
-  t6/t7/t8 verdes local. El loop visual y pytest completo corren en
-  Docker/CI (Render ya trae Pango Debian estable).
-- Mitigaciones aplicadas sin éxito: GSETTINGS_BACKEND=memory,
-  caché fontconfig construida, WeasyPrint 66, stack consistente.
+- Consecuencia original: t1–t5/t9/t10 (requieren PDF) NO corren en esta PC.
+- **FIX APLICADO (2026-09-17):** GTK3 portable 2022 (`C:\Users\Administrador\gtk3-portable\$_63_\`) + FONTCONFIG_PATH
+  apuntando a `C:\Users\Administrador\.fonts-vl\` con `fonts.conf` que escanea
+  `%LOCALAPPDATA%\Microsoft\Windows\Fonts` (DejaVuSans instalado a nivel usuario).
+  Resultado: t1–t10 verdes, PDF + PNG renderizan correctamente en Windows.
+- Variables de entorno necesarias para render local:
+  `$env:PATH = 'C:\Users\Administrador\gtk3-portable\$_63_;' + $env:PATH`
+  `$env:GSETTINGS_BACKEND = 'memory'`
+  `$env:FONTCONFIG_PATH = 'C:\Users\Administrador\.fonts-vl'`
+- Docker/CI no necesita estos fixes (Pango Debian estable).
 
 ## Lint de catálogo (t7 — §8.6)
 - El lint `validators.lint_catalog` corre sobre `exercise_bank.json` y
