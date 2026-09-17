@@ -40,6 +40,33 @@ página, problema, fix. Un fix que rompe un test anterior = regresión.
   `$env:FONTCONFIG_PATH = 'C:\Users\Administrador\.fonts-vl'`
 - Docker/CI no necesita estos fixes (Pango Debian estable).
 
+## 2026-09-17 — Ronda 2: fix fontconfig + re-render con DejaVu
+- **Fix:** GTK3 portable 2022 + FONTCONFIG_PATH a `~/.fonts-vl/` con
+  `fonts.conf` apuntando a `%LOCALAPPDATA%\Microsoft\Windows\Fonts`
+  (DejaVuSans instalado a nivel usuario). fc-cache -f en msys2_shell.
+- **Resultado:** t1–t10 verdes, PDF + PNG renderizan correctamente en Windows.
+- **Páginas tras fix:**
+  - fixture_a: 12 págs (antes 11) — 12 ejercicios
+  - fixture_b: 15 págs (antes 14) — 20 ejercicios
+  - fixture_c: 8 págs (antes 7) — 4 ejercicios
+- **Revisión visual fixture_b (15 págs):**
+  - p1 Portada: sin footer ✓, "Consultorio de Voz" ✓, datos paciente ✓
+  - p2 Contrato + tarjeta 1: 2 columnas ✓, SVG ✓, firmas ✓
+  - p10 (densa, 3 ejercicios): 18 pasos total, cabe sin overflow ✓
+  - p12 Horario: tabla 16 filas ✓
+  - p13 TME: 7 días + referencia ✓
+  - p14 VHI-10 + oraciones: 10 ítems + tabla + 6 oraciones prellenadas ✓
+  - p15 Bibliografía: 2 columnas + cierre ✓
+  - Footer: "Lic. Matías Pérez · Fonoaudiólogo · M.P. 7276" en todas ✓
+  - Sin "VocalisLab" en ningún lado ✓
+  - DejaVu Sans renderiza correctamente ✓
+- **Revisión visual fixture_c (8 págs):**
+  - p1 Portada: "Plan breve de inicio", 6 sesiones ✓
+  - p4: Último ejercicio (12.3 RLF) ✓
+  - p7: VHI-10 + oraciones vacías ✓
+  - p8: Bibliografía + cierre ✓
+- **Sin violaciones encontradas.**
+
 ## Lint de catálogo (t7 — §8.6)
 - El lint `validators.lint_catalog` corre sobre `exercise_bank.json` y
   REPORTA sin reescribir (§8.6, §2.3).
