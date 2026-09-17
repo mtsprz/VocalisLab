@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
+  <line x1="28" y1="118" x2="212" y2="118" stroke="#E5E7EB" stroke-width="1.5"/>
+  <circle cx="70" cy="104" r="9" fill="none" stroke="#5B4BC4" stroke-width="2.5"/>
+  <circle cx="120" cy="76" r="9" fill="none" stroke="#5B4BC4" stroke-width="2.5"/>
+  <circle cx="170" cy="48" r="9" fill="none" stroke="#5B4BC4" stroke-width="2.5"/>
+  <line x1="70" y1="104" x2="120" y2="76" stroke="#10B981" stroke-width="2.5"/>
+  <line x1="120" y1="76" x2="170" y2="48" stroke="#10B981" stroke-width="2.5"/>
+  <text x="120" y="144" font-size="12" text-anchor="middle" fill="#1E1B4B">Do Mi Sol</text>
+</svg>

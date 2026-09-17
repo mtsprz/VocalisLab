@@ -1,0 +1,97 @@
+{
+  "paciente": {
+    "nombre": "Ana López",
+    "iniciales": "AL",
+    "edad": 28,
+    "ocupacion": "Estudiante"
+  },
+  "profesional": {
+    "nombre": "Lic. Matías Pérez",
+    "matricula": "M.P. 7276",
+    "contacto": "+54 9 341 555-0134"
+  },
+  "prescripcion": {
+    "titulo": "Plan breve de inicio",
+    "fecha_inicio": "2026-09-16",
+    "sesiones": 6,
+    "frecuencia": "1 vez por semana",
+    "duracion_sesion_min": 30
+  },
+  "ejercicios": [
+    {
+      "codigo": "9.1",
+      "nombre": "Respiración abdominal",
+      "familia": "respiracion",
+      "para_que": "Aprendo a usar bien el aire al hablar, sin quedarme sin aire.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 5,
+      "micro_leyenda": "La panza sube y baja",
+      "consignas": [
+        "Me acuesto boca arriba con las rodillas dobladas, una mano en mi panza y otra en mi pecho.",
+        "Inspiro por mi nariz 4 segundos: solo sube mi mano de la panza.",
+        "Hago una pausa de 2 segundos sin cerrar mi garganta.",
+        "Exhalo por mi boca con labios fruncidos 6 segundos: mi panza baja lento.",
+        "Descanso 2 segundos. Repito 10 ciclos. Después lo pruebo sentado y de pie."
+      ]
+    },
+    {
+      "codigo": "10.1",
+      "nombre": "Glissandos ascendentes y descendentes (sobre /m/ o /u/)",
+      "familia": "tonal",
+      "ilustracion": "sirena.svg",
+      "para_que": "Flexibilizo mis cuerdas vocales sin saltos ni quiebres.",
+      "nota_tecnica": "TVSO: tracto vocal semiocluido.",
+      "nivel": 2,
+      "nivel_nombre": "Ajuste TVSO",
+      "dosis_min": 5,
+      "micro_leyenda": "Subo y bajo suave",
+      "consignas": [
+        "Parto de un tono grave cómodo y deslizo hacia el agudo y vuelvo. Repito 5 veces.",
+        "Parto de un tono medio y deslizo hacia el grave manteniendo la calidad. Repito 5 veces.",
+        "Subo y bajo en movimiento continuo, como una sirena. Repito 5 veces."
+      ]
+    },
+    {
+      "codigo": "12.1",
+      "nombre": "Rutina de calentamiento vocal",
+      "familia": "rutina",
+      "para_que": "Preparo mi voz antes de usarla (clase, jornada).",
+      "nivel": 3,
+      "nivel_nombre": "Modulación",
+      "dosis_min": 10,
+      "micro_leyenda": "Preparo antes de usar",
+      "consignas": [
+        "Muevo mi cuerpo: roto hombros y cuello 1 minuto.",
+        "Respiro costo-abdominal en reposo 1 minuto.",
+        "Bostezo con descenso laríngeo 30 segundos, 3 veces.",
+        "Hago /m/ sostenida con vocales U-I-E-O-A, 2 minutos.",
+        "Hago glissandos ascendentes y descendentes 2 minutos.",
+        "Canto la escala de 3ra en tono cómodo 1 minuto.",
+        "Leo salmodiando 2 versos 1 minuto.",
+        "Leo expresivo 2 oraciones 1 minuto.",
+        "Bebo medio vaso de agua a temperatura ambiente 15 minutos antes."
+      ]
+    },
+    {
+      "codigo": "12.3",
+      "nombre": "Pautas antirreflujo laringofaríngeo (RLF)",
+      "familia": "higiene",
+      "para_que": "Protejo mis cuerdas del ácido.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 3,
+      "micro_leyenda": "Ceno temprano, duermo alto",
+      "consignas": [
+        "No me acuesto antes de 2 horas y media después de cenar.",
+        "Elevo la cabecera de mi cama de 10 a 15 cm.",
+        "Disminuyo café, mate muy caliente, alcohol y grasas o picantes.",
+        "Tomo agua a temperatura ambiente en sorbos, todo el día."
+      ]
+    }
+  ],
+  "anexos": {
+    "tme_referencia": "Hombres sanos 20–35 s · Mujeres sanas 15–25 s",
+    "frases": []
+  }
+}

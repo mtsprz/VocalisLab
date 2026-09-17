@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Cuadernillo terapéutico vocal — {{ paciente.nombre }}</title>
+  <style>{% include "cuadernillo.css" %}</style>
+</head>
+<body>
+
+<!-- 1. Portada -->
+<section class="portada">
+  <div class="marca">
+    <div class="consultorio">Consultorio de Voz</div>
+    <div class="doc-titulo">Cuadernillo terapéutico vocal</div>
+    <div class="subtitulo">{{ prescripcion.titulo }}</div>
+  </div>
+  <table class="datos-portada">
+    <tr><td>Paciente</td><td>{{ paciente.nombre }}</td></tr>
+    <tr><td>Fecha de inicio</td><td>{{ prescripcion.fecha_inicio }}</td></tr>
+    <tr><td>Sesiones</td><td>{{ prescripcion.sesiones }}</td></tr>
+    <tr><td>Profesional</td><td>{{ profesional.nombre }} · {{ profesional.matricula }}</td></tr>
+  </table>
+</section>
+
+<!-- 2. Contrato terapéutico -->
+<section class="section-newpage">
+  <h1 class="seccion">Contrato terapéutico</h1>
+  <div class="contract">
+    <p><strong>Frecuencia:</strong> {{ prescripcion.frecuencia }} · <strong>Duración de cada sesión:</strong> {{ prescripcion.duracion_sesion_min }} min.</p>
+    <p><strong>Pautas de asistencia:</strong> Avisar con 24 horas si no puedo venir. Traer este cuadernillo a cada sesión.</p>
+    <p>Me comprometo a practicar todos los días un rato corto, sin forzar mi voz. Si algo duele o molesta, lo freno y lo consulto en la próxima sesión.</p>
+    <div class="firma">
+      <span class="linea"></span>
+      <span class="etiqueta">Firma del profesional: {{ profesional.nombre }}</span>
+    </div>
+    <div class="firma">
+      <span class="linea"></span>
+      <span class="etiqueta">Firma del paciente — Aclaración:</span>
+    </div>
+  </div>
+
+  <!-- 3. Cómo usar + leyenda -->
+  <h1 class="seccion">Cómo usar este cuadernillo</h1>
+  <ul class="leyenda">
+    <li><strong>Niveles 1 a 4:</strong> 1 Concienciación · 2 Ajuste TVSO · 3 Modulación · 4 Transferencia. Cada ejercicio indica su nivel.</li>
+    <li><strong>Dosis:</strong> el chip "X min/día" indica cuántos minutos practicar ese ejercicio por día.</li>
+    <li><strong>Casillas:</strong> marco la casilla de cada consigna cuando la completo.</li>
+    <li><strong>Dibujo:</strong> el dibujo de la derecha muestra cómo se hace; el texto corto debajo lo resume.</li>
+  </ul>
+</section>
+
+<!-- 4. Ejercicios -->
+<section>
+  <h1 class="seccion">Mis ejercicios</h1>
+  {% for ex in ejercicios %}
+  <div class="card">
+    <div class="card-header">
+      <table class="card-headtable"><tr>
+        <td><span class="card-num">{{ ex.n }}</span><span class="card-codigo">{{ ex.codigo }}</span><h2 class="ejercicio" style="display:inline">{{ ex.nombre }}</h2></td>
+        <td class="dosis-cell"><span class="card-dosis">{{ ex.dosis_min }} min/día</span></td>
+      </tr></table>
+      <span class="card-nivel">Nivel {{ ex.nivel }} · {{ ex.nivel_nombre }}</span>
+    </div>
+    <p class="card-paraque"><strong>¿Para qué sirve?</strong> {{ ex.para_que }}</p>
+    {% if ex.nota_tecnica %}<p class="card-nota">{{ ex.nota_tecnica }}</p>{% endif %}
+    <table class="card-cols"><tr>
+      <td class="card-consignas">
+        {% for c in ex.consignas %}
+        <p class="consigna"><span class="checkbox"></span>{{ c }}</p>
+        {% endfor %}
+      </td>
+      <td class="card-ilust">
+        {% if ex.svg %}{{ ex.svg | safe }}
+        {% if ex.familia == 'tonal' %}<p class="micro"><strong>Su voz debe sonar así:</strong></p>{% endif %}
+        <p class="caption">{{ ex.caption }}</p>
+        {% if ex.micro_leyenda %}<p class="micro">{{ ex.micro_leyenda }}</p>{% endif %}
+        {% elif ex.tabla_registro %}
+        <table class="anexo mini-registro">
+          <thead><tr><th>Día</th><th>¿Cómo sonó?</th></tr></thead>
+          <tbody>
+            <tr><td>Lun</td><td class="mano"></td></tr>
+            <tr><td>Mar</td><td class="mano"></td></tr>
+            <tr><td>Mié</td><td class="mano"></td></tr>
+            <tr><td>Jue</td><td class="mano"></td></tr>
+            <tr><td>Vie</td><td class="mano"></td></tr>
+          </tbody>
+        </table>
+        <p class="caption">Mi registro semanal</p>
+        {% if ex.micro_leyenda %}<p class="micro">{{ ex.micro_leyenda }}</p>{% endif %}
+        {% endif %}
+      </td>
+    </tr></table>
+    {% if ex.precaucion %}<p class="stop">⚠ {{ ex.precaucion }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<!-- 5. Horario semanal -->
+<section class="section-newpage">
+  <h1 class="seccion">Mi horario semanal</h1>
+  <div class="table-block">
+  <table class="anexo">
+    <thead><tr><th>Hora</th><th>Lunes</th><th>Martes</th><th>Miércoles</th><th>Jueves</th><th>Viernes</th></tr></thead>
+    <tbody>
+      {% for h in horario_horas %}
+      <tr><td>{{ h }}</td><td class="mano"></td><td class="mano"></td><td class="mano"></td><td class="mano"></td><td class="mano"></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="nota">Marco con una X dos turnos por día para hacer mis ejercicios.</p>
+</section>
+
+<!-- 6. Registro TME -->
+<section class="section-newpage">
+  <h1 class="seccion">Registro TME /s/</h1>
+  <div class="table-block">
+  <table class="anexo">
+    <thead><tr><th>Día</th><th>1ª</th><th>2ª</th><th>3ª</th><th>Mejor valor</th><th>Observaciones</th></tr></thead>
+    <tbody>
+      {% for d in dias_semana %}
+      <tr><td>{{ d }}</td><td class="mano"></td><td class="mano"></td><td class="mano"></td><td class="mano"></td><td class="mano"></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="nota">{{ anexos.tme_referencia }}</p>
+</section>
+
+<!-- 7. VHI-10 -->
+<section class="section-newpage">
+  <h1 class="seccion">VHI-10 · Cómo siento mi voz</h1>
+  {% if anexos.vhi10_previo %}
+  <p><span class="chip">Último registro: {{ anexos.vhi10_previo.puntaje }} pts ({{ anexos.vhi10_previo.fecha }})</span></p>
+  {% endif %}
+  <div class="table-block">
+  <table class="anexo">
+    <thead><tr><th>Nº</th><th>Enunciado</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead>
+    <tbody>
+      {% for item in vhi_items %}
+      <tr><td>{{ loop.index }}</td><td>{{ item }}</td>
+        <td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="nota">0 Nunca · 1 Casi nunca · 2 A veces · 3 Casi siempre · 4 Siempre.</p>
+  <table class="anexo">
+    <thead><tr><th>Puntaje</th><th>Interpretación</th></tr></thead>
+    <tbody>
+      {% for r in vhi_interp %}
+      <tr><td>{{ r.rango }}</td><td>{{ r.texto }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="nota">Repetir cada 4 a 6 semanas para comparar la evolución.</p>
+</section>
+
+<!-- 8. Oraciones -->
+<section>
+  <h1 class="seccion">Oraciones de uso frecuente</h1>
+  {% if not oraciones or oraciones|length == 0 %}
+  <p class="nota">Completo mis 8 oraciones de todos los días con la situación donde las uso.</p>
+  {% endif %}
+  <div class="table-block">
+  <table class="anexo">
+    <thead><tr><th>Nº</th><th>Oración</th><th>Cuándo la uso</th></tr></thead>
+    <tbody>
+      {% for o in oraciones %}
+      <tr><td>{{ loop.index }}</td><td{% if not o.texto %} class="mano"{% endif %}>{{ o.texto }}</td><td{% if not o.contexto %} class="mano"{% endif %}>{{ o.contexto }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- 9. Bibliografía -->
+<section class="section-newpage">
+  <h1 class="seccion">Bibliografía</h1>
+  <div class="biblio">
+    {% for ref in biblio %}
+    <p>{{ ref }}</p>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- 10. Cierre -->
+<section>
+  <div class="cierre">
+    <strong>Uso exclusivo terapéutico.</strong> Este cuadernillo fue preparado para uso supervisado en terapia fonoaudiológica. Si siente dolor o molestia, suspenda los ejercicios y consulte a su profesional.
+  </div>
+</section>
+
+</body>
+</html>

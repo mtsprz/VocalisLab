@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
+  <circle cx="120" cy="82" r="46" fill="none" stroke="#5B4BC4" stroke-width="2.5"/>
+  <polygon points="120,22 112,36 128,36" fill="#10B981"/>
+  <polygon points="120,142 112,128 128,128" fill="#10B981"/>
+  <text x="120" y="18" font-size="12" text-anchor="middle" fill="#1E1B4B">Entra</text>
+  <text x="120" y="156" font-size="12" text-anchor="middle" fill="#1E1B4B">Sale</text>
+  <text x="182" y="86" font-size="12" text-anchor="middle" fill="#1E1B4B">Pausa</text>
+</svg>

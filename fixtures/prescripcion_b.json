@@ -1,0 +1,381 @@
+{
+  "paciente": {
+    "nombre": "Juan Pérez",
+    "iniciales": "JP",
+    "edad": 45,
+    "ocupacion": "Vendedor"
+  },
+  "profesional": {
+    "nombre": "Lic. Matías Pérez",
+    "matricula": "M.P. 7276",
+    "contacto": "+54 9 341 555-0134"
+  },
+  "prescripcion": {
+    "titulo": "Reeducación intensiva",
+    "fecha_inicio": "2026-09-16",
+    "sesiones": 14,
+    "frecuencia": "2 a 3 veces por semana",
+    "duracion_sesion_min": 30
+  },
+  "ejercicios": [
+    {
+      "codigo": "7.1",
+      "nombre": "Disociación muscular por segmentos",
+      "familia": "postural",
+      "para_que": "Separo la tensión de mis hombros y cuello del trabajo de mi voz.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 5,
+      "micro_leyenda": "Aire lento, hombros sueltos",
+      "consignas": [
+        "Inspiro por la boca con /f/, aire lento y continuo de 4 a 6 segundos. Siento frío en mi paladar.",
+        "Espero el aire con /sh/, flujo estable de 6 a 8 segundos. Siento calor en mi mano a 10 cm.",
+        "Hago una pausa suave de 2 a 3 segundos con mi garganta abierta.",
+        "Relajo 5 segundos recorriendo con mi atención mis hombros, cuello y mandíbula."
+      ]
+    },
+    {
+      "codigo": "7.2",
+      "nombre": "Digitopresión craneofacial (Puntos Shiatsu)",
+      "familia": "masaje",
+      "para_que": "Aflojo mi mandíbula, mis sienes y mi cuello para que mi voz salga sin esfuerzo.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 5,
+      "micro_leyenda": "Presión suave, sin dolor",
+      "consignas": [
+        "Presiono mi coronilla 20 a 30 segundos hasta sentir que baja mi tono general.",
+        "Presiono mis sienes de los dos lados 20 a 30 segundos.",
+        "Presiono mi entrecejo 20 a 30 segundos y suelto el ceño.",
+        "Presiono mi mandíbula (ATM) 20 a 30 segundos.",
+        "Presiono mis maseteros de arriba hacia abajo 30 segundos.",
+        "Presiono alrededor de mi boca 20 a 30 segundos.",
+        "Estiro mi cuello a los costados 30 segundos por lado.",
+        "Presiono suave debajo de mi mentón 30 segundos."
+      ]
+    },
+    {
+      "codigo": "7.3",
+      "nombre": "Movilidad articular escapular y cervical",
+      "familia": "postural",
+      "para_que": "Suelto mis hombros y mi cuello para liberar mi laringe.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 4,
+      "micro_leyenda": "Grande, lento y cómodo",
+      "precaucion": "Stop si siento mareo.",
+      "consignas": [
+        "Roto mis hombros en círculos amplios hacia atrás y adelante, 5 veces por lado.",
+        "Inclino mi cabeza llevando mi oreja al hombro, sin girar, 3 veces por lado.",
+        "Giro mi cabeza a cada lado hasta donde me resulte cómodo, 5 veces por lado.",
+        "Dibujo círculos lentos con mi cabeza, sin llevarla hacia atrás."
+      ]
+    },
+    {
+      "codigo": "8.1",
+      "nombre": "Masaje laríngeo lateral",
+      "familia": "masaje",
+      "ilustracion": "zona_cuello.svg",
+      "para_que": "Ablando los músculos de mi cuello.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 4,
+      "micro_leyenda": "Círculos suaves, sin dolor",
+      "precaucion": "Stop si tengo laringitis aguda.",
+      "consignas": [
+        "Ubico mi índice y mi pulgar sobre los cartílagos de mi laringe.",
+        "Hago círculos suaves 30 segundos en un sentido y 30 en el otro.",
+        "Muevo de derecha a izquierda 10 veces por lado.",
+        "Presiono suave hacia abajo y adelante 3 segundos, 5 veces."
+      ]
+    },
+    {
+      "codigo": "8.2",
+      "nombre": "Descenso activo por bostezo / succión",
+      "familia": "masaje",
+      "ilustracion": "zona_cuello.svg",
+      "para_que": "Abro mi garganta y relajo mi laringe.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 3,
+      "micro_leyenda": "Bostezo y sostengo",
+      "consignas": [
+        "Bostezo lento y amplio inspirando por mi boca.",
+        "Succiono en el punto máximo, como tomando con sorbete.",
+        "Sostengo la posición baja 3 segundos sin hacer sonido.",
+        "Libero lento y descanso 5 segundos."
+      ]
+    },
+    {
+      "codigo": "8.3",
+      "nombre": "Emisión en báscula baja — 'hu hu hu'",
+      "familia": "sovte",
+      "para_que": "Bajo mi laringe y abro mi faringe.",
+      "nivel": 2,
+      "nivel_nombre": "Ajuste TVSO",
+      "dosis_min": 3,
+      "micro_leyenda": "Hu-hu grave y redondo",
+      "consignas": [
+        "Inspiro por mi boca como en un suspiro suave.",
+        "Emito 'hu' grave y cómodo, a volumen medio-bajo.",
+        "Hago una pausa de 1 segundo y repito 3 veces: hu — hu — hu.",
+        "Descanso 5 segundos entre series."
+      ]
+    },
+    {
+      "codigo": "8.4",
+      "nombre": "Ampliación orofaríngea y moldeado vocálico",
+      "familia": "articulacion",
+      "para_que": "Moldeo mis vocales con la laringe baja.",
+      "nivel": 2,
+      "nivel_nombre": "Ajuste TVSO",
+      "dosis_min": 4,
+      "micro_leyenda": "Vocales claras, sin apretar",
+      "precaucion": "Stop si tengo hiperfunción, nódulos o DMT.",
+      "consignas": [
+        "Alterno vocales manteniendo mi timbre, sin resbalar ni perder calidad.",
+        "Alterno O – A lento: diferencio mi resonancia grave y mi apertura.",
+        "Cierro el ciclo O – A – O: controlo pasar de cerrada a abierta y volver.",
+        "Alterno U – I: siento cómo sube y baja mi laringe.",
+        "Vuelvo a mi posición inicial U – I – U.",
+        "Coordino la serie completa O – U – I – E – A.",
+        "Hago el moldeado inverso A – E – I – O – U con control fino."
+      ]
+    },
+    {
+      "codigo": "9.1",
+      "nombre": "Respiración abdominal",
+      "familia": "respiracion",
+      "para_que": "Aprendo a usar bien el aire al hablar, sin quedarme sin aire.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 5,
+      "micro_leyenda": "La panza sube y baja",
+      "consignas": [
+        "Me acuesto boca arriba con las rodillas dobladas, una mano en mi panza y otra en mi pecho.",
+        "Inspiro por mi nariz 4 segundos: solo sube mi mano de la panza.",
+        "Hago una pausa de 2 segundos sin cerrar mi garganta.",
+        "Exhalo por mi boca con labios fruncidos 6 segundos: mi panza baja lento.",
+        "Descanso 2 segundos. Repito 10 ciclos. Después lo pruebo sentado y de pie."
+      ]
+    },
+    {
+      "codigo": "9.2",
+      "nombre": "Expansión costo-lateral con retención (Patrón 4-4-8-2)",
+      "familia": "respiracion",
+      "ilustracion": "franja_tiempos.svg",
+      "para_que": "Junto más aire para hablar sin esfuerzo.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 4,
+      "micro_leyenda": "4 adentro, 4 quieto, 8 afuera",
+      "consignas": [
+        "Coloco mis manos en mis costillas de abajo, a los costados.",
+        "Inspiro 4 segundos por mi nariz: siento cómo se separan mis manos.",
+        "Retengo 4 segundos con mi garganta abierta.",
+        "Exhalo 8 segundos por mi boca con labios fruncidos.",
+        "Descanso 2 segundos. Repito 8 ciclos."
+      ]
+    },
+    {
+      "codigo": "9.3",
+      "nombre": "Respiración costo-abdominal integrada (Patrón 5-2-8 3D)",
+      "familia": "respiracion",
+      "para_que": "Uso todo mi aire, no solo el pecho.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 4,
+      "micro_leyenda": "Aire en 3D",
+      "consignas": [
+        "Me paro erguido, una mano en mi panza y otra en mi cintura.",
+        "Inspiro 5 segundos por mi nariz: siento cómo se expanden panza, costados y espalda.",
+        "Hago una pausa suave de 2 segundos.",
+        "Exhalo 8 segundos con labios fruncidos. Repito 8 ciclos."
+      ]
+    },
+    {
+      "codigo": "9.4",
+      "nombre": "Coordinación Costo-Abdominal Dinámica",
+      "familia": "respiracion",
+      "para_que": "Mantengo la presión de mi aire estable al hablar.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 5,
+      "micro_leyenda": "Flujo parejo, sin forzar",
+      "consignas": [
+        "Hago una inspiración costo-abdominal suave.",
+        "Emito /s/ y /z/ sostenidas.",
+        "Mantengo mi aire parejo sin forzar mi cuello.",
+        "Practico 5 minutos por día."
+      ]
+    },
+    {
+      "codigo": "10.4",
+      "nombre": "Voz salmodiada con versos y refranes",
+      "familia": "articulacion",
+      "para_que": "Junto respiración y laringe baja en frases.",
+      "nivel": 2,
+      "nivel_nombre": "Ajuste TVSO",
+      "dosis_min": 4,
+      "micro_leyenda": "Cantado-hablado parejo",
+      "consignas": [
+        "Repito cada refrán 2 veces con resonancia pareja:",
+        "A buen entendedor, pocas palabras bastan.",
+        "Más vale tarde que nunca.",
+        "El que mucho abarca, poco aprieta.",
+        "A quien madruga, Dios le ayuda.",
+        "No hay mal que por bien no venga.",
+        "Cría cuervos y te sacarán los ojos.",
+        "Más vale pájaro en mano que ciento volando.",
+        "Dime con quién andas y te diré quién eres."
+      ]
+    },
+    {
+      "codigo": "10.5",
+      "nombre": "Corpus de lecturas balanceadas",
+      "familia": "habla",
+      "para_que": "Llevo lo entrenado a mi habla de todos los días.",
+      "nivel": 3,
+      "nivel_nombre": "Modulación",
+      "dosis_min": 4,
+      "micro_leyenda": "Claro y parejo al leer",
+      "consignas": [
+        "Leo en voz alta con articulación clara y buena apertura de mi boca.",
+        "Practico las 20 oraciones del manual.",
+        "Anoto cada día qué leí y cómo sentí mi voz del 0 al 10."
+      ]
+    },
+    {
+      "codigo": "10.6",
+      "nombre": "Oclusión Nasal /m/ Prolongada a Vocales",
+      "familia": "sovte",
+      "para_que": "Cierro mis cuerdas suave, sin golpearlas.",
+      "nivel": 2,
+      "nivel_nombre": "Ajuste TVSO",
+      "dosis_min": 5,
+      "micro_leyenda": "Vibra la máscara",
+      "consignas": [
+        "Hago una /m/ nasal suave y prolongada.",
+        "Abro hacia vocales (m-aaa, m-ooo) sin perder la vibración.",
+        "Siento vibrar mi máscara y mi cuello flojo.",
+        "Repito 3 series de 5 emisiones."
+      ]
+    },
+    {
+      "codigo": "10.7",
+      "nombre": "Glissandos Ascendentes y Descendentes",
+      "familia": "tonal",
+      "ilustracion": "curva_f0_asc.svg",
+      "para_que": "Estiro mis cuerdas con simetría y sin rigidez.",
+      "nivel": 3,
+      "nivel_nombre": "Modulación",
+      "dosis_min": 4,
+      "micro_leyenda": "Sin quiebres",
+      "consignas": [
+        "Arranco en un grave cómodo.",
+        "Deslizo suave al agudo y vuelvo a mi nota inicial, sin cortes.",
+        "Busco suavidad total, sin saltos.",
+        "Hago 10 repeticiones por día."
+      ]
+    },
+    {
+      "codigo": "11.1",
+      "nombre": "Temas sugeridos para práctica de habla",
+      "familia": "habla",
+      "para_que": "Automatizo mi técnica al hablar.",
+      "nivel": 3,
+      "nivel_nombre": "Modulación",
+      "dosis_min": 5,
+      "micro_leyenda": "2 minutos, laringe baja",
+      "consignas": [
+        "Hablo 2 o 3 minutos sobre un tema, en voz alta y con apoyo.",
+        "Me grabo y me escucho después para evaluarme.",
+        "Elijo temas: mi infancia, mi trabajo, una persona importante."
+      ]
+    },
+    {
+      "codigo": "11.2",
+      "nombre": "Oraciones de uso frecuente personalizadas",
+      "familia": "habla",
+      "ilustracion": "tabla_registro",
+      "para_que": "Llevo lo entrenado a mi vida real.",
+      "nivel": 4,
+      "nivel_nombre": "Transferencia",
+      "dosis_min": 6,
+      "micro_leyenda": "Mis frases, mi vida",
+      "consignas": [
+        "Completo mis 8 oraciones con su contexto de uso.",
+        "Practico cada oración con resonancia adelante y apoyo.",
+        "Llevo mi registro semanal de sensaciones de lunes a domingo."
+      ]
+    },
+    {
+      "codigo": "12.1",
+      "nombre": "Rutina de calentamiento vocal",
+      "familia": "rutina",
+      "para_que": "Preparo mi voz antes de usarla (clase, jornada).",
+      "nivel": 3,
+      "nivel_nombre": "Modulación",
+      "dosis_min": 10,
+      "micro_leyenda": "Preparo antes de usar",
+      "consignas": [
+        "Muevo mi cuerpo: roto hombros y cuello 1 minuto.",
+        "Respiro costo-abdominal en reposo 1 minuto.",
+        "Bostezo con descenso laríngeo 30 segundos, 3 veces.",
+        "Hago /m/ sostenida con vocales U-I-E-O-A, 2 minutos.",
+        "Hago glissandos ascendentes y descendentes 2 minutos.",
+        "Canto la escala de 3ra en tono cómodo 1 minuto.",
+        "Leo salmodiando 2 versos 1 minuto.",
+        "Leo expresivo 2 oraciones 1 minuto.",
+        "Bebo medio vaso de agua a temperatura ambiente 15 minutos antes."
+      ]
+    },
+    {
+      "codigo": "12.2",
+      "nombre": "Rutina de enfriamiento vocal",
+      "familia": "rutina",
+      "para_que": "Devuelvo mi voz al reposo después de exigirla.",
+      "nivel": 3,
+      "nivel_nombre": "Modulación",
+      "dosis_min": 10,
+      "micro_leyenda": "Cierro suave, silencio después",
+      "consignas": [
+        "Tomo medio vaso de agua a temperatura ambiente.",
+        "Respiro costo-abdominal suave 2 minutos.",
+        "Me hago masaje laríngeo lateral suave 1 minuto.",
+        "Hago /m/ muy suave con vocales cerradas U, I, 2 minutos.",
+        "Hago glissandos descendentes lentos 2 minutos.",
+        "Leo salmodiando muy suave 1 o 2 versos 1 minuto.",
+        "Hago silencio vocal absoluto 10 minutos.",
+        "Evito carraspear, toser y susurrar; me alejo del humo."
+      ]
+    },
+    {
+      "codigo": "12.3",
+      "nombre": "Pautas antirreflujo laringofaríngeo (RLF)",
+      "familia": "higiene",
+      "para_que": "Protejo mis cuerdas del ácido.",
+      "nivel": 1,
+      "nivel_nombre": "Concienciación",
+      "dosis_min": 3,
+      "micro_leyenda": "Ceno temprano, duermo alto",
+      "consignas": [
+        "No me acuesto antes de 2 horas y media después de cenar.",
+        "Elevo la cabecera de mi cama de 10 a 15 cm.",
+        "Disminuyo café, mate muy caliente, alcohol y grasas o picantes.",
+        "Tomo agua a temperatura ambiente en sorbos, todo el día."
+      ]
+    }
+  ],
+  "anexos": {
+    "tme_referencia": "Hombres sanos 20–35 s · Mujeres sanas 15–25 s",
+    "frases": [
+      {"texto": "¿A cuánto está la oferta de hoy?", "contexto": "Con clientes"},
+      {"texto": "Le tomo el pedido, ¿qué va a llevar?", "contexto": "Atendiendo"},
+      {"texto": "Cierro a las ocho en punto.", "contexto": "Avisos"},
+      {"texto": "¿Me repite su nombre, por favor?", "contexto": "Por teléfono"},
+      {"texto": "Gracias por su compra.", "contexto": "Despedida"},
+      {"texto": "Hablamos mañana a primera hora.", "contexto": "Coordinación"}
+    ]
+  }
+}
