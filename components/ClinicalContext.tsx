@@ -272,6 +272,12 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
           } else if (ev.grbas) {
             markStep('escalas');
           }
+          // Rescate de autopercepción: si la fila de anamnesis no la trae
+          // (backend viejo o migración pendiente), usar la última evaluación
+          // guardada para que el slider no se resetee a vacío.
+          if (ev.autopercepcion_vocal != null) {
+            setAnamnesis({ autopercepcion_voz: ev.autopercepcion_vocal });
+          }
         }
       }
     } catch {}

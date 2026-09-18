@@ -454,6 +454,19 @@ export default function AnamnesisModule({ pacienteId }: Props) {
             const err = await r1.json().catch(() => ({}));
             throw new Error(err.detail || `Anamnesis: error ${r1.status}`);
           }
+          // Verificación de persistencia: si el backend es viejo o falta la
+          // migración, la autopercepción se pierde en silencio. Avisarlo.
+          if (anamnesisObj.autopercepcion_voz != null) {
+            try {
+              const rv = await fetch(`${BACKEND_URL}/api/anamnesis?paciente_id=${pacienteId}`);
+              if (rv.ok) {
+                const got = await rv.json();
+                if (got && got.autopercepcion_voz == null) {
+                  setError('Anamnesis guardada, pero el servidor NO persistió la autopercepción: redeployá el backend (Render) con el último commit y corré supabase/anamnesis_autopercepcion.sql');
+                }
+              }
+            } catch {}
+          }
           const fp = new FormData();
           if (dvh != null) fp.append('demanda_vocal_horas', String(dvh));
           if (ocup) fp.append('ocupacion', ocup);
