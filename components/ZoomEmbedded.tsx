@@ -124,6 +124,21 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, join
           await import('@zoom/meetingsdk/dist/css/bootstrap.css');
           await import('@zoom/meetingsdk/dist/css/react-select.css');
         } catch {}
+        // El reboot de Bootstrap pisa el fondo del body en blanco y "rompe"
+        // el modo noche de la app. Reafirmar nuestros fondos DESPUÉS de que
+        // cargue su CSS (gana por orden de cascada). Singleton por sesión.
+        try {
+          if (!document.getElementById('zoom-bootstrap-compensation')) {
+            const st = document.createElement('style');
+            st.id = 'zoom-bootstrap-compensation';
+            st.textContent = [
+              'html body{background-color:#f3f4f6 !important;color:#0f172a !important;}',
+              'html.dark body{background-color:#020617 !important;color:#e2e8f0 !important;}',
+              'html.dark{color-scheme:dark;}',
+            ].join('\n');
+            document.head.appendChild(st);
+          }
+        } catch {}
 
         if (cancelled) return;
         const client = ZoomMtgEmbedded.createClient();
