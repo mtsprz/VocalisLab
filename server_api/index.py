@@ -1127,6 +1127,27 @@ async def anamnesis_completa(
 
 # ─── CUADERNILLO TERAPÉUTICO PDF ────────────────────────────
 
+@app.post("/api/cuadernillo/verificar")
+async def verificar_cuadernillo_endpoint(
+    ejercicios_json: str = Form("[]"),
+    diagnostico_texto: str = Form(""),
+):
+    """Pre-chequeo de seguridad clínica: ejercicios vs diagnóstico."""
+    try:
+        from recomendar_motor import verificar_contraindicaciones
+        ej_ids = []
+        try:
+            ej = json.loads(ejercicios_json) if ejercicios_json.startswith("[") else []
+            ej_ids = [e.get("id") if isinstance(e, dict) else e for e in ej]
+        except Exception:
+            ej_ids = []
+        _, excluidos = verificar_contraindicaciones(ej_ids, diagnostico_texto)
+        return JSONResponse(content={"ok": True, "excluidos": excluidos})
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"ok": False, "excluidos": [], "error": str(e)[:200]})
+
+
 @app.post("/api/cuadernillo/generar")
 async def generar_cuadernillo_endpoint(
     paciente_nombre: str = Form(""),
@@ -1136,6 +1157,7 @@ async def generar_cuadernillo_endpoint(
     contrato_json: str = Form("{}"),
     notas: str = Form(""),
     profesional_json: str = Form("{}"),
+    diagnostico_texto: str = Form(""),
 ):
     try:
         ejercicios = json.loads(ejercicios_json) if ejercicios_json.startswith("[") else []
@@ -1143,6 +1165,21 @@ async def generar_cuadernillo_endpoint(
         profesional = json.loads(profesional_json) if profesional_json.startswith("{") else {}
     except Exception:
         ejercicios, contrato, profesional = [], {}, {}
+
+    # Guardia clínica: excluir ejercicios contraindicados para el diagnóstico
+    # (ej: empuje glótico + lesión exofítica). Nunca salen en el PDF.
+    excluidos = []
+    if diagnostico_texto:
+        try:
+            from recomendar_motor import verificar_contraindicaciones
+            ej_ids = [e.get("id") if isinstance(e, dict) else e for e in ejercicios]
+            _, excluidos = verificar_contraindicaciones(ej_ids, diagnostico_texto)
+            if excluidos:
+                ids_fuera = {x["id"] for x in excluidos}
+                ejercicios = [e for e in ejercicios
+                              if (e.get("id") if isinstance(e, dict) else e) not in ids_fuera]
+        except Exception as e:
+            print(f"[cuadernillo] verificación contraindicaciones falló: {e}")
 
     pdf_path = generar_cuadernillo_pdf(
         paciente_nombre=paciente_nombre,
@@ -1170,6 +1207,7 @@ async def generar_cuadernillo_endpoint(
         "pdf_base64": pdf_b64,
         "filename": f"{titulo.replace(' ', '_')}.pdf",
         "size_bytes": len(pdf_bytes),
+        "excluidos_seguridad": excluidos,
     })
 
 

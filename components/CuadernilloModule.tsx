@@ -361,6 +361,34 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const pacienteNombre = clinical.data.paciente?.nombre_completo || '';
   const pacienteTelefono = (clinical.data.paciente?.telefono || '').replace(/\D/g, '');
   const pacienteEmail = clinical.data.paciente?.email || '';
+  // Diagnóstico para el guardia de seguridad clínica (contraindicaciones)
+  const diagnosticoTexto = [
+    clinical.data.anamnesis?.diagnostico_orl || '',
+    clinical.data.anamnesis?.motivo_consulta || '',
+  ].filter(Boolean).join(' — ');
+  const [alertasSeguridad, setAlertasSeguridad] = useState<any[]>([]);
+
+  // Pre-chequeo en vivo: avisar si algún seleccionado está contraindicado
+  useEffect(() => {
+    if (!selectedExercises.length || !diagnosticoTexto) {
+      setAlertasSeguridad([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const fd = new FormData();
+        fd.append('ejercicios_json', JSON.stringify(selectedExercises));
+        fd.append('diagnostico_texto', diagnosticoTexto);
+        const r = await fetch(`${BACKEND_URL}/api/cuadernillo/verificar`, { method: 'POST', body: fd });
+        if (r.ok) {
+          const data = await r.json();
+          setAlertasSeguridad(data.excluidos || []);
+        }
+      } catch {}
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedExercises.join(','), diagnosticoTexto]);
 
   useEffect(() => {
     if (initialExerciseIds && initialExerciseIds.length > 0) {
@@ -536,6 +564,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       fd.append('contrato_json', JSON.stringify(contrato));
       fd.append('notas', notas);
       fd.append('profesional_json', JSON.stringify(profesional));
+      fd.append('diagnostico_texto', diagnosticoTexto);
 
       const r = await fetch(`${BACKEND_URL}/api/cuadernillo/generar`, { method: 'POST', body: fd });
       const data = await r.json();
@@ -545,6 +574,11 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
         const blob = new Blob([arr], { type: 'application/pdf' });
         setPdfUrl(URL.createObjectURL(blob));
+        const excl = data.excluidos_seguridad || [];
+        setAlertasSeguridad(excl);
+        if (excl.length > 0) {
+          setExportMsg(`PDF generado. Excluidos por seguridad clínica: ${excl.map((x: any) => x.name || x.id).join(', ')}.`);
+        }
       } else {
         alert(data.error || 'Error generando el PDF del cuadernillo');
       }
@@ -657,6 +691,19 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6">
+      {/* Alerta de seguridad clínica (contraindicaciones vs diagnóstico) */}
+      {alertasSeguridad.length > 0 && (
+        <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-1">
+          <p className="text-xs font-black text-red-600 dark:text-red-400">
+            ⚠ Conflicto clínico con el diagnóstico ({alertasSeguridad.length}): estos ejercicios NO saldrán en el PDF
+          </p>
+          {alertasSeguridad.map((a: any) => (
+            <p key={a.id} className="text-xs text-red-600/90 dark:text-red-300">
+              • <strong>{a.name || a.id}</strong> — {a.motivo}
+            </p>
+          ))}
+        </div>
+      )}
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-indigo-900/60 via-purple-900/40 to-slate-900/80 backdrop-blur-xl border border-indigo-500/20 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -802,6 +849,11 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                           {isSelected && <CheckCircle2 size={14} className="text-indigo-500 shrink-0" />}
                         </div>
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">{p.description}</p>
+                        {(p as any).advertencia && (
+                          <p className="mt-1.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1 leading-snug">
+                            ⚠ {(p as any).advertencia}
+                          </p>
+                        )}
                       </div>
                       <div className="mt-3 pt-2 border-t border-gray-200 dark:border-white/5 flex items-center justify-between text-[10px] text-gray-400">
                         <span className="font-semibold text-indigo-600 dark:text-indigo-400">{p.exercise_ids.length} ejercicios</span>

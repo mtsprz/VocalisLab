@@ -6,8 +6,8 @@ Anamnesis + Ficha de Riesgo Vocal (69 ítems) + Escalas Clínicas + Acústica Pr
 import os
 import json
 import traceback
-
 EXERCISE_BANK_PATH = os.path.join(os.path.dirname(__file__), "exercise_bank.json")
+
 
 def _load_bank():
     try:
@@ -15,6 +15,65 @@ def _load_bank():
             return json.load(f)
     except Exception:
         return {"sections": [], "presets": []}
+
+
+# Mapeo tag de contraindicación del banco → patrones en el diagnóstico/motivo.
+# Si el diagnóstico matchea y el ejercicio tiene ese tag, se EXCLUYE del
+# cuadernillo (error clínicamente inadmisible, ej: empuje + nódulos).
+CONTRA_MAP = {
+    "nodulo": [r"n[oó]dulo", r"p[oó]lipo", r"quiste", r"reinke", r"edema",
+               r"lesi[oó]n (de masa|exof)", r"exof[ií]", r"papiloma", r"granuloma"],
+    "hiperfuncion": [r"hiperfunc", r"\bdmt\b", r"m[uú]sculo tens", r"espasm[oó]dica"],
+    "dmt": [r"\bdmt\b", r"hiperfunc", r"tensional"],
+    "laringitis_aguda": [r"laringitis aguda"],
+}
+
+_EXERCISE_INDEX = None
+
+
+def _exercise_index():
+    """id ejercicio → {contraindications, name} (cache en memoria)."""
+    global _EXERCISE_INDEX
+    if _EXERCISE_INDEX is None:
+        _EXERCISE_INDEX = {}
+        bank = _load_bank()
+        for s in bank.get("sections", []):
+            for e in s.get("exercises", []):
+                if e.get("id"):
+                    _EXERCISE_INDEX[e["id"]] = {
+                        "name": e.get("name", e["id"]),
+                        "contraindications": e.get("contraindications", []) or [],
+                    }
+    return _EXERCISE_INDEX
+
+
+def verificar_contraindicaciones(exercise_ids, diagnostico_texto=""):
+    """
+    Retorna (seguros, excluidos). excluidos = [{id, name, motivo}].
+    Sin diagnóstico no se excluye nada (se informa como no verificado).
+    """
+    import re as _re
+    idx = _exercise_index()
+    diag = (diagnostico_texto or "").lower()
+    seguros, excluidos = [], []
+    for eid in (exercise_ids or []):
+        info = idx.get(eid, {"name": eid, "contraindications": []})
+        motivo = None
+        for tag in info["contraindications"]:
+            for pat in CONTRA_MAP.get(tag, []):
+                if _re.search(pat, diag):
+                    motivo = (
+                        f"Contraindicado con este cuadro ('{tag}'): "
+                        f"el diagnóstico menciona un patrón compatible."
+                    )
+                    break
+            if motivo:
+                break
+        if motivo:
+            excluidos.append({"id": eid, "name": info["name"], "motivo": motivo})
+        else:
+            seguros.append(eid)
+    return seguros, excluidos
 
 
 def generar_recomendacion_terapeutica(

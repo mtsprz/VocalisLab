@@ -875,6 +875,7 @@ async def crear_turno(
 ):
     meet_link = None
     google_event_id = None
+    google_sync: dict = {"intentado": bool(sincronizar_google and user_id), "ok": False, "detalle": ""}
 
     # Si se solicita sincronización con Google Calendar y se proporciona user_id
     if sincronizar_google and user_id:
@@ -907,9 +908,18 @@ async def crear_turno(
             if g_data.get("ok"):
                 google_event_id = g_data.get("google_event_id")
                 meet_link = g_data.get("meet_link")
+                google_sync.update(ok=True, detalle="Evento creado en Google Calendar.")
+            else:
+                google_sync.update(ok=False, detalle=str(g_data.get("error") or g_data)[:200] or "Google rechazó el evento.")
+        except HTTPException as e:
+            google_sync.update(ok=False, detalle=f"Google auth: {e.detail} (re-logueate con Google).")
+            print(f"[api_clinica] No se pudo sincronizar turno con Google: {e}")
         except Exception as e:
+            google_sync.update(ok=False, detalle=str(e)[:200])
             print(f"[api_clinica] No se pudo sincronizar turno con Google: {e}")
 
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Supabase no configurado en el servidor: la cita NO se guardó.")
     data = {
         "paciente_id": paciente_id,
         "fecha_hora": fecha_hora,
@@ -922,8 +932,20 @@ async def crear_turno(
         "google_event_id": google_event_id,
         "estado": "programado",
     }
-    result = _db_insert("turnos", data)
-    return JSONResponse(content=result)
+    # Insert tolerante: si la DB no tiene aún meet_link/google_event_id,
+    # quitarlas y reintentar (la cita se guarda igual, sin link).
+    for _ in range(4):
+        try:
+            result = _db_insert("turnos", data)
+            if isinstance(result, dict):
+                result["google_sync"] = google_sync
+            return JSONResponse(content=result)
+        except Exception as e_ins:
+            col = _missing_column(str(e_ins))
+            if col and col in data:
+                data.pop(col, None)
+                continue
+            raise
 
 
 @router.get("/api/turnos")

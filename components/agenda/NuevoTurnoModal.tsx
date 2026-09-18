@@ -41,6 +41,7 @@ export default function NuevoTurnoModal({
   const [crearZoom, setCrearZoom] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [googleWarn, setGoogleWarn] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -114,6 +115,15 @@ export default function NuevoTurnoModal({
         throw new Error(err.detail || 'Error guardando turno en el servidor');
       }
       const guardado = await resp.json().catch(() => ({}));
+      if (!guardado?.id) {
+        throw new Error(guardado?.detail || 'El servidor no devolvió la cita guardada.');
+      }
+      const gs = guardado.google_sync;
+      if (gs?.intentado && !gs?.ok) {
+        setGoogleWarn(`Cita guardada en la app, pero NO llegó a Google Calendar: ${gs.detalle || 'error de sincronización'}`);
+      } else {
+        setGoogleWarn('');
+      }
 
       // Flujo agenda: turno virtual → crear sala Zoom automáticamente (idempotente)
       if (!turnoEditar && modalidad === 'VIRTUAL' && crearZoom && user?.id && guardado?.id) {
@@ -167,6 +177,12 @@ export default function NuevoTurnoModal({
           <div className="mx-6 mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+        {googleWarn && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{googleWarn}</span>
           </div>
         )}
 

@@ -471,7 +471,8 @@
       "description": "Espasmos aductores intermitentes. Foco en relajación, respiración fluida y SOVTE suave. Evitar esfuerzo de empuje.",
       "exercise_ids": ["le_huche", "respiracion_abdominal", "masaje_laringeo", "descenso_laringeo", "tubo_agua", "enfriamiento"],
       "sesiones_recomendadas": 12,
-      "frecuencia": "1 a 2 veces por semana"
+      "frecuencia": "1 a 2 veces por semana",
+      "advertencia": "Cuadro neurológico: estos ejercicios son coadyuvantes, no reemplazan el tratamiento neurológico ni la toxina botulínica. Supervisión médica obligatoria."
     },
     {
       "id": "puberfonia",
@@ -543,7 +544,8 @@
       "description": "Rehabilitación suave post-microcirugía. Foco en cicatrización flexible, SOVTE de baja carga y reposo relativo.",
       "exercise_ids": ["respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 10,
-      "frecuencia": "1 a 2 veces por semana"
+      "frecuencia": "1 a 2 veces por semana",
+      "advertencia": "Postquirúrgico: iniciar solo con alta médica del ORL. Priorizar reposo vocal y SOVTE suave; suspender ante disnea, disfagia o sangrado."
     },
     {
       "id": "paralisis_cordal",
