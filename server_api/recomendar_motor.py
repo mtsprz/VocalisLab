@@ -22,11 +22,14 @@ def generar_recomendacion_terapeutica(
     anamnesis: dict,
     riesgo_vocal: dict,
     escalas: dict,
-    acustica: dict
+    acustica: dict,
+    extras: dict = None
 ) -> dict:
     """
     Sintetiza la clínica completa del paciente y genera un plan terapéutico
     personalizado con ejercicios del banco de Farías.
+    extras (hidratado server-side): {"informe_orl": {...}, "evolucion": [...],
+    "basal": {...}, "actual": {...}}.
     """
     groq_key = os.environ.get("GROQ_API_KEY")
     bank = _load_bank()
@@ -103,11 +106,38 @@ def generar_recomendacion_terapeutica(
                 "}\n"
             )
 
+            _extras = extras or {}
+            _orl = _extras.get("informe_orl") or {}
+            _orl_txt = ""
+            if _orl:
+                _orl_txt = (
+                    f"\n- Informe ORL validado (DB): {(_orl.get('diagnostico') or 's/diagnóstico')} "
+                    f"[{(_orl.get('metodo') or 's/método')}]. "
+                    f"Hallazgos: {str(_orl.get('estructurales') or '')[:300]} / {str(_orl.get('funcionales') or '')[:300]} "
+                    f"Texto: {str(_orl.get('texto') or '')[:500]}"
+                )
+            _evo_txt = ""
+            _basal, _actual = _extras.get("basal"), _extras.get("actual")
+            if _basal and _actual:
+                def _n(v):
+                    try:
+                        return v if v is None else round(float(v), 1)
+                    except Exception:
+                        return v
+                _evo_txt = (
+                    f"\n- Evolución basal→actual ({len(_extras.get('evolucion', []))} evaluaciones): "
+                    f"autopercepción {_n(_basal.get('autopercepcion_vocal'))}→{_n(_actual.get('autopercepcion_vocal'))}/10, "
+                    f"VHI-10 {_n(_basal.get('vhi10_score'))}→{_n(_actual.get('vhi10_score'))}/40, "
+                    f"riesgo {_n(_basal.get('riesgo_vocal_score'))}→{_n(_actual.get('riesgo_vocal_score'))}/207, "
+                    f"TME-O {_n(_basal.get('tme_o'))}→{_n(_actual.get('tme_o'))}s."
+                )
+
             user_content = f"""
 DATOS DEL CASO CLÍNICO:
 - Paciente: {nombre} ({edad} años, {sexo}), Ocupación: {ocupacion}, Demanda vocal: {demanda} h/día.
 - Anamnesis: Motivo: {anamnesis.get('motivo_consulta', 'N/D')}. Diagnóstico ORL: {anamnesis.get('diagnostico_orl', 'Sin informe laringoscópico previo')}.
   Síntomas: {json.dumps(anamnesis.get('sintomas', {}), ensure_ascii=False)}
+  Autopercepción voz: {anamnesis.get('autopercepcion_voz', 'N/D')}/10. Antecedentes: {(anamnesis.get('antecedentes_salud') or 'N/D')[:300]}.{_orl_txt}{_evo_txt}
 - Evaluación de riesgo vocal:
   * Puntaje Total: {riesgo_total}/207 -> {riesgo_grupo}
   * Subtotales: {json.dumps(subtotales, ensure_ascii=False)}

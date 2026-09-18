@@ -335,6 +335,8 @@ async def guardar_anamnesis(
     resumen_clinico: str = Form(""),
     transcripcion_audio: str = Form(""),
     demanda_vocal_horas: str = Form(""),
+    autopercepcion_voz: str = Form(None),
+    antecedentes_salud: str = Form(""),
 ):
     data = {
         "paciente_id": paciente_id,
@@ -345,7 +347,14 @@ async def guardar_anamnesis(
         "factores_riesgo": _parse_json_field(factores_riesgo, {}),
         "resumen_clinico": resumen_clinico,
         "transcripcion_audio": transcripcion_audio,
+        "antecedentes_salud": antecedentes_salud,
     }
+    try:
+        ap = int(float(autopercepcion_voz)) if autopercepcion_voz not in (None, "") else None
+    except Exception:
+        ap = None
+    if ap is not None:
+        data["autopercepcion_voz"] = ap
     if not supabase:
         return JSONResponse(content={"id": "local", **data})
     # Upsert manual: actualizar la ficha más reciente del paciente, o insertar

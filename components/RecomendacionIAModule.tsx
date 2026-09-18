@@ -72,6 +72,26 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
     }
   }, [pacienteId]);
 
+  // Sincronizar con el contexto clínico REAL (anamnesis, escalas, riesgo,
+  // acústica cargados en los pasos previos). Sin esto el motor usaba los
+  // datos demo iniciales aunque el profesional ya hubiera evaluado.
+  const hasReal = (v: any) => v && typeof v === 'object'
+    && Object.values(v).some(x => x !== '' && x !== 0 && x !== null && x !== undefined
+      && JSON.stringify(x) !== '{}' && JSON.stringify(x) !== '[]');
+  useEffect(() => {
+    const d = clinical.data;
+    if (d.paciente?.id || d.paciente?.nombre_completo) {
+      setPacienteData((prev: any) => ({ ...prev, ...d.paciente }));
+    }
+    if (hasReal(d.anamnesis)) setAnamnesisData((prev: any) => ({ ...prev, ...d.anamnesis }));
+    if (hasReal(d.riesgoVocal) || (d.riesgoVocal?.puntaje_total ?? 0) > 0) {
+      setRiesgoVocalData((prev: any) => ({ ...prev, ...d.riesgoVocal }));
+    }
+    if (hasReal(d.escalas)) setEscalasData((prev: any) => ({ ...prev, ...d.escalas }));
+    if (hasReal(d.acustica)) setAcusticaData((prev: any) => ({ ...prev, ...d.acustica }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinical.data, clinical.cargaToken]);
+
   // Sync recomendacion back to clinical context
   useEffect(() => {
     if (recomendacion) {
@@ -110,6 +130,9 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
     setTransferred(false);
     try {
       const fd = new FormData();
+      // paciente_id: el backend hidrata informes ORL + evolución aunque el
+      // frontend venga parcial (no depender solo de lo que trae el contexto).
+      fd.append('paciente_id', selectedId || clinical.data.paciente?.id || '');
       fd.append('paciente_json', JSON.stringify(pacienteData));
       fd.append('anamnesis_json', JSON.stringify(anamnesisData));
       fd.append('riesgo_vocal_json', JSON.stringify(riesgoVocalData));

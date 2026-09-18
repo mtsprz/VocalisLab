@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Search, Edit2, Trash2, Phone, Mail, Save, X, UserCheck } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, Phone, Mail, Save, X, UserCheck, MessageCircle } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -245,6 +245,34 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                   <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.telefono || '—'}</td>
                   <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.ocupacion || '—'}</td>
                   <td className="px-4 py-3.5 text-right space-x-1">
+                    {p.telefono && (
+                      <>
+                        <a
+                          href={`https://wa.me/${p.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${p.nombre_completo}, te escribo del Consultorio de Voz.`)}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="inline-block p-1.5 text-slate-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                          title="WhatsApp al paciente"
+                        >
+                          <MessageCircle size={15} />
+                        </a>
+                        <a
+                          href={`tel:${p.telefono.replace(/\D/g, '')}`}
+                          className="inline-block p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                          title={`Llamar a ${p.telefono}`}
+                        >
+                          <Phone size={15} />
+                        </a>
+                      </>
+                    )}
+                    {p.email && (
+                      <a
+                        href={`mailto:${p.email}?subject=${encodeURIComponent(`Seguimiento fonoaudiológico — ${p.nombre_completo}`)}`}
+                        className="inline-block p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                        title={`Email a ${p.email}`}
+                      >
+                        <Mail size={15} />
+                      </a>
+                    )}
                     <button
                       onClick={() => handleEdit(p)}
                       className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"

@@ -445,6 +445,10 @@ export default function AnamnesisModule({ pacienteId }: Props) {
           fd.append('factores_riesgo', JSON.stringify(anamnesisObj.factores_riesgo || {}));
           fd.append('resumen_clinico', anamnesisObj.resumen_clinico || '');
           fd.append('transcripcion_audio', anamnesisObj.transcripcion || '');
+          fd.append('antecedentes_salud', anamnesisObj.antecedentes_salud || '');
+          if (anamnesisObj.autopercepcion_voz != null) {
+            fd.append('autopercepcion_voz', String(anamnesisObj.autopercepcion_voz));
+          }
           const r1 = await fetch(`${BACKEND_URL}/api/anamnesis`, { method: 'POST', body: fd });
           if (!r1.ok) {
             const err = await r1.json().catch(() => ({}));

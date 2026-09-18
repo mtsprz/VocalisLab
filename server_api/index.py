@@ -1221,6 +1221,7 @@ async def recomendar_terapia_endpoint(
     riesgo_vocal_json: str = Form("{}"),
     escalas_json: str = Form("{}"),
     acustica_json: str = Form("{}"),
+    paciente_id: str = Form(""),
 ):
     try:
         paciente = json.loads(paciente_json) if paciente_json.startswith("{") else {}
@@ -1231,13 +1232,61 @@ async def recomendar_terapia_endpoint(
     except Exception:
         paciente, anamnesis, riesgo_vocal, escalas, acustica = {}, {}, {}, {}, {}
 
+    # Hidratación server-side: informes ORL validados + evolución de
+    # evaluaciones (basal vs actual). El frontend puede venir parcial o con
+    # datos demo; la DB manda.
+    extras: dict = {"informe_orl": None, "evolucion": []}
+    if paciente_id:
+        try:
+            from api_clinica import _get_supabase
+            sb = _get_supabase()
+            if sb:
+                try:
+                    ri = sb.table("informes_orl").select(
+                        "diagnostico_principal, metodo_exploracion, hallazgos_estructurales,"
+                        " hallazgos_funcionales, texto_transcrito_crudo, estado, created_at"
+                    ).eq("paciente_id", paciente_id).order("created_at", desc=True).limit(5).execute()
+                    rows = ri.data or []
+                    val = next((x for x in rows if (x.get("estado") == "validado" and x.get("diagnostico_principal"))), None)
+                    val = val or next((x for x in rows if x.get("diagnostico_principal")), None)
+                    val = val or (rows[0] if rows else None)
+                    if val:
+                        txt = (val.get("texto_transcrito_crudo") or "")[:1500]
+                        extras["informe_orl"] = {
+                            "diagnostico": val.get("diagnostico_principal", ""),
+                            "metodo": val.get("metodo_exploracion", ""),
+                            "estructurales": val.get("hallazgos_estructurales", ""),
+                            "funcionales": val.get("hallazgos_funcionales", ""),
+                            "texto": txt,
+                        }
+                        if not anamnesis.get("diagnostico_orl") and val.get("diagnostico_principal"):
+                            anamnesis["diagnostico_orl"] = val["diagnostico_principal"]
+                except Exception as e:
+                    print(f"[recomendar] informes_orl no hidratados: {str(e)[:120]}")
+                try:
+                    re_ = sb.table("evaluaciones_clinicas").select(
+                        "fecha, vhi10_score, riesgo_vocal_score, tme_o, tme_s,"
+                        " autopercepcion_vocal, f0_conversacional_hz"
+                    ).eq("paciente_id", paciente_id).order("fecha", desc=False).limit(50).execute()
+                    evs = re_.data or []
+                    if evs:
+                        extras["evolucion"] = evs
+                        basal, actual = evs[0], evs[-1]
+                        extras["basal"] = basal
+                        extras["actual"] = actual
+                except Exception as e:
+                    print(f"[recomendar] evolucion no hidratada: {str(e)[:120]}")
+        except Exception as e:
+            print(f"[recomendar] hidratacion fallo: {str(e)[:150]}")
+
     try:
         recomendacion = generar_recomendacion_terapeutica(
             paciente=paciente,
             anamnesis=anamnesis,
             riesgo_vocal=riesgo_vocal,
             escalas=escalas,
-            acustica=acustica
+            acustica=acustica,
+            extras=extras
         )
         return JSONResponse(content={"ok": True, "recomendacion": recomendacion})
     except Exception as e:

@@ -215,6 +215,8 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
             factores_riesgo: a.factores_riesgo || {},
             resumen_clinico: a.resumen_clinico || '',
             transcripcion: a.transcripcion_audio || '',
+            antecedentes_salud: a.antecedentes_salud || '',
+            autopercepcion_voz: a.autopercepcion_voz ?? null,
           };
           setAnamnesis(anamnesisBase);
           markStep('anamnesis');
