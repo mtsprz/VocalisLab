@@ -783,7 +783,7 @@ async def exportar_plantilla_cuadernillo(request: Request):
         body = {}
     motor = str(body.get("motor", "reportlab_vector")).strip().lower()
     paciente_id = body.get("paciente_id", "")
-    paciente_nombre = body.get("paciente_nombre", "Paciente Sin Especificar")
+    paciente_nombre = str(body.get("paciente_nombre", "")).strip()
     titulo = body.get("titulo", "Cuadernillo Terapéutico Vocal")
     sesiones = int(body.get("cantidad_sesiones", 8))
     ejercicios = body.get("ejercicios", [])
@@ -791,6 +791,10 @@ async def exportar_plantilla_cuadernillo(request: Request):
     notas = body.get("notas", "")
     profesional = body.get("profesional", {})
     advertencias = body.get("advertencias", []) or []
+    fecha_inicio = str(body.get("fecha_inicio", "")).strip()
+
+    if not paciente_nombre:
+        raise HTTPException(status_code=400, detail="Completá el nombre del paciente antes de generar el cuadernillo.")
 
     from plantillas_engine import (
         extraer_variables_cuadernillo,
@@ -807,6 +811,7 @@ async def exportar_plantilla_cuadernillo(request: Request):
         notas=notas,
         profesional=profesional,
         advertencias=advertencias,
+        fecha_inicio=fecha_inicio,
     )
 
     if motor == "canva":
@@ -853,6 +858,8 @@ async def exportar_plantilla_cuadernillo(request: Request):
             contrato=contrato,
             notas=notas,
             profesional=profesional,
+            advertencias=advertencias,
+            fecha_inicio=fecha_inicio,
         )
         return FileResponse(
             pdf_path,

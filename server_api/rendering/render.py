@@ -14,44 +14,9 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VHI_ITEMS = [
-    "Mi voz me dificulta hacer que me escuchen en ambientes ruidosos",
-    "La gente tiene dificultad para oírme en ambientes ruidosos o concurridos",
-    "Mi voz me presenta problemas en mi trabajo o en mi vida personal",
-    "Me siento tenso al hablar",
-    "La calidad de mi voz es impredecible a lo largo del día",
-    'Mi voz "se corta" o me quedo sin aire cuando hablo',
-    "Siento que necesito esforzarme para producir mi voz",
-    "Mi voz suena ronca o áspera",
-    "Mi voz limita mi vida personal y social",
-    "Siento que la gente no comprende mi problema de voz",
-]
-
-VHI_INTERP = [
-    {"rango": "0–10", "texto": "Impacto mínimo"},
-    {"rango": "11–20", "texto": "Impacto leve-moderado"},
-    {"rango": "21–30", "texto": "Impacto moderado-severo"},
-    {"rango": "31–40", "texto": "Impacto severo"},
-]
-
 HORARIO_HORAS = [f"{h:02d}:00" for h in range(7, 23)]
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes",
                "Sábado", "Domingo"]
-
-BIBLIO = [
-    "Behrman, A. (2018). Speech and voice science (3.ª ed.). Plural Publishing.",
-    "Baken, R. J., & Orlikoff, R. F. (2011). Clinical measurement of speech and voice (2.ª ed.). Cengage Learning.",
-    "Hirano, M. (1981). Clinical examination of voice. Springer-Verlag.",
-    "Jacobson, B. H., Johnson, A., Grywalski, C., et al. (1997). The Voice Handicap Index (VHI). AJSLP, 6(3), 66–70.",
-    "Rosen, C. A., Lee, A. S., Osborne, J., et al. (2004). Validation of the Voice Handicap Index-10. Laryngoscope, 114(9), 1549–1556.",
-    "Boone, D. R., McFarlane, S. C., Von Berg, S. L., & Zraick, R. I. (2020). The voice and voice therapy (10.ª ed.). Pearson.",
-    "Stemple, J. C., Glaze, L. E., & Klaben, B. G. (2020). Clinical voice pathology (6.ª ed.). Plural Publishing.",
-    "Sataloff, R. T. (2017). Vocal health and pedagogy (3.ª ed.). Plural Publishing.",
-    "Roy, N., Merrill, R. M., Thibeault, S., et al. (2004). Prevalence of voice disorders in teachers. JSLHR, 47(2), 281–293.",
-    "Titze, I. R. (2017). Vocal health for vocal professionals. National Center for Voice and Speech.",
-    "Verdolini-Marston, K., Sandage, M., & Titze, I. R. (1994). Effect of hydration on laryngeal fatigue. J. Voice, 8(2), 138–146.",
-    "Estill, J. (2020). Estill voice training: Level one — Figures for voice control (Rev. ed.). Estill Voice International.",
-]
 
 
 class PrescriptionError(Exception):
@@ -152,11 +117,8 @@ def build_context(data: dict, svg_dir: str) -> dict:
         "ejercicios": ejercicios,
         "anexos": data.get("anexos") or {},
         "oraciones": oraciones,
-        "vhi_items": VHI_ITEMS,
-        "vhi_interp": VHI_INTERP,
         "horario_horas": HORARIO_HORAS,
         "dias_semana": DIAS_SEMANA,
-        "biblio": BIBLIO,
     }
 
 

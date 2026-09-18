@@ -764,30 +764,34 @@ def _svg_vocales():
     return d
 
 
+# Ilustración por CONTENIDO del ejercicio (nombre + pasos), no por ID:
+# varios IDs del banco arrastran nombres históricos distintos
+# (ej: tubo_agua = glissandos, empuje_glotico = moldeado vocálico).
+# Misma familia puede compartir dibujo, siempre con rótulo propio.
 _SVG_POR_EJERCICIO = {
-    "rotacion_hombros": (_svg_cervical_mobility, "Movilidad cervical"),
+    "rotacion_hombros": (_svg_shoulder_rotation, "Círculos de hombros y cuello"),
     "respiracion_abdominal": (_svg_diaphragmatic, "Respiración con panza"),
-    "tubo_agua": (_svg_sirena, "Glissandos sirena"),
-    "popote_aire": (_svg_vocal_scales, "Escalas 3.ª–5.ª–8.ª"),
-    "humming_m": (_svg_lectura, "Lectura balanceada"),
-    "frases_balanceadas": (_svg_voice_projection, "Proyección a 3 m"),
+    "tubo_agua": (_svg_sirena, "Sirena sobre /m/ o /u/"),
+    "popote_aire": (_svg_vocal_scales, "Escalas 3.ª – 5.ª – 8.ª"),
+    "humming_m": (_svg_lectura, "Lectura balanceada en voz alta"),
+    "frases_balanceadas": (_svg_voice_projection, "Oraciones de todos los días"),
     "calentamiento": (_svg_warmup_flow, "Rutina de entrada"),
     "enfriamiento": (_svg_cooldown_flow, "Rutina de salida"),
     "le_huche": (_svg_breathing_cycle, "Ciclo respiratorio"),
     "shiatsu_cabeza": (_svg_pressure_points, "Digitopresión"),
     "masaje_laringeo": (_svg_laryngeal_massage, "Masaje laríngeo"),
-    "descenso_laringeo": (_svg_larynx_descent, "Descenso laríngeo"),
-    "oclusion_succion": (_svg_larynx_descent, "Báscula baja hu-hu"),
-    "expansion_costo_lateral": (_svg_rib_expansion, "Expansión costal"),
-    "soplo_escalonado": (_svg_stepped_blow, "Soplo escalonado"),
-    "empuje_glotico": (_svg_vocales, "Moldeado U-I-E-O-A"),
-    "vibracion_labial": (_svg_facial_mask, "Resonancia anterior /m/"),
+    "descenso_laringeo": (_svg_larynx_descent, "Bostezo: la laringe baja"),
+    "oclusion_succion": (_svg_larynx_descent, "Laringe baja en 'hu-hu'"),
+    "expansion_costo_lateral": (_svg_rib_expansion, "Expansión costo-lateral"),
+    "soplo_escalonado": (_svg_rib_expansion, "Expansión 3D (patrón 5-2-8)"),
+    "empuje_glotico": (_svg_vocales, "Moldeado O-A-U-I"),
+    "vibracion_labial": (_svg_facial_mask, "Vibración en máscara /m/"),
     "consonantes_fricativas": (_svg_lectura, "Versos salmodiados"),
-    "escalas_vocalicas": (_svg_habla, "Habla espontánea"),
+    "escalas_vocalicas": (_svg_habla, "Monólogo con apoyo (2-3 min)"),
     "pautas_rlf": (_svg_antireflux, "Pautas antirreflujo"),
-    "oclusion_nasal": (_svg_lip_trill, "Oclusión nasal /m/"),
-    "coordinacion_costo_abdominal": (_svg_fricative_flow, "Coordinación /s/–/z/"),
-    "glissandos": (_svg_sirena, "Sirena vocal"),
+    "oclusion_nasal": (_svg_vocales, "De /m/ a vocales abiertas"),
+    "coordinacion_costo_abdominal": (_svg_fricative_flow, "Flujo /s/–/z/ con apoyo"),
+    "glissandos": (_svg_sirena, "Sirena suave sin quiebres"),
 }
 
 
@@ -1230,6 +1234,9 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     elements = []
 
     name = _sanear(_simplificar(exercise.get("name", "Ejercicio sin nombre")))
+    # El banco trae prefijo de manual ("7.1 ...") y la tarjeta ya numera
+    # ("1. ..."): quitar el prefijo para no imprimir "1. 7.1 ...".
+    name = re.sub(r"^\s*\d+\.\d+\s*", "", name)
     desc = _sanear(_simplificar(exercise.get("description", "")))
     proposito = _PROPOSITO_SECCION.get(
         seccion_id, "Para entrenar y cuidar su voz todos los días.")
@@ -1425,7 +1432,7 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
 def _build_weekly_grid(styles):
     """Grilla de horarios semanales Lun-Vie de 7 a 22 h."""
     elements = []
-    elements.append(Paragraph("Mi Horario Semanal de Ejercicios", styles['SectionTitle']))
+    elements.append(Paragraph("2 · Mi Horario Semanal de Ejercicios", styles['SectionTitle']))
     elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     elements.append(Spacer(1, 2 * mm))
     elements.append(Paragraph(
@@ -1460,9 +1467,9 @@ def _build_weekly_grid(styles):
 
 
 def _build_tme_log(styles):
-    """Tabla de registro diario de TME /s/ según Sección 5 del Manual 2026."""
+    """Tabla de registro diario de TME /s/ (sección 3 del cuadernillo)."""
     elements = []
-    elements.append(Paragraph("Sección 5 — Prueba de Tiempo Máximo Espiratorio (TME /s/)",
+    elements.append(Paragraph("3 · Registro Semanal de TME /s/ (soplo sostenido)",
                               styles['SectionTitle']))
     elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     elements.append(Spacer(1, 2 * mm))
@@ -1500,142 +1507,10 @@ def _build_tme_log(styles):
     return elements
 
 
-_VHI_10_OFICIAL = [
-    "1. Mi voz me dificulta hacer que me escuchen en ambientes ruidosos.",
-    "2. La gente tiene dificultad para oírme en ambientes ruidosos o concurridos.",
-    "3. Mi voz me presenta problemas en mi trabajo o en mi vida personal.",
-    "4. Me siento tenso al hablar.",
-    "5. La calidad de mi voz es impredecible a lo largo del día.",
-    "6. Mi voz 'se corta' o me quedo sin aire cuando hablo.",
-    "7. Siento que necesito esforzarme para producir mi voz.",
-    "8. Mi voz suena ronca o áspera.",
-    "9. Mi voz limita mi vida personal y social.",
-    "10. Siento que la gente no comprende mi problema de voz.",
-]
-
-
 def _build_self_assessment(styles):
-    """Autoevaluación vocal + VHI-10 Oficial (Sección 3 del Manual Edición 2026)."""
-    elements = []
-    elements.append(Paragraph("Sección 3 — Índice de Discapacidad Vocal (VHI-10)",
-                              styles['SectionTitle']))
-    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
-    elements.append(Spacer(1, 2 * mm))
-    elements.append(Paragraph(
-        "Instrumento validado que mide el impacto de la disfonía en la calidad de vida. "
-        "Puntuación: 0 = Nunca · 1 = Casi nunca · 2 = A veces · 3 = Casi siempre · 4 = Siempre",
-        styles['CuadBody']))
-    elements.append(Spacer(1, 2 * mm))
-
-    vhi_data = [["N°", "Pregunta", "0", "1", "2", "3", "4"]]
-    for item in _VHI_10_OFICIAL:
-        n, q = item.split(". ", 1)
-        vhi_data.append([n, q, "[ ]", "[ ]", "[ ]", "[ ]", "[ ]"])
-    vhi_table = Table(vhi_data, colWidths=[10 * mm, 110 * mm, 10 * mm, 10 * mm, 10 * mm, 10 * mm, 10 * mm],
-                      repeatRows=1)
-    vhi_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
-    ]))
-    elements.append(vhi_table)
-    elements.append(Spacer(1, 3 * mm))
-    
-    # Cuadro de interpretación clínica
-    interp_data = [
-        ["Puntaje", "Grado de impacto", "Significado clínico"],
-        ["0 – 10", "Impacto mínimo", "Voz funcional, molestias leves"],
-        ["11 – 20", "Impacto leve-moderado", "Dificultades en situaciones demandantes"],
-        ["21 – 30", "Impacto moderado-severo", "Limitación clara en comunicación cotidiana"],
-        ["31 – 40", "Impacto severo", "Alteración importante de calidad de vida vocal"]
-    ]
-    interp_t = Table(interp_data, colWidths=[25 * mm, 45 * mm, 100 * mm])
-    interp_t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), SECONDARY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 7.5),
-        ('ALIGN', (0, 0), (1, -1), 'CENTER'),
-        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]))
-    elements.append(interp_t)
-    elements.append(Spacer(1, 2 * mm))
-    elements.append(Paragraph(
-        "<i>Repetición recomendada: completar cada 4–6 semanas. Una disminución ≥ 5 puntos se considera clínicamente significativa.</i>",
-        styles['CuadHelp']))
-    return elements
-    elements = []
-    elements.append(Paragraph("¿Cómo Va Mi Voz? (autoevaluación)",
-                              styles['SectionTitle']))
-    elements.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
-    elements.append(Spacer(1, 2 * mm))
-    elements.append(Paragraph(
-        "Complete esta página <b>antes de empezar</b> y otra vez <b>al terminar "
-        "las 8 sesiones</b>. Así vemos juntos si el tratamiento está funcionando.",
-        styles['CuadBody']))
-
-    elements.append(Paragraph(
-        "<b>1) Del 0 al 10, ¿qué puntaje le da hoy a su voz?</b> "
-        "(0 = sin voz / muy mala, 10 = voz óptima). Marque con una X:",
-        styles['CuadBody']))
-    scale_row = ["Antes:"] + [f"[ {n} ]" for n in range(11)]
-    scale_row2 = ["Después:"] + [f"[ {n} ]" for n in range(11)]
-    scale_table = Table([scale_row, scale_row2],
-                        colWidths=[22 * mm] + [12 * mm] * 11)
-    scale_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 11),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-    ]))
-    elements.append(scale_table)
-    elements.append(Spacer(1, 4 * mm))
-
-    elements.append(Paragraph(
-        "<b>2) ¿Con qué frecuencia le pasan estas cosas?</b> "
-        "0 = Nunca &nbsp;&nbsp; 1 = Casi nunca &nbsp;&nbsp; 2 = A veces &nbsp;&nbsp; "
-        "3 = Casi siempre &nbsp;&nbsp; 4 = Siempre",
-        styles['CuadBody']))
-    vhi_data = [["Situación", "Antes (0-4)", "Después (0-4)"]]
-    for item in _VHI_SIMPLE:
-        vhi_data.append([item, "[0] [1] [2] [3] [4]", "[0] [1] [2] [3] [4]"])
-    vhi_table = Table(vhi_data, colWidths=[80 * mm, 40 * mm, 40 * mm],
-                      repeatRows=1)
-    vhi_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 11),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
-    ]))
-    elements.append(vhi_table)
-    elements.append(Spacer(1, 3 * mm))
-    elements.append(Paragraph(
-        "<b>¿Mejoró su puntaje?</b> Si su nota del 0 al 10 subió 2 o más puntos, "
-        "o si estas frases le pasan menos seguido, el tratamiento está funcionando bien. "
-        "Felicitaciones por su constancia.",
-        styles['CuadBody']))
-    return elements
+    """Reservado: el VHI-10 se toma en la app (no se imprime en el cuadernillo).
+    Se mantiene el nombre para no romper imports externos; devuelve vacío."""
+    return []
 
 
 def _add_page_number(canvas, doc):
@@ -1649,6 +1524,22 @@ def _add_page_number(canvas, doc):
     canvas.restoreState()
 
 
+def _normalizar_fecha_inicio(fecha_inicio: str = "") -> str:
+    """Normaliza la fecha de inicio editable (ISO yyyy-mm-dd o dd/mm/aaaa)
+    a dd/mm/aaaa. Si viene vacía o inválida, usa hoy."""
+    hoy = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
+    f = (fecha_inicio or "").strip()
+    if not f:
+        return hoy
+    import re as _re
+    m = _re.match(r"^(\d{4})-(\d{2})-(\d{2})$", f)
+    if m:
+        return f"{m.group(3)}/{m.group(2)}/{m.group(1)}"
+    if _re.match(r"^\d{2}/\d{2}/\d{4}$", f):
+        return f
+    return hoy
+
+
 def generar_cuadernillo_pdf(
     paciente_nombre: str,
     titulo: str,
@@ -1658,8 +1549,9 @@ def generar_cuadernillo_pdf(
     notas: str = "",
     profesional: dict = None,
     advertencias: list = None,
+    fecha_inicio: str = "",
 ) -> str:
-    fecha = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
+    fecha = _normalizar_fecha_inicio(fecha_inicio)
     profesional = profesional if isinstance(profesional, dict) else {}
 
     tmp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
@@ -1695,7 +1587,7 @@ def generar_cuadernillo_pdf(
     # Advertencias de seguridad del preset (STOP imprimible, C4 auditoría).
     story.extend(_build_stop_banner(styles, advertencias))
 
-    story.append(Paragraph("Mis Ejercicios de Voz", styles['SectionTitle']))
+    story.append(Paragraph("1 · Mis Ejercicios de Voz", styles['SectionTitle']))
     story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph(
@@ -1721,60 +1613,13 @@ def generar_cuadernillo_pdf(
         story.extend(_build_exercise_card(styles, ex, idx,
                                           seccion_id=str(ex.get("seccion_id", ""))))
 
-    # Hojas de seguimiento: fluyen juntas y compactas (sin saltos forzados
-    # entre grillas: weekly + TME + autoevaluación comparten las hojas finales).
+    # Hojas de seguimiento (orden del documento: 2 horario, 3 TME).
+    # Sin VHI-10: se toma en la app al inicio y en la sesión 8.
+    # Sin bibliografía: material para el paciente, no académico.
     story.append(PageBreak())
     story.extend(_build_weekly_grid(styles))
     story.append(Spacer(1, 4 * mm))
     story.extend(_build_tme_log(styles))
-    story.append(Spacer(1, 4 * mm))
-    story.extend(_build_self_assessment(styles))
-
-    # Sección 13 — Bibliografía Académica Oficial (APA)
-    story.append(PageBreak())
-    story.append(Paragraph("Sección 13 — Bibliografía Académica (APA)", styles['SectionTitle']))
-    story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
-    story.append(Spacer(1, 2 * mm))
-    story.append(Paragraph("<i>Referencias seleccionadas por rigor científico y relevancia clínica. Formato APA.</i>", styles['CuadHelp']))
-    story.append(Spacer(1, 3 * mm))
-
-    bib_sections = [
-        ("EVALUACIÓN VOCAL", [
-            "Behrman, A. (2018). Speech and voice science (3.ª ed.). Plural Publishing.",
-            "Baken, R. J., & Orlikoff, R. F. (2011). Clinical measurement of speech and voice (2.ª ed.). Cengage Learning.",
-            "Hirano, M. (1981). Clinical examination of voice. Springer-Verlag.",
-            "Jacobson, B. H., Johnson, A., Grywalski, C., et al. (1997). The Voice Handicap Index (VHI). AJSLP, 6(3), 66–70.",
-            "Rosen, C. A., Lee, A. S., Osborne, J., et al. (2004). Validation of the Voice Handicap Index-10. Laryngoscope, 114(9), 1549–1556."
-        ]),
-        ("REHABILITACIÓN VOCAL", [
-            "Boone, D. R., McFarlane, S. C., Von Berg, S. L., & Zraick, R. I. (2020). The voice and voice therapy (10.ª ed.). Pearson.",
-            "Casiano, R. R. (2020). Manual of voice disorders: Diagnosis and management. Plural Publishing.",
-            "Chapman, J. L. (2016). Singing and teaching singing: A holistic approach to classical voice (3.ª ed.). Plural Publishing.",
-            "Stemple, J. C., Glaze, L. E., & Klaben, B. G. (2020). Clinical voice pathology (6.ª ed.). Plural Publishing.",
-            "Sataloff, R. T. (2017). Vocal health and pedagogy (3.ª ed.). Plural Publishing.",
-            "Harris, T., Harris, S., Rubin, J. S., & Howard, D. M. (2018). The voice clinic handbook (2.ª ed.). Compton Publishing.",
-            "Mathieson, L. (2018). The voice and its disorders (7.ª ed.). John Wiley & Sons."
-        ]),
-        ("HIGIENE VOCAL Y CUIDADO PREVENTIVO", [
-            "Roy, N., Merrill, R. M., Thibeault, S., et al. (2004). Prevalence of voice disorders in teachers. JSLHR, 47(2), 281–293.",
-            "Titze, I. R. (2017). Vocal health for vocal professionals. National Center for Voice and Speech.",
-            "Verdolini-Marston, K., Sandage, M., & Titze, I. R. (1994). Effect of hydration on laryngeal fatigue. J. Voice, 8(2), 138–146.",
-            "Williams, N. R. (2003). Occupational groups at risk of voice disorders. Occ. Med., 53(7), 456–460."
-        ]),
-        ("TÉCNICA VOCAL Y PEDAGOGÍA", [
-            "Estill, J. (2020). Estill voice training: Level one — Figures for voice control (Rev. ed.). Estill Voice International.",
-            "McKinney, J. C. (2005). The diagnosis and correction of vocal faults (Rev. ed.). Genevox Music Group.",
-            "Miller, R. (2004). Solutions for singers: Tools for performers and teachers. Oxford University Press.",
-            "Titze, I. R. (2017). Principles of voice production (3.ª ed.). National Center for Voice and Speech."
-        ])
-    ]
-
-    for area_title, refs in bib_sections:
-        story.append(Paragraph(f"<b>{area_title}</b>", styles['CuadSubTitle']))
-        story.append(Spacer(1, 1 * mm))
-        for r_txt in refs:
-            story.append(Paragraph(f"• {r_txt}", styles['CuadBody']))
-        story.append(Spacer(1, 2.5 * mm))
 
     if notas:
         story.append(Spacer(1, 8 * mm))

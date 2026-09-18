@@ -51,7 +51,7 @@
 
 <!-- 4. Ejercicios -->
 <section>
-  <h1 class="seccion">Mis ejercicios</h1>
+  <h1 class="seccion">1 · Mis ejercicios</h1>
   {% for ex in ejercicios %}
   <div class="card">
     <div class="card-header">
@@ -97,7 +97,7 @@
 
 <!-- 5. Horario semanal -->
 <section class="section-newpage">
-  <h1 class="seccion">Mi horario semanal</h1>
+  <h1 class="seccion">2 · Mi horario semanal</h1>
   <div class="table-block">
   <table class="anexo">
     <thead><tr><th>Hora</th><th>Lunes</th><th>Martes</th><th>Miércoles</th><th>Jueves</th><th>Viernes</th></tr></thead>
@@ -113,7 +113,7 @@
 
 <!-- 6. Registro TME -->
 <section class="section-newpage">
-  <h1 class="seccion">Registro TME /s/</h1>
+  <h1 class="seccion">3 · Registro semanal de TME /s/</h1>
   <div class="table-block">
   <table class="anexo">
     <thead><tr><th>Día</th><th>1ª</th><th>2ª</th><th>3ª</th><th>Mejor valor</th><th>Observaciones</th></tr></thead>
@@ -127,36 +127,7 @@
   <p class="nota">{{ anexos.tme_referencia }}</p>
 </section>
 
-<!-- 7. VHI-10 -->
-<section class="section-newpage">
-  <h1 class="seccion">VHI-10 · Cómo siento mi voz</h1>
-  {% if anexos.vhi10_previo %}
-  <p><span class="chip">Último registro: {{ anexos.vhi10_previo.puntaje }} pts ({{ anexos.vhi10_previo.fecha }})</span></p>
-  {% endif %}
-  <div class="table-block">
-  <table class="anexo">
-    <thead><tr><th>Nº</th><th>Enunciado</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead>
-    <tbody>
-      {% for item in vhi_items %}
-      <tr><td>{{ loop.index }}</td><td>{{ item }}</td>
-        <td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td><td><span class="vhi-circulo"></span></td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  <p class="nota">0 Nunca · 1 Casi nunca · 2 A veces · 3 Casi siempre · 4 Siempre.</p>
-  <table class="anexo">
-    <thead><tr><th>Puntaje</th><th>Interpretación</th></tr></thead>
-    <tbody>
-      {% for r in vhi_interp %}
-      <tr><td>{{ r.rango }}</td><td>{{ r.texto }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p class="nota">Repetir cada 4 a 6 semanas para comparar la evolución.</p>
-</section>
-
-<!-- 8. Oraciones -->
+<!-- 7. Oraciones (el VHI-10 se toma en la app, no se imprime) -->
 <section>
   <h1 class="seccion">Oraciones de uso frecuente</h1>
   {% if not oraciones or oraciones|length == 0 %}
@@ -174,17 +145,7 @@
   </div>
 </section>
 
-<!-- 9. Bibliografía -->
-<section class="section-newpage">
-  <h1 class="seccion">Bibliografía</h1>
-  <div class="biblio">
-    {% for ref in biblio %}
-    <p>{{ ref }}</p>
-    {% endfor %}
-  </div>
-</section>
-
-<!-- 10. Cierre -->
+<!-- 8. Cierre (sin bibliografía: material para el paciente, no académico) -->
 <section>
   <div class="cierre">
     <strong>Uso exclusivo terapéutico.</strong> Este cuadernillo fue preparado para uso supervisado en terapia fonoaudiológica. Si siente dolor o molestia, suspenda los ejercicios y consulte a su profesional.

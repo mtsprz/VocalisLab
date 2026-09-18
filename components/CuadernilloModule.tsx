@@ -321,6 +321,9 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [titulo, setTitulo] = useState('Cuadernillo Terapéutico Vocal');
   const [sesiones, setSesiones] = useState(8);
   const [notas, setNotas] = useState('');
+  // Nombre editable (el PDF lo exige) + fecha de inicio editable.
+  const [nombrePaciente, setNombrePaciente] = useState('');
+  const [fechaInicio, setFechaInicio] = useState(() => new Date().toISOString().slice(0, 10));
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [motorExport, setMotorExport] = useState<'reportlab_vector' | 'html_pdf' | 'figma'>('reportlab_vector');
@@ -362,7 +365,9 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     });
   };
 
-  const pacienteNombre = clinical.data.paciente?.nombre_completo || '';
+  const pacienteNombreClinico = clinical.data.paciente?.nombre_completo || '';
+  // El nombre del PDF: editable, pre-cargado desde la ficha clínica.
+  const pacienteNombre = nombrePaciente || pacienteNombreClinico;
   const pacienteTelefono = (clinical.data.paciente?.telefono || '').replace(/\D/g, '');
   const pacienteEmail = clinical.data.paciente?.email || '';
   // Diagnóstico para el guardia de seguridad clínica (contraindicaciones)
@@ -404,6 +409,12 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   useEffect(() => {
     loadBank();
   }, []);
+
+  // Pre-cargar el nombre desde la ficha clínica (sigue siendo editable).
+  useEffect(() => {
+    if (pacienteNombreClinico && !nombrePaciente) setNombrePaciente(pacienteNombreClinico);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacienteNombreClinico]);
 
   const loadBank = async () => {
     try {
@@ -499,6 +510,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       alert('Seleccioná al menos un ejercicio terapéutico.');
       return;
     }
+    if (!pacienteNombre.trim()) {
+      alert('Completá el nombre del paciente (campo "Paciente" en Datos del cuadernillo).');
+      return;
+    }
     setGenerating(true);
     setExportMsg('');
     try {
@@ -521,7 +536,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
           body: JSON.stringify({
             motor: motorExport,
             paciente_id: pacienteId || '',
-            paciente_nombre: pacienteNombre || 'Paciente Sin Especificar',
+            paciente_nombre: pacienteNombre.trim(),
             titulo,
             cantidad_sesiones: sesiones,
             ejercicios: selected,
@@ -529,6 +544,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             notas,
             profesional,
             advertencias,
+            fecha_inicio: fechaInicio,
           }),
         });
         const ctype0 = r.headers.get('content-type', '');
@@ -567,6 +583,8 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       }
       const fd = new FormData();
       fd.append('paciente_id', pacienteId || '');
+      fd.append('paciente_nombre', pacienteNombre.trim());
+      fd.append('fecha_inicio', fechaInicio);
       fd.append('titulo', titulo);
       fd.append('sesiones', String(sesiones));
       fd.append('ejercicios_json', JSON.stringify(selected));
@@ -743,7 +761,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
                 title={
-                  m.id === 'reportlab_vector' ? 'PDF vectorial de 19 páginas (motor interno)' :
+                  m.id === 'reportlab_vector' ? 'PDF vectorial (motor interno: ejercicios + horario + TME)' :
                   m.id === 'html_pdf' ? 'PDF editorial automático open-source (WeasyPrint, sin cuotas)' :
                   'Exportar frame Figma a PDF (requiere FIGMA_ACCESS_TOKEN)'
                 }
@@ -1084,6 +1102,24 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Paciente (sale en el PDF) *</label>
+            <input
+              value={nombrePaciente}
+              onChange={e => setNombrePaciente(e.target.value)}
+              placeholder={pacienteNombreClinico || 'Nombre y apellido del paciente'}
+              className="mt-1 w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Fecha de inicio</label>
+            <input
+              type="date"
+              value={fechaInicio}
+              onChange={e => setFechaInicio(e.target.value)}
+              className="mt-1 w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
           <div>
             <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Título del Cuadernillo</label>
             <input

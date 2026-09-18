@@ -27,6 +27,7 @@ def extraer_variables_cuadernillo(
     profesional: Dict[str, Any] = None,
     evaluacion: Dict[str, Any] = None,
     advertencias: List[str] = None,
+    fecha_inicio: str = "",
 ) -> Dict[str, Any]:
     """Extrae un diccionario estandarizado de variables con nombres limpios
     ({{paciente_nombre}}, {{vhi10_score}}, etc.) para inyectar en plantillas de
@@ -35,7 +36,11 @@ def extraer_variables_cuadernillo(
     profesional = profesional or {}
     evaluacion = evaluacion or {}
     
-    fecha_hoy = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
+    try:
+        from cuadernillo_pdf import _normalizar_fecha_inicio
+        fecha_hoy = _normalizar_fecha_inicio(fecha_inicio)
+    except Exception:
+        fecha_hoy = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
     
     # Formatear la lista de ejercitación para la plantilla.
     # Precaución STOP por ejercicio: viene del frontend o se enriquece acá
@@ -51,10 +56,12 @@ def extraer_variables_cuadernillo(
         pasos_str = "\n".join([f"{i}. {p}" for i, p in enumerate(pasos, 1)])
         precaucion = (ex.get("precaucion") or "").strip() or _prec_map.get(
             str(ex.get("id", "")).strip().lower(), "")
+        import re as _re
+        _nombre = _re.sub(r"^\s*\d+\.\d+\s*", "", str(ex.get("name", f"Ejercicio {idx}")))
         ejercicios_formateados.append({
             "numero": idx,
             "id": ex.get("id", ""),
-            "nombre": ex.get("name", f"Ejercicio {idx}"),
+            "nombre": _nombre,
             "descripcion": ex.get("description", ""),
             "duracion": f"{ex.get('duration_min', 5)} min/día",
             "pasos_lista": pasos,

@@ -1150,7 +1150,6 @@ async def verificar_cuadernillo_endpoint(
 
 @app.post("/api/cuadernillo/generar")
 async def generar_cuadernillo_endpoint(
-    paciente_nombre: str = Form(""),
     titulo: str = Form("Cuadernillo Terapéutico Vocal"),
     sesiones: int = Form(8),
     ejercicios_json: str = Form("[]"),
@@ -1159,6 +1158,8 @@ async def generar_cuadernillo_endpoint(
     profesional_json: str = Form("{}"),
     diagnostico_texto: str = Form(""),
     advertencias_json: str = Form("[]"),
+    paciente_nombre: str = Form(""),
+    fecha_inicio: str = Form(""),
 ):
     try:
         ejercicios = json.loads(ejercicios_json) if ejercicios_json.startswith("[") else []
@@ -1167,6 +1168,13 @@ async def generar_cuadernillo_endpoint(
         advertencias = json.loads(advertencias_json) if advertencias_json.startswith("[") else []
     except Exception:
         ejercicios, contrato, profesional, advertencias = [], {}, {}, []
+
+    # El PDF es personal: sin nombre no se genera (antes salía "Sin especificar").
+    if not paciente_nombre.strip():
+        return JSONResponse(content={
+            "ok": False,
+            "error": "Completá el nombre del paciente antes de generar el cuadernillo.",
+        })
 
     # Guardia clínica: excluir ejercicios contraindicados para el diagnóstico
     # (ej: empuje glótico + lesión exofítica). Nunca salen en el PDF.
@@ -1196,7 +1204,7 @@ async def generar_cuadernillo_endpoint(
         print(f"[cuadernillo] enriquecimiento precauciones falló: {e}")
 
     pdf_path = generar_cuadernillo_pdf(
-        paciente_nombre=paciente_nombre,
+        paciente_nombre=paciente_nombre.strip(),
         titulo=titulo,
         sesiones=sesiones,
         ejercicios=ejercicios,
@@ -1204,6 +1212,7 @@ async def generar_cuadernillo_endpoint(
         notas=notas,
         profesional=profesional,
         advertencias=[a for a in advertencias if str(a).strip()],
+        fecha_inicio=fecha_inicio,
     )
 
     with open(pdf_path, "rb") as f:

@@ -201,8 +201,12 @@ def _es_imagen_valida(path: str) -> bool:
         return False
 
 
-def _prompt_ejercicio(nombre: str, descripcion: str) -> str:
-    return PROMPT_BASE.format(desc=f"{nombre}. {descripcion[:220]}".strip())
+def _prompt_ejercicio(nombre: str, descripcion: str, exercise_id: str = "") -> str:
+    # Usa la descripción específica por ejercicio (no el nombre genérico)
+    # para que la IA ilustre el contenido real y no un título histórico.
+    desc = _descripcion_ejercicio(exercise_id, nombre or "ejercicio vocal",
+                                 descripcion or "")
+    return PROMPT_BASE.format(desc=desc[:300].strip())
 
 
 def _via_cloudflare(prompt: str, desc_fallback: str = "",
@@ -652,13 +656,32 @@ def proveedores_disponibles() -> list:
     return provs
 
 
+# Descripciones 3D por CONTENIDO del ejercicio (ver _SVG_POR_EJERCICIO en
+# cuadernillo_pdf.py: los IDs arrastran nombres históricos distintos).
 IMG_DESC_3D = {
-    "tubo_agua": "a person's hands holding a clear glass bottle with water, a transparent silicone tube submerged exactly 1.5 cm, realistic water bubbles, studio lighting, medical textbook aesthetic",
-    "popote_aire": "stylized 3D vector diagram of a head side profile with a thin straw at the lips in open air, smooth featureless surfaces, no glass, no water",
-    "humming_m": "hyperrealistic 3D anatomical render of a human head side profile, soft glowing highlight on the nasolabial and mask area indicating acoustic resonance, elegant medical graphic style",
-    "frases_balanceadas": "person speaking clearly in 3D clinical render with expanding soundwave arcs extending forward, medical textbook aesthetic",
+    "le_huche": "3D torso diagram of slow breathing cycle with /f/ inhale and /sh/ exhale airflow arrows, relaxed shoulders",
+    "shiatsu_cabeza": "3D head diagram with marked self-massage pressure dots on crown, temples, jaw and neck, no hands",
     "rotacion_hombros": "3D anatomical render of human upper torso showing neck side bend and shoulder roll, clinical style",
+    "masaje_laringeo": "3D medical vector diagram of correct hand placement on the front of the neck, laryngeal area",
+    "descenso_laringeo": "head profile vector diagram of wide yawn with lowered larynx arrow",
+    "oclusion_succion": "head profile diagram phonating low rounded 'hu-hu' with lowered larynx indicator",
+    "empuje_glotico": "mouth and vowel shaping diagram alternating open O-A and U-I positions with low larynx",
     "respiracion_abdominal": "3D anatomical render of human torso side-view showing abdominal expansion during breathing",
+    "expansion_costo_lateral": "3D ribcage diagram with lateral expansion arrows on lower ribs during 4-4-8-2 breathing",
+    "soplo_escalonado": "3D torso diagram of full 3D breathing expansion front sides and lumbar back, pursed-lip exhale",
+    "coordinacion_costo_abdominal": "3D torso diagram showing sustained /s/ and /z/ airflow lines with stable breath support",
+    "tubo_agua": "smooth pitch siren glide diagram on /m/ sliding from low to high tone and back, no glass no water",
+    "vibracion_labial": "close-up lip and face mask diagram with /m/ vibration ripple lines on lips nose and cheeks",
+    "popote_aire": "five ascending musical stairs diagram with notes going up and down, 3rd 5th octave",
+    "consonantes_fricativas": "person chanting proverbs in sung speech with gentle melodic modulation lines",
+    "humming_m": "open book with balanced reading sentences diagram and clear speech soundwave arcs",
+    "oclusion_nasal": "nose and lip diagram showing nasal /m/ resonance flowing into open vowels",
+    "glissandos": "smooth continuous siren pitch curve ascending and descending without breaks",
+    "escalas_vocalicas": "person speaking monologue confidently for 2-3 minutes with breath support indicator",
+    "frases_balanceadas": "person speaking clearly in 3D clinical render with expanding soundwave arcs extending forward, medical textbook aesthetic",
+    "calentamiento": "three ascending warm-up steps diagram for voice training with arrows going up",
+    "enfriamiento": "three descending cool-down steps diagram for voice training with arrows going down",
+    "pautas_rlf": "inclined bed wedge pillow vector diagram and clock icon showing no food 2.5 hours before sleep",
 }
 
 
