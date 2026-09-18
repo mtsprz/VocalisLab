@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, AlertCircle, PhoneOff } from 'lucide-react';
+import { Loader2, AlertCircle, PhoneOff, RotateCcw, ExternalLink } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+/** Tiempo máximo esperando init/join antes de mostrar error accionable. */
+const JOIN_TIMEOUT_MS = 60000;
 
 interface Props {
   meetingNumber: string;
@@ -9,8 +11,43 @@ interface Props {
   userName: string;
   /** 1 = terapeuta (host), 0 = paciente */
   role?: number;
+  /** Enlace directo a la sala (fallback cuando el embebido falla). */
+  joinUrl?: string;
   onLeave?: () => void;
   onJoin?: () => void;
+}
+
+/**
+ * Traduce rechazos del SDK (vienen como objetos {errorCode, reason}, no Error)
+ * a mensajes accionables en español. Devuelve null si no es del SDK Zoom.
+ */
+function zoomRejectionMessage(r: any): string | null {
+  if (r == null) return null;
+  const code = typeof r === 'object' ? r.errorCode ?? r.code : null;
+  const raw = typeof r === 'string'
+    ? r
+    : String(r.reason ?? r.message ?? r.error ?? '');
+  const low = raw.toLowerCase();
+  const isZoom = typeof code === 'number'
+    || /zoom|meeting|signature|hardware acceleration|video encoding|media/i.test(raw);
+  if (!isZoom) return null;
+  if (code === 3712 || /signature is invalid/i.test(raw)) {
+    return 'Firma Zoom inválida (error 3712): las credenciales no corresponden a una app con Meeting SDK habilitado. '
+      + 'En Render, ZOOM_SDK_KEY y ZOOM_SDK_SECRET deben ser el Client ID y Client Secret de una app “General App” '
+      + '(Marketplace → Build App → General App → Features → Embed → Meeting SDK ON), NO las de la app Server-to-Server.';
+  }
+  if (/hardware acceleration|video encoding/i.test(raw)) {
+    return 'Zoom bloqueó la aceleración de video por restricción de la cuenta (sin HD/720p habilitado). '
+      + 'El embebido puede quedar en negro: unite con la app de escritorio de Zoom o pedí habilitar HD en tu plan. '
+      + `Detalle técnico: ${raw.slice(0, 200)}`;
+  }
+  if (/network|timeout|connection|reconnect/i.test(low)) {
+    return `Se perdió la conexión con la sala de Zoom (${raw.slice(0, 160)}). Revisá tu internet y reintentá.`;
+  }
+  if (/sharedarraybuffer|noise suppression/i.test(low)) {
+    return 'Supresión de ruido no disponible en este navegador (requiere escritorio con crossed-isolated). El audio sigue funcionando sin ese filtro.';
+  }
+  return `Zoom devolvió un error${typeof code === 'number' ? ` (${code})` : ''}: ${raw.slice(0, 220) || 'fallo desconocido del SDK'}. Probá reintentar o unirte con el enlace directo.`;
 }
 
 /**
@@ -24,32 +61,43 @@ interface Props {
  *   del Video SDK); el paciente debe activarlo en el panel de audio de Zoom.
  *   Ver guía en ZoomTeleconsulta.
  */
-export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLeave, onJoin }: Props) {
+export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, joinUrl, onLeave, onJoin }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<any>(null);
+  const joinedRef = useRef(false);
   const [status, setStatus] = useState<'cargando' | 'en_llamada' | 'error'>('cargando');
   const [errorMsg, setErrorMsg] = useState('');
+  // Reintentos: cambiar la key vuelve a montar el efecto (reinit limpio del SDK).
+  const [attempt, setAttempt] = useState(0);
+
+  const fail = (msg: string) => {
+    setErrorMsg(msg);
+    setStatus('error');
+  };
 
   useEffect(() => {
     let cancelled = false;
+    joinedRef.current = false;
+    setStatus('cargando');
+    setErrorMsg('');
 
-    // El SDK puede rechazar el join fuera del await (evento interno).
-    // Convertir el error 3712 en mensaje accionable en vez de spam en consola.
+    // El SDK rechaza promesas fuera del await (fallas de media/red/hardware).
+    // Mapearlas a mensajes accionables y evitar el "Uncaught (in promise)".
     const onUnhandled = (ev: PromiseRejectionEvent) => {
-      const r: any = ev.reason;
-      if (r && (r.errorCode === 3712 || /signature is invalid/i.test(String(r.reason || r.message || '')))) {
+      const msg = zoomRejectionMessage(ev.reason);
+      if (msg) {
         ev.preventDefault();
-        if (!cancelled) {
-          setErrorMsg(
-            'Firma Zoom inválida (error 3712): las credenciales no corresponden a una app con Meeting SDK habilitado. ' +
-            'En Render, ZOOM_SDK_KEY y ZOOM_SDK_SECRET deben ser el Client ID y Client Secret de una app “General App” ' +
-            '(Marketplace → Build App → General App → Features → Embed → Meeting SDK ON), NO las de la app Server-to-Server.'
-          );
-          setStatus('error');
-        }
+        if (!cancelled) fail(msg);
       }
     };
     window.addEventListener('unhandledrejection', onUnhandled);
+
+    // Timeout: si init/join cuelga, no dejar loader infinito.
+    const timeoutId = window.setTimeout(() => {
+      if (!cancelled && !joinedRef.current) {
+        fail('Zoom tardó demasiado en conectar (60 s). Puede ser red, cuenta sin permisos de video, o sala llena. Reintentá o unite con el enlace directo.');
+      }
+    }, JOIN_TIMEOUT_MS);
 
     (async () => {
       try {
@@ -81,6 +129,23 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLe
         const client = ZoomMtgEmbedded.createClient();
         clientRef.current = client;
 
+        // Si la conexión cae DESPUÉS del join (video/red), mostrar error con
+        // reintento en vez de dejar el área en negro/blanco.
+        try {
+          if (typeof client.on === 'function') {
+            client.on('connection-change', (payload: any) => {
+              const state = String(payload?.state ?? payload ?? '').toLowerCase();
+              if (cancelled) return;
+              if ((state === 'closed' || state === 'failed') && joinedRef.current) {
+                joinedRef.current = false;
+                fail('Se cortó la conexión con la sala de Zoom. Reintentá o unite con el enlace directo.');
+              }
+            });
+          }
+        } catch {}
+
+        // NOTA: no pasar `videoElement` (deprecado en el SDK: usar attachVideo/
+        // renderVideo si se maneja video propio; el Component View lo gestiona solo).
         await client.init({
           zoomAppRoot: rootRef.current,
           language: 'es-ES',
@@ -95,26 +160,30 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLe
         });
 
         if (!cancelled) {
+          joinedRef.current = true;
           setStatus('en_llamada');
           onJoin?.();
         }
       } catch (e: any) {
         if (!cancelled) {
-          setErrorMsg(e.message || 'No se pudo unir a la sala embebida');
-          setStatus('error');
+          const mapped = zoomRejectionMessage(e);
+          fail(mapped ?? (e.message || 'No se pudo unir a la sala embebida'));
         }
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     })();
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
       window.removeEventListener('unhandledrejection', onUnhandled);
       try {
         clientRef.current?.leave?.();
       } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingNumber]);
+  }, [meetingNumber, attempt]);
 
   const colgar = async () => {
     try {
@@ -136,7 +205,7 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLe
           className="w-full min-h-[320px] sm:min-h-[480px] bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden"
         />
         {status !== 'en_llamada' && (
-          <div className="absolute inset-0 rounded-2xl bg-slate-950/95 flex flex-col items-center justify-center gap-3 p-6 text-center pointer-events-none">
+          <div className="absolute inset-0 rounded-2xl bg-slate-950/95 flex flex-col items-center justify-center gap-3 p-6 text-center">
             {status === 'cargando' ? (
               <>
                 <Loader2 size={28} className="animate-spin text-blue-500" />
@@ -147,8 +216,24 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, onLe
                 <AlertCircle size={28} className="text-amber-500" />
                 <p className="text-xs font-bold text-slate-200">No se pudo embeber el video</p>
                 <p className="text-[11px] text-slate-400 max-w-sm">{errorMsg}</p>
+                <div className="flex flex-wrap justify-center gap-2 pt-1">
+                  <button
+                    onClick={() => setAttempt(a => a + 1)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5"
+                  >
+                    <RotateCcw size={13} /> Reintentar embebido
+                  </button>
+                  {joinUrl && (
+                    <a
+                      href={joinUrl} target="_blank" rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5"
+                    >
+                      <ExternalLink size={13} /> Abrir en Zoom
+                    </a>
+                  )}
+                </div>
                 <p className="text-[11px] text-slate-500">
-                  Podés unirte igual con el enlace directo de Zoom o la app de escritorio.
+                  También podés unirte con la app de escritorio de Zoom.
                 </p>
               </>
             )}

@@ -234,6 +234,7 @@ export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSal
                       password={sala.zoom_password || ''}
                       userName="Fonoaudiólogo/a"
                       role={1}
+                      joinUrl={sala.zoom_join_url}
                       onLeave={() => setModoEmbebido(false)}
                     />
                   </div>
