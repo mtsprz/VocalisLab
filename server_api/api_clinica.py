@@ -912,7 +912,8 @@ async def crear_turno(
                 meet_link = g_data.get("meet_link")
                 google_sync.update(ok=True, detalle="Evento creado en Google Calendar.")
             else:
-                google_sync.update(ok=False, detalle=str(g_data.get("error") or g_data)[:200] or "Google rechazó el evento.")
+                error_msg = g_data.get("error") or "Google Calendar error desconocido"
+                google_sync.update(ok=False, detalle=str(error_msg)[:200])
         except HTTPException as e:
             google_sync.update(ok=False, detalle=f"Google auth: {e.detail} (re-logueate con Google).")
             print(f"[api_clinica] No se pudo sincronizar turno con Google: {e}")

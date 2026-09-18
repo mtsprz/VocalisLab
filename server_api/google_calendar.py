@@ -123,6 +123,16 @@ async def create_calendar_event(
     motivo: str = Form(""),
 ):
     """Create a new event in Google Calendar with Google Meet support."""
+    # Defensa: esta función también se llama internamente (turnos/sync) sin
+    # pasar todos los params; los defaults Form() NO son strings y romperían
+    # json.dumps ("Object of type Form is not JSON serializable"). Coercionar.
+    def _s(v):
+        # Un default Form() no es string ni convertible: no trae valor útil.
+        return v if isinstance(v, str) else ""
+    user_id, summary, description = _s(user_id), _s(summary), _s(description)
+    start_datetime, end_datetime = _s(start_datetime), _s(end_datetime)
+    attendee_email, location = _s(attendee_email), _s(location)
+    modalidad, motivo = _s(modalidad) or "PRESENCIAL", _s(motivo)
     if not user_id:
         raise HTTPException(status_code=401, detail="user_id requerido")
 
@@ -206,31 +216,28 @@ async def create_calendar_event(
 @router.post("/api/calendar/create-event")
 async def create_event_json(request: Request):
     """
-    Endpoint compatible con JSON payload del prompt arquitectónico:
-    {
-      "user_id": string,
-      "pacienteNombre": string,
-      "pacienteEmail": string,
-      "modalidad": 'VIRTUAL' | 'PRESENCIAL',
-      "fecha": 'YYYY-MM-DD',
-      "horaInicio": 'HH:MM',
-      "horaFin": 'HH:MM',
-      "motivoConsulta": string
-    }
+    Endpoint compatible con payload JSON del prompt arquitectónico,
+    pero también acepta datos de formulario (el uso real desde el frontend).
     """
     try:
-        body = await request.json()
+        # Intentar parsear como JSON primero; si falla, intentar como form data
+        try:
+            body = await request.json()
+        except Exception:
+            # Si no es JSON, parsear como form data
+            form = await request.form()
+            body = dict(form)
     except Exception:
         body = {}
 
-    user_id = body.get("user_id", "")
-    paciente_nombre = body.get("pacienteNombre", "Paciente")
-    paciente_email = body.get("pacienteEmail", "")
-    modalidad = body.get("modalidad", "PRESENCIAL")
-    fecha = body.get("fecha", datetime.utcnow().strftime("%Y-%m-%d"))
-    hora_inicio = body.get("horaInicio", "10:00")
-    hora_fin = body.get("horaFin", "10:45")
-    motivo = body.get("motivoConsulta", "Especialidad Voz")
+    user_id = body.get("user_id", "") if isinstance(body, dict) else ""
+    paciente_nombre = body.get("pacienteNombre", "Paciente") if isinstance(body, dict) else "Paciente"
+    paciente_email = body.get("pacienteEmail", "") if isinstance(body, dict) else ""
+    modalidad = body.get("modalidad", "PRESENCIAL") if isinstance(body, dict) else "PRESENCIAL"
+    fecha = body.get("fecha", datetime.utcnow().strftime("%Y-%m-%d")) if isinstance(body, dict) else datetime.utcnow().strftime("%Y-%m-%d")
+    hora_inicio = body.get("horaInicio", "10:00") if isinstance(body, dict) else "10:00"
+    hora_fin = body.get("horaFin", "10:45") if isinstance(body, dict) else "10:45"
+    motivo = body.get("motivoConsulta", "Especialidad Voz") if isinstance(body, dict) else "Especialidad Voz"
 
     start_datetime = f"{fecha}T{hora_inicio}:00"
     end_datetime = f"{fecha}T{hora_fin}:00"
