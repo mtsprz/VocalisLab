@@ -18,6 +18,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
   const [recomendacion, setRecomendacion] = useState<any>(null);
   const [transferred, setTransferred] = useState(false);
   const [error, setError] = useState('');
+  const [contextoUsado, setContextoUsado] = useState<any>(null);
 
   // Data from clinical context or fallback demo data
   const [pacienteData, setPacienteData] = useState<any>(
@@ -144,6 +145,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
       const data = await r.json();
       if (data.ok && data.recomendacion) {
         setRecomendacion(data.recomendacion);
+        setContextoUsado(data.contexto_usado || null);
       } else {
         setError('No se pudo generar la recomendación.');
       }
@@ -191,7 +193,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
       </div>
 
       {/* Patient Selector & Quick Inputs Context */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-xl p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Contexto del Paciente</span>
@@ -269,6 +271,45 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
               <p className="text-gray-400">AVQI v03.01</p>
               <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.avqi}</p>
             </div>
+          </div>
+        </div>
+
+        {/* Anamnesis + ORL Summary Card (fibroscopía / diagnóstico) */}
+        <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 rounded-xl p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Anamnesis + ORL</span>
+            <FileText size={16} className="text-emerald-500" />
+          </div>
+          <div className="space-y-2 text-xs">
+            <div>
+              <p className="text-gray-400 font-semibold">Motivo</p>
+              <p className="font-medium text-gray-800 dark:text-gray-200 line-clamp-2">{anamnesisData.motivo_consulta || <span className="text-rose-500 font-bold">Sin anamnesis cargada</span>}</p>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400 font-semibold shrink-0">Diag. ORL:</span>
+              <span className="font-bold text-gray-800 dark:text-gray-200 text-right">{anamnesisData.diagnostico_orl || <span className="text-rose-500">—</span>}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400 font-semibold shrink-0">Exploración:</span>
+              <span className="font-bold text-gray-800 dark:text-gray-200 text-right">{anamnesisData.metodo_exploracion || '—'}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-400 font-semibold shrink-0">Autoperc.:</span>
+              <span className="font-bold text-gray-800 dark:text-gray-200">{anamnesisData.autopercepcion_voz ?? '—'}/10</span>
+            </div>
+            {contextoUsado && (
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1">
+                <p className={`font-bold ${contextoUsado.tiene_informe_orl ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>
+                  {contextoUsado.tiene_informe_orl ? '✓ Informe ORL inyectado a la IA' : '○ Sin informe ORL validado'}
+                </p>
+                <p className="text-gray-500 dark:text-gray-400">
+                  Evaluaciones en DB: <strong>{contextoUsado.n_evaluaciones ?? 0}</strong>
+                  {contextoUsado.basal_autopercepcion != null && (
+                    <> · Autoperc. basal→actual: <strong>{contextoUsado.basal_autopercepcion}→{contextoUsado.actual_autopercepcion}</strong></>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

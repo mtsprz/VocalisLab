@@ -144,6 +144,21 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, join
         const client = ZoomMtgEmbedded.createClient();
         clientRef.current = client;
 
+        // El SDK trae Bootstrap en tema claro: espejar el modo noche de la
+        // app dentro de su root para que toolbar/menús no queden blancos.
+        try {
+          const root = rootRef.current;
+          const syncBsTheme = () => {
+            const dark = document.documentElement.classList.contains('dark');
+            root?.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+          };
+          syncBsTheme();
+          const mo = new MutationObserver(syncBsTheme);
+          mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+          const prevCleanup = () => mo.disconnect();
+          (clientRef as any)._bsThemeCleanup = prevCleanup;
+        } catch {}
+
         // Si la conexión cae DESPUÉS del join (video/red), mostrar error con
         // reintento en vez de dejar el área en negro/blanco.
         try {
@@ -193,6 +208,9 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role = 1, join
       cancelled = true;
       window.clearTimeout(timeoutId);
       window.removeEventListener('unhandledrejection', onUnhandled);
+      try {
+        (clientRef as any)._bsThemeCleanup?.();
+      } catch {}
       try {
         clientRef.current?.leave?.();
       } catch {}

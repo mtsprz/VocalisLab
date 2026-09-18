@@ -1232,15 +1232,38 @@ async def recomendar_terapia_endpoint(
     except Exception:
         paciente, anamnesis, riesgo_vocal, escalas, acustica = {}, {}, {}, {}, {}
 
-    # Hidratación server-side: informes ORL validados + evolución de
-    # evaluaciones (basal vs actual). El frontend puede venir parcial o con
+    # Hidratación server-side: anamnesis + informes ORL validados + evolución
+    # de evaluaciones (basal vs actual). El frontend puede venir parcial o con
     # datos demo; la DB manda.
     extras: dict = {"informe_orl": None, "evolucion": []}
+    contexto_usado: dict = {
+        "tiene_anamnesis": bool(anamnesis.get("motivo_consulta")),
+        "tiene_informe_orl": False,
+        "diagnostico_orl": anamnesis.get("diagnostico_orl", ""),
+        "metodo_exploracion": anamnesis.get("metodo_exploracion", ""),
+        "n_evaluaciones": 0,
+        "basal_autopercepcion": None,
+        "actual_autopercepcion": None,
+    }
     if paciente_id:
         try:
             from api_clinica import _get_supabase
             sb = _get_supabase()
             if sb:
+                try:
+                    ra = sb.table("anamnesis").select(
+                        "motivo_consulta, diagnostico_orl, metodo_exploracion,"
+                        " resumen_clinico, autopercepcion_voz, antecedentes_salud"
+                    ).eq("paciente_id", paciente_id).order("fecha", desc=True).limit(1).execute()
+                    adb = (ra.data or [None])[0]
+                    if adb:
+                        for k in ("motivo_consulta", "diagnostico_orl", "metodo_exploracion",
+                                  "resumen_clinico", "autopercepcion_voz", "antecedentes_salud"):
+                            if not anamnesis.get(k) and adb.get(k) not in (None, "", {}, []):
+                                anamnesis[k] = adb[k]
+                        contexto_usado["tiene_anamnesis"] = bool(anamnesis.get("motivo_consulta"))
+                except Exception as e:
+                    print(f"[recomendar] anamnesis no hidratada: {str(e)[:120]}")
                 try:
                     ri = sb.table("informes_orl").select(
                         "diagnostico_principal, metodo_exploracion, hallazgos_estructurales,"
@@ -1261,6 +1284,10 @@ async def recomendar_terapia_endpoint(
                         }
                         if not anamnesis.get("diagnostico_orl") and val.get("diagnostico_principal"):
                             anamnesis["diagnostico_orl"] = val["diagnostico_principal"]
+                        contexto_usado["tiene_informe_orl"] = True
+                        contexto_usado["diagnostico_orl"] = anamnesis.get("diagnostico_orl", "")
+                        if val.get("metodo_exploracion"):
+                            contexto_usado["metodo_exploracion"] = val["metodo_exploracion"]
                 except Exception as e:
                     print(f"[recomendar] informes_orl no hidratados: {str(e)[:120]}")
                 try:
@@ -1274,6 +1301,9 @@ async def recomendar_terapia_endpoint(
                         basal, actual = evs[0], evs[-1]
                         extras["basal"] = basal
                         extras["actual"] = actual
+                        contexto_usado["n_evaluaciones"] = len(evs)
+                        contexto_usado["basal_autopercepcion"] = basal.get("autopercepcion_vocal")
+                        contexto_usado["actual_autopercepcion"] = actual.get("autopercepcion_vocal")
                 except Exception as e:
                     print(f"[recomendar] evolucion no hidratada: {str(e)[:120]}")
         except Exception as e:
@@ -1288,7 +1318,7 @@ async def recomendar_terapia_endpoint(
             acustica=acustica,
             extras=extras
         )
-        return JSONResponse(content={"ok": True, "recomendacion": recomendacion})
+        return JSONResponse(content={"ok": True, "recomendacion": recomendacion, "contexto_usado": contexto_usado})
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error en recomendación IA: {str(e)}")

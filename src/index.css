@@ -12,6 +12,12 @@
     @apply bg-gray-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100;
   }
 
+  /* Controles nativos (date/time/select/range) en modo noche.
+     Sin esto, los pickers del navegador se ven claros aunque la app esté oscura. */
+  html.dark {
+    color-scheme: dark;
+  }
+
   /* Custom scrollbar for dark mode */
   ::-webkit-scrollbar {
     width: 6px;

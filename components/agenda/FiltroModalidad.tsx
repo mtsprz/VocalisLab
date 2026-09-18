@@ -17,7 +17,7 @@ export default function FiltroModalidad({ valor, onChange, conteo }: Props) {
   ];
 
   return (
-    <div className="inline-flex items-center p-1 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs font-medium">
+    <div className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs font-medium max-w-full">
       {opciones.map(op => {
         const activa = valor === op.id;
         return (

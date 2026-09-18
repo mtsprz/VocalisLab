@@ -262,7 +262,7 @@ export default function NuevoTurnoModal({
           </div>
 
           {/* Motivo & Tipo */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="font-semibold text-gray-700 dark:text-gray-300 block mb-1">Motivo</label>
               <select
