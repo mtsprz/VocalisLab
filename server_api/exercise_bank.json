@@ -435,7 +435,8 @@
       "description": "Isometría laríngea con laringe elevada y tensión. Foco en Le Huche, descontracturación cervical y descenso laríngeo.",
       "exercise_ids": ["le_huche", "shiatsu_cabeza", "rotacion_hombros", "masaje_laringeo", "descenso_laringeo", "respiracion_abdominal", "tubo_agua", "calentamiento"],
       "sesiones_recomendadas": 10,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "Ante dolor, mareo o molestia que no cede, suspender y consultar al profesional. Sin forzar ni empujar."
     },
     {
       "id": "dmt_2",
@@ -444,7 +445,8 @@
       "description": "Aproximación excesiva de bandas ventriculares. Foco en ensanchamiento faríngeo, SOVTE en tubo de agua y soplo aspirado.",
       "exercise_ids": ["le_huche", "descenso_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "vibracion_labial", "enfriamiento"],
       "sesiones_recomendadas": 12,
-      "frecuencia": "2 a 3 veces por semana"
+      "frecuencia": "2 a 3 veces por semana",
+      "advertencia": "Ante dolor, mareo o molestia que no cede, suspender y consultar al profesional. Sin forzar ni empujar."
     },
     {
       "id": "dmt_3_4",
@@ -453,7 +455,8 @@
       "description": "Compresión esfinteriana global con voz estrangulada. Foco en desactivación tensional, descenso laríngeo y SOVTE suave.",
       "exercise_ids": ["le_huche", "masaje_laringeo", "descenso_laringeo", "oclusion_nasal", "tubo_agua", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 14,
-      "frecuencia": "2 a 3 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "Ante dolor, mareo o molestia que no cede, suspender y consultar al profesional. Sin forzar ni empujar."
     },
     {
       "id": "disfonia_funcional",
@@ -462,7 +465,8 @@
       "description": "Voz débil sin lesión estructural. Foco en apoyo respiratorio, aducción suave y transferencia sin esfuerzo.",
       "exercise_ids": ["respiracion_abdominal", "coordinacion_costo_abdominal", "oclusion_nasal", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 10,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "Ante dolor, mareo o molestia que no cede, suspender y consultar al profesional. Sin forzar ni empujar."
     },
     {
       "id": "disfonia_espasmodica",
@@ -481,7 +485,8 @@
       "description": "Persistencia de registro agudo post-puberal. Foco en descenso laríngeo, glissandos descendentes y estabilización modal.",
       "exercise_ids": ["descenso_laringeo", "glissandos", "escalas_vocalicas", "oclusion_nasal", "humming_m", "frases_balanceadas"],
       "sesiones_recomendadas": 10,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "Ante dolor, mareo o molestia que no cede, suspender y consultar al profesional. Sin forzar ni empujar."
     },
     {
       "id": "cantante_tvso",
@@ -490,7 +495,8 @@
       "description": "Cantantes con fatiga o restricción de rango. Foco en tracto semiocluido, glissandos, escalas y calentamiento/enfriamiento.",
       "exercise_ids": ["rotacion_hombros", "respiracion_abdominal", "tubo_agua", "popote_aire", "vibracion_labial", "glissandos", "escalas_vocalicas", "oclusion_nasal", "humming_m", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 10,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "Ante dolor, fatiga inmediata o pérdida de rango, suspender y consultar. Sin cantar con dolor ni forzar agudos."
     },
     {
       "id": "nodo_cordial",
@@ -499,7 +505,8 @@
       "description": "Edema en punto nodular por microtrauma. Foco en reeducación respiratoria, ataque suave, SOVTE y descontracturación. Sin empuje.",
       "exercise_ids": ["le_huche", "masaje_laringeo", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 14,
-      "frecuencia": "2 a 3 veces por semana"
+      "frecuencia": "2 a 3 veces por semana",
+      "advertencia": "STOP: suspender ante dolor, disfonía súbita/afonía, sangrado o disnea y derivar al ORL. Prohibidos empuje glótico, ataque duro, carraspeo/tos fuerte y susurro sostenido."
     },
     {
       "id": "polipo_vocal",
@@ -508,7 +515,8 @@
       "description": "Lesión exofítica unilateral. Foco en economía vocal, SOVTE suave y resonancia. Sin empuje ni esfuerzo.",
       "exercise_ids": ["le_huche", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 12,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "STOP: suspender ante dolor, disfonía súbita/afonía, sangrado o disnea y derivar al ORL. Prohibidos empuje glótico, ataque duro, carraspeo/tos fuerte y susurro sostenido."
     },
     {
       "id": "quiste_cuerda",
@@ -517,7 +525,8 @@
       "description": "Lesión subepitelial con rigidez local. Foco en flexibilidad suave, SOVTE y descarga tensional. Sin empuje.",
       "exercise_ids": ["masaje_laringeo", "respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 12,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "STOP: suspender ante dolor, disfonía súbita/afonía, sangrado o disnea y derivar al ORL. Prohibidos empuje glótico, ataque duro, carraspeo/tos fuerte y susurro sostenido."
     },
     {
       "id": "laringitis_cronica",
@@ -526,7 +535,8 @@
       "description": "Inflamación persistente por irritantes o RLF. Foco en higiene, hidratación y fonación suave.",
       "exercise_ids": ["pautas_rlf", "respiracion_abdominal", "descenso_laringeo", "tubo_agua", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 8,
-      "frecuencia": "1 a 2 veces por semana"
+      "frecuencia": "1 a 2 veces por semana",
+      "advertencia": "STOP ante dolor, afonía o disnea. Evitar irritantes (tabaco, alcohol, polvo/humo); no forzar la voz inflamada y derivar al ORL si persiste más de 14 días."
     },
     {
       "id": "granuloma_contacto",
@@ -535,7 +545,8 @@
       "description": "Lesión posterior por golpe glótico o intubación. Foco en ataque suave, higiene digestiva y descarga.",
       "exercise_ids": ["pautas_rlf", "respiracion_abdominal", "descenso_laringeo", "soplo_escalonado", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 10,
-      "frecuencia": "1 a 2 veces por semana"
+      "frecuencia": "1 a 2 veces por semana",
+      "advertencia": "STOP: suspender ante dolor, disfonía súbita, sangrado o disnea y derivar al ORL. No carraspear ni toser: usar deglución consciente y sorbos de agua. Prohibidos empuje y ataque duro."
     },
     {
       "id": "papilomatosis_postqx",
@@ -554,7 +565,8 @@
       "description": "Déficit de cierre cordal. Foco en apoyo costodiafragmático, consonantes fricativas sonoras y resonancia anterior.",
       "exercise_ids": ["empuje_glotico", "respiracion_abdominal", "expansion_costo_lateral", "consonantes_fricativas", "popote_aire", "escalas_vocalicas", "humming_m"],
       "sesiones_recomendadas": 16,
-      "frecuencia": "2 a 3 veces por semana"
+      "frecuencia": "2 a 3 veces por semana",
+      "advertencia": "Empuje solo con supervisión y en días alternos, con incompetencia confirmada por ORL. STOP ante dolor cervical, mareo, disnea o disfagia; cribado deglutorio previo. Prohibido si hay lesión exofítica asociada."
     },
     {
       "id": "presbifonia",
@@ -563,7 +575,8 @@
       "description": "Atrofia cordal senil con arqueamiento. Foco en incremento de tonicidad con popote estrecho y proyección vocal.",
       "exercise_ids": ["expansion_costo_lateral", "popote_aire", "vibracion_labial", "consonantes_fricativas", "escalas_vocalicas", "frases_balanceadas", "calentamiento"],
       "sesiones_recomendadas": 12,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "Progresión gradual de carga. STOP ante dolor, fatiga inmediata, mareo o disnea; control cardiovascular en adultos mayores. Suspender y consultar."
     },
     {
       "id": "sulcus_vergeture",
@@ -572,7 +585,8 @@
       "description": "Alteración mínima estructural con rigidez de cubierta. Foco en flexibilidad, SOVTE y coordinación aerodinámica.",
       "exercise_ids": ["respiracion_abdominal", "coordinacion_costo_abdominal", "tubo_agua", "humming_m", "escalas_vocalicas", "enfriamiento"],
       "sesiones_recomendadas": 14,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "AME: SOVTE suave, sin trauma ni esfuerzo. STOP ante dolor o disfonía súbita; control ORL periódico."
     },
     {
       "id": "sinequia_puente",
@@ -581,7 +595,8 @@
       "description": "Adherencia de borde libre. Foco en vibración simétrica suave y elongación sin trauma.",
       "exercise_ids": ["tubo_agua", "vibracion_labial", "humming_m", "glissandos", "enfriamiento"],
       "sesiones_recomendadas": 14,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "AME: vibración suave, sin trauma ni esfuerzo. STOP ante dolor o disfonía súbita; control ORL periódico."
     },
     {
       "id": "ectasias_varices",
@@ -590,7 +605,8 @@
       "description": "Fragilidad vascular con riesgo hemorrágico. Foco en economía vocal estricta, sin esfuerzo ni empuje.",
       "exercise_ids": ["respiracion_abdominal", "tubo_agua", "humming_m", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 10,
-      "frecuencia": "1 a 2 veces por semana"
+      "frecuencia": "1 a 2 veces por semana",
+      "advertencia": "Riesgo hemorrágico: sin esfuerzo, sirenas amplias ni forte; SOVTE suave y dosis cortas. Ante afonía súbita post-esfuerzo → silencio relativo y ORL urgente; no susurrar ni carraspear."
     },
     {
       "id": "anomalias_congenitas",
@@ -599,7 +615,8 @@
       "description": "Laringomalacia, diafragma laríngeo, quiste sacular. Apoyo coordinado con ORL: respiración, descenso suave y SOVTE liviano.",
       "exercise_ids": ["respiracion_abdominal", "descenso_laringeo", "tubo_agua", "humming_m", "frases_balanceadas", "enfriamiento"],
       "sesiones_recomendadas": 12,
-      "frecuencia": "1 a 2 veces por semana"
+      "frecuencia": "1 a 2 veces por semana",
+      "advertencia": "Apoyo coordinado con ORL. STOP ante disnea, estridor o disfagia; carga mínima y supervisión."
     },
     {
       "id": "fonastenia",
@@ -608,7 +625,8 @@
       "description": "Cansancio vocal en docentes y profesionales. Foco en economía vocal (SOVTE), resonancia y pausas vocales.",
       "exercise_ids": ["rotacion_hombros", "respiracion_abdominal", "tubo_agua", "popote_aire", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 8,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "Ante dolor, mareo o molestia que no cede, suspender y consultar al profesional. Respetar pausas vocales y no competir con ruido ambiente."
     },
     {
       "id": "rlf",
@@ -617,7 +635,8 @@
       "description": "Irritación interaritenoidea con carraspeo crónico. Foco en higiene digestiva estricta, hidratación y vibración suave.",
       "exercise_ids": ["pautas_rlf", "descenso_laringeo", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
       "sesiones_recomendadas": 8,
-      "frecuencia": "1 a 2 veces por semana"
+      "frecuencia": "1 a 2 veces por semana",
+      "advertencia": "No carraspear, toser ni susurrar: deglución consciente y sorbos de agua. No acostarse antes de 2.5 h post-cena, cabecera 10-15 cm. Derivar a gastro/ORL si hay pirosis o disfagia."
     },
     {
       "id": "edema_reinke",
@@ -626,7 +645,8 @@
       "description": "Aumento de masa y laxitud en espacio de Reinke. Foco en disminución de impacto, resonancia y SOVTE.",
       "exercise_ids": ["le_huche", "masaje_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 12,
-      "frecuencia": "2 veces por semana"
+      "frecuencia": "2 veces por semana",
+      "advertencia": "STOP: suspender ante dolor, disfonía súbita/afonía, sangrado o disnea y derivar al ORL. SOVTE suave (inmersión máx. 2 cm). Prohibidos empuje glótico, ataque duro y carraspeo."
     },
     {
       "id": "preparacion_vocal",
@@ -635,7 +655,8 @@
       "description": "Rutina completa de preparación y cuidado para profesionales de la voz hablada y cantada.",
       "exercise_ids": ["rotacion_hombros", "le_huche", "respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
       "sesiones_recomendadas": 6,
-      "frecuencia": "diario o pre-jornada"
+      "frecuencia": "diario o pre-jornada",
+      "advertencia": "Rutina de mantenimiento: ante dolor, fatiga o molestia, suspender y consultar al profesional."
     }
   ]
 }

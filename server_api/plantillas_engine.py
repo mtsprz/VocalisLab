@@ -26,6 +26,7 @@ def extraer_variables_cuadernillo(
     notas: str = "",
     profesional: Dict[str, Any] = None,
     evaluacion: Dict[str, Any] = None,
+    advertencias: List[str] = None,
 ) -> Dict[str, Any]:
     """Extrae un diccionario estandarizado de variables con nombres limpios
     ({{paciente_nombre}}, {{vhi10_score}}, etc.) para inyectar en plantillas de
@@ -36,11 +37,20 @@ def extraer_variables_cuadernillo(
     
     fecha_hoy = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
     
-    # Formatear la lista de ejercitación para la plantilla
+    # Formatear la lista de ejercitación para la plantilla.
+    # Precaución STOP por ejercicio: viene del frontend o se enriquece acá
+    # desde las fichas clínicas (bank_id).
+    try:
+        from recomendar_motor import precauciones_por_bank_id
+        _prec_map = precauciones_por_bank_id()
+    except Exception:
+        _prec_map = {}
     ejercicios_formateados = []
     for idx, ex in enumerate(ejercicios, 1):
         pasos = ex.get("steps", []) or []
         pasos_str = "\n".join([f"{i}. {p}" for i, p in enumerate(pasos, 1)])
+        precaucion = (ex.get("precaucion") or "").strip() or _prec_map.get(
+            str(ex.get("id", "")).strip().lower(), "")
         ejercicios_formateados.append({
             "numero": idx,
             "id": ex.get("id", ""),
@@ -50,6 +60,7 @@ def extraer_variables_cuadernillo(
             "pasos_lista": pasos,
             "pasos_texto": pasos_str,
             "seccion": ex.get("seccion_id", "general"),
+            "precaucion": precaucion,
         })
 
     return {
@@ -81,6 +92,9 @@ def extraer_variables_cuadernillo(
         "ejercicios_total": len(ejercicios),
         "ejercicios": ejercicios_formateados,
         "ejercicios_json_str": json.dumps(ejercicios_formateados, ensure_ascii=False),
+
+        # Seguridad clínica (STOP imprimible)
+        "advertencias": [str(a).strip() for a in (advertencias or []) if str(a).strip()],
     }
 
 
@@ -154,6 +168,9 @@ class HTMLTemplateEngine:
             pasos_li = "".join(
                 [f"<li><span class='checkbox'>☐</span> {_htmlmod.escape(str(p))}</li>"
                  for p in ex.get("pasos_lista", [])])
+            prec = (ex.get("precaucion") or "").strip()
+            prec_html = (f"<p class='stop'>⚠ STOP — {_htmlmod.escape(prec)}</p>"
+                         if prec else "")
             ejercicios_html += f"""
             <div class="exercise-card">
               <table class="card-header"><tr>
@@ -162,11 +179,18 @@ class HTMLTemplateEngine:
                 <td class="ex-dosis">{_htmlmod.escape(str(ex['duracion']))}</td>
               </tr></table>
               <p class="ex-desc">{_htmlmod.escape(str(ex['descripcion']))}</p>
+              {prec_html}
               <ul class="steps-list">
                 {pasos_li}
               </ul>
             </div>
             """
+        advs = [str(a).strip() for a in variables.get("advertencias", []) if str(a).strip()]
+        advertencias_html = ""
+        if advs:
+            items = "".join(
+                [f"<p class='stop'>⚠ STOP — {_htmlmod.escape(a)}</p>" for a in advs])
+            advertencias_html = f"<div class='stop-banner'>{items}</div>"
 
         html_doc = f"""<!DOCTYPE html>
 <html lang="es">
@@ -194,6 +218,8 @@ class HTMLTemplateEngine:
     .steps-list {{ list-style: none; padding: 0; margin: 0; font-size: 13px; }}
     .steps-list li {{ padding: 4px 0; border-bottom: 1px dashed #f1f5f9; }}
     .checkbox {{ color: #7c4dff; font-weight: bold; margin-right: 6px; }}
+    .stop {{ background: #fdecea; border: 1px solid #b71c1c; color: #b71c1c; font-size: 12px; font-weight: bold; border-radius: 6px; padding: 6px 8px; margin: 8px 0; }}
+    .stop-banner {{ margin: 12px 0 20px 0; }}
     .footer {{ text-align: center; font-size: 10px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; }}
   </style>
 </head>
@@ -216,6 +242,7 @@ class HTMLTemplateEngine:
     <strong>Contrato terapéutico:</strong> frecuencia {variables['frecuencia_sesiones']} ·
     sesiones de {variables['duracion_sesion_min']} min. {variables['notas_profesional']}
   </div>
+  {advertencias_html}
 
   <div class="exercises-container">
     {ejercicios_html}

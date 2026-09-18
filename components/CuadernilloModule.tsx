@@ -68,7 +68,8 @@ const DEFAULT_PRESETS: Preset[] = [
     description: "Edema en punto nodular por microtrauma. Foco en reeducación respiratoria, ataque suave, SOVTE y descontracturación.",
     exercise_ids: ["le_huche", "masaje_laringeo", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
     sesiones_recomendadas: 14,
-    frecuencia: "2 a 3 veces por semana"
+    frecuencia: "2 a 3 veces por semana",
+    advertencia: "STOP: suspender ante dolor, disfonía súbita/afonía, sangrado o disnea y derivar al ORL. Prohibidos empuje glótico, ataque duro, carraspeo/tos fuerte y susurro sostenido.",
   },
   {
     id: "paralisis_cordal",
@@ -76,7 +77,8 @@ const DEFAULT_PRESETS: Preset[] = [
     description: "Déficit de cierre cordal. Foco en apoyo costodiafragmático, consonantes fricativas sonoras y resonancia anterior.",
     exercise_ids: ["respiracion_abdominal", "expansion_costo_lateral", "consonantes_fricativas", "popote_aire", "escalas_vocalicas", "humming_m"],
     sesiones_recomendadas: 16,
-    frecuencia: "2 a 3 veces por semana"
+    frecuencia: "2 veces por semana",
+    advertencia: "Empuje solo con supervisión y en días alternos, con incompetencia confirmada por ORL. STOP ante dolor cervical, mareo, disnea o disfagia."
   },
   {
     id: "presbifonia",
@@ -100,7 +102,8 @@ const DEFAULT_PRESETS: Preset[] = [
     description: "Irritación interaritenoidea con carraspeo crónico. Foco en higiene digestiva estricta, hidratación y vibración suave.",
     exercise_ids: ["pautas_rlf", "descenso_laringeo", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
     sesiones_recomendadas: 8,
-    frecuencia: "1 a 2 veces por semana"
+    frecuencia: "1 a 2 veces por semana",
+    advertencia: "No carraspear, toser ni susurrar: deglución consciente y sorbos de agua. No acostarse antes de 2.5 h post-cena, cabecera 10-15 cm.",
   },
   {
     id: "edema_reinke",
@@ -108,7 +111,8 @@ const DEFAULT_PRESETS: Preset[] = [
     description: "Aumento de masa y laxitud en espacio de Reinke. Foco en disminución de impacto, resonancia y SOVTE.",
     exercise_ids: ["le_huche", "masaje_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "calentamiento", "enfriamiento"],
     sesiones_recomendadas: 12,
-    frecuencia: "2 veces por semana"
+    frecuencia: "2 veces por semana",
+    advertencia: "STOP: suspender ante dolor, disfonía súbita, sangrado o disnea y derivar al ORL. SOVTE suave (inmersión máx. 2 cm).",
   },
   {
     id: "preparacion_vocal",
@@ -505,6 +509,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         duracion_sesion: '30 minutos',
         pautas_ausencias: 'Avisar con 24h de anticipación.',
       };
+      // Advertencias STOP de los presets activos → se imprimen en el PDF.
+      const advertencias = presetsActivos
+        .map(p => (p as any).advertencia)
+        .filter((a): a is string => Boolean(a && String(a).trim()));
       // Motores editoriales externos (Figma / HTML) vía plantillas_engine
       if (motorExport !== 'reportlab_vector') {
         const r = await fetch(`${BACKEND_URL}/api/cuadernillo/exportar-plantilla`, {
@@ -520,6 +528,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             contrato,
             notas,
             profesional,
+            advertencias,
           }),
         });
         const ctype0 = r.headers.get('content-type', '');
@@ -565,6 +574,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       fd.append('notas', notas);
       fd.append('profesional_json', JSON.stringify(profesional));
       fd.append('diagnostico_texto', diagnosticoTexto);
+      fd.append('advertencias_json', JSON.stringify(advertencias));
 
       const r = await fetch(`${BACKEND_URL}/api/cuadernillo/generar`, { method: 'POST', body: fd });
       const data = await r.json();

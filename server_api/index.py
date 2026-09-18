@@ -1158,13 +1158,15 @@ async def generar_cuadernillo_endpoint(
     notas: str = Form(""),
     profesional_json: str = Form("{}"),
     diagnostico_texto: str = Form(""),
+    advertencias_json: str = Form("[]"),
 ):
     try:
         ejercicios = json.loads(ejercicios_json) if ejercicios_json.startswith("[") else []
         contrato = json.loads(contrato_json) if contrato_json.startswith("{") else {}
         profesional = json.loads(profesional_json) if profesional_json.startswith("{") else {}
+        advertencias = json.loads(advertencias_json) if advertencias_json.startswith("[") else []
     except Exception:
-        ejercicios, contrato, profesional = [], {}, {}
+        ejercicios, contrato, profesional, advertencias = [], {}, {}, []
 
     # Guardia clínica: excluir ejercicios contraindicados para el diagnóstico
     # (ej: empuje glótico + lesión exofítica). Nunca salen en el PDF.
@@ -1181,6 +1183,18 @@ async def generar_cuadernillo_endpoint(
         except Exception as e:
             print(f"[cuadernillo] verificación contraindicaciones falló: {e}")
 
+    # Enriquecer cada ejercicio con su precaución STOP (fichas clínicas).
+    try:
+        from recomendar_motor import precauciones_por_bank_id
+        prec_map = precauciones_por_bank_id()
+        for e in ejercicios:
+            if isinstance(e, dict) and not e.get("precaucion"):
+                p = prec_map.get(str(e.get("id", "")).strip().lower())
+                if p:
+                    e["precaucion"] = p
+    except Exception as e:
+        print(f"[cuadernillo] enriquecimiento precauciones falló: {e}")
+
     pdf_path = generar_cuadernillo_pdf(
         paciente_nombre=paciente_nombre,
         titulo=titulo,
@@ -1189,6 +1203,7 @@ async def generar_cuadernillo_endpoint(
         contrato=contrato,
         notas=notas,
         profesional=profesional,
+        advertencias=[a for a in advertencias if str(a).strip()],
     )
 
     with open(pdf_path, "rb") as f:

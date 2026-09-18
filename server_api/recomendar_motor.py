@@ -17,6 +17,33 @@ def _load_bank():
         return {"sections": [], "presets": []}
 
 
+_PRECAUCIONES_CACHE = None
+
+
+def precauciones_por_bank_id():
+    """bank_id ejercicio → texto de precauciones (fichas_clinicas.json).
+
+    Se usa para imprimir el STOP por ejercicio en el PDF aunque el frontend
+    mande los ejercicios sin ese campo.
+    """
+    global _PRECAUCIONES_CACHE
+    if _PRECAUCIONES_CACHE is None:
+        _PRECAUCIONES_CACHE = {}
+        try:
+            path = os.path.join(os.path.dirname(__file__), "fichas_clinicas.json")
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            fichas = raw.get("fichas", raw) if isinstance(raw, dict) else raw
+            for fc in (fichas or []):
+                bid = str(fc.get("bank_id", "")).strip().lower()
+                prec = str(fc.get("precauciones", "")).strip()
+                if bid and prec and bid not in _PRECAUCIONES_CACHE:
+                    _PRECAUCIONES_CACHE[bid] = prec
+        except Exception as e:
+            print(f"[recomendar_motor] no se pudieron cargar precauciones: {e}")
+    return _PRECAUCIONES_CACHE
+
+
 # Mapeo tag de contraindicación del banco → patrones en el diagnóstico/motivo.
 # Si el diagnóstico matchea y el ejercicio tiene ese tag, se EXCLUYE del
 # cuadernillo (error clínicamente inadmisible, ej: empuje + nódulos).

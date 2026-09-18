@@ -790,13 +790,14 @@ async def exportar_plantilla_cuadernillo(request: Request):
     contrato = body.get("contrato", {})
     notas = body.get("notas", "")
     profesional = body.get("profesional", {})
+    advertencias = body.get("advertencias", []) or []
 
     from plantillas_engine import (
         extraer_variables_cuadernillo,
         FigmaRESTEngine,
         HTMLTemplateEngine,
     )
-    
+
     vars_dict = extraer_variables_cuadernillo(
         paciente_nombre=paciente_nombre,
         titulo=titulo,
@@ -805,6 +806,7 @@ async def exportar_plantilla_cuadernillo(request: Request):
         contrato=contrato,
         notas=notas,
         profesional=profesional,
+        advertencias=advertencias,
     )
 
     if motor == "canva":

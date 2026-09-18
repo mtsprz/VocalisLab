@@ -119,7 +119,8 @@ export default function NuevoTurnoModal({
         throw new Error(guardado?.detail || 'El servidor no devolvió la cita guardada.');
       }
       const gs = guardado.google_sync;
-      if (gs?.intentado && !gs?.ok) {
+      const googleFallo = Boolean(gs?.intentado && !gs?.ok);
+      if (googleFallo) {
         setGoogleWarn(`Cita guardada en la app, pero NO llegó a Google Calendar: ${gs.detalle || 'error de sincronización'}`);
       } else {
         setGoogleWarn('');
@@ -139,6 +140,12 @@ export default function NuevoTurnoModal({
       }
 
       onTurnoCreado();
+      // Si Google falló, NO cerrar: el aviso ámbar debe verse (antes se
+      // cerraba el modal y el warning nunca se mostraba).
+      if (googleFallo) {
+        setGuardando(false);
+        return;
+      }
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al agendar cita.');

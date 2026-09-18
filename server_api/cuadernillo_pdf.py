@@ -972,7 +972,26 @@ def _get_styles():
          leading=13, spaceAfter=2 * mm)
     _add('CuadSubTitle', parent=styles['Heading3'], fontSize=11, textColor=PRIMARY,
          spaceBefore=3 * mm, spaceAfter=1 * mm, leading=14)
+    # Seguridad clínica: banda roja STOP (precauciones por ejercicio y
+    # advertencias del preset). Debe verse sí o sí en el PDF impreso.
+    _add('StopText', parent=styles['Normal'], fontSize=11, leading=14,
+         textColor=HexColor("#b71c1c"), backColor=HexColor("#fdecea"),
+         borderWidth=0.6, borderColor=HexColor("#b71c1c"),
+         borderPadding=(4, 4, 4), spaceBefore=2 * mm, spaceAfter=2 * mm)
     return styles
+
+
+def _build_stop_banner(styles, textos):
+    """Banda roja con advertencias de seguridad (una por renglón)."""
+    elements = []
+    limpios = [str(t).strip() for t in (textos or []) if str(t).strip()]
+    if not limpios:
+        return elements
+    for t in limpios:
+        elements.append(Paragraph(
+            f"<b>STOP — {escape(_sanear(_simplificar(t)))}</b>",
+            styles['StopText']))
+    return elements
 
 
 def _prof(profesional: dict, key: str, default: str = "") -> str:
@@ -1374,6 +1393,12 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     elements.append(card)
     elements.append(Spacer(1, 3 * mm))
 
+    precaucion = str(exercise.get("precaucion") or "").strip()
+    if precaucion:
+        elements.append(Paragraph(
+            f"<b>STOP — {escape(_sanear(_simplificar(precaucion)))}</b>",
+            styles['StopText']))
+
     phrases = exercise.get("phrases", []) or []
     if phrases:
         elements.append(Spacer(1, 2 * mm))
@@ -1632,6 +1657,7 @@ def generar_cuadernillo_pdf(
     contrato: dict,
     notas: str = "",
     profesional: dict = None,
+    advertencias: list = None,
 ) -> str:
     fecha = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
     profesional = profesional if isinstance(profesional, dict) else {}
@@ -1666,6 +1692,8 @@ def generar_cuadernillo_pdf(
     story.extend(_build_cover(styles, titulo, paciente_nombre, sesiones, fecha,
                               profesional=profesional))
     story.extend(_build_contract(styles, contrato))
+    # Advertencias de seguridad del preset (STOP imprimible, C4 auditoría).
+    story.extend(_build_stop_banner(styles, advertencias))
 
     story.append(Paragraph("Mis Ejercicios de Voz", styles['SectionTitle']))
     story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
