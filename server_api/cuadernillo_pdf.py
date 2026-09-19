@@ -1451,6 +1451,14 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     # Sin bloques full-width duplicados ni desbordes de columna.
     ex_id_vis = str(exercise.get("id", "")).strip().lower()
     ai_img = exercise.get("_ai_pre") or None
+    # Banco del profesional: si hay imagen asignada en la tabla, gana siempre
+    # (cubre llamadas directas a la tarjeta fuera de generar_cuadernillo_pdf).
+    if not ai_img and ex_id_vis:
+        try:
+            from imagen_terapeutica import buscar_imagen_guardada as _db_img
+            ai_img = _db_img(ex_id_vis)
+        except Exception:
+            ai_img = None
     if not ai_img and _modo_imagen() == "ai":
         try:
             from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
@@ -1739,13 +1747,23 @@ def generar_cuadernillo_pdf(
         "Siga los pasos en orden y tilde cada casilla cuando lo complete.",
         styles['CuadBody']))
 
+    # Imágenes asignadas por el profesional (banco Supabase): ganan SIEMPRE,
+    # en cualquier modo. Luego IA (solo modo 'ai') y dibujo vectorial.
+    ilustraciones = {}
+    try:
+        from imagen_terapeutica import mapa_imagenes_db
+        ids_todos = [str((e or {}).get("id", "")).strip().lower() for e in (ejercicios or [])]
+        ilustraciones.update(mapa_imagenes_db(ids_todos))
+    except Exception as e:
+        print(f"[cuadernillo] banco de imágenes omitido: {e}")
+
     # Pre-generación PARALELA de ilustraciones IA (4 hilos): SOLO en modo
-    # 'ai' explícito. En modo 'svg' (default) se omite por completo: cero
-    # llamadas a la IA, cero artefactos, PDF rápido y determinista.
+    # 'ai' explícito y solo para ejercicios SIN imagen asignada.
     if _modo_imagen() == "ai":
-        ilustraciones = _preguntar_ilustraciones(ejercicios)
-    else:
-        ilustraciones = {}
+        resto = [e for e in (ejercicios or [])
+                 if str((e or {}).get("id", "")).strip().lower() not in ilustraciones]
+        for eid, path in _preguntar_ilustraciones(resto).items():
+            ilustraciones.setdefault(eid, path)
 
     for idx, ex in enumerate(ejercicios, 1):
         ex = dict(ex or {})

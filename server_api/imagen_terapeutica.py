@@ -569,6 +569,35 @@ def _ensure_bucket(sb) -> bool:
             return False
 
 
+def mapa_imagenes_db(exercise_ids: list) -> dict:
+    """{exercise_id: path_local} para los ejercicios con imagen asignada por
+    el profesional. UNA sola query (no una por ejercicio). Nunca lanza."""
+    out: dict = {}
+    ids = [str(i or "").strip().lower() for i in (exercise_ids or []) if str(i or "").strip()]
+    if not ids:
+        return out
+    try:
+        sb = _supabase()
+        if not sb:
+            return out
+        res = sb.table("ejercicio_imagenes").select("exercise_id, image_url, storage_path")\
+            .in_("exercise_id", ids).execute()
+        for row in (res.data or []):
+            ex_id = str(row.get("exercise_id", "")).strip().lower()
+            if not ex_id or ex_id in out:
+                continue
+            dest = _cache_path(f"ejercicio:{ex_id}", "db")
+            if _es_imagen_valida(dest):
+                out[ex_id] = dest
+                continue
+            url = row.get("image_url", "")
+            if url and _descargar(url, dest, timeout=60):
+                out[ex_id] = dest
+    except Exception as e:
+        print(f"[imagen_terapeutica] mapa DB falló: {e}")
+    return out
+
+
 def buscar_imagen_guardada(exercise_id: str) -> str | None:
     """Devuelve el path local de la imagen persistida para el ejercicio, o None.
     1) Fila en ejercicio_imagenes → 2) descarga de Storage a caché local."""

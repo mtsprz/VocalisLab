@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind, MessageCircle, Mail, X, Send, Zap } from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCircle, Shield, Music, Activity, Wind, MessageCircle, Mail, X, Send, Zap, Image as ImageIcon, Upload, Trash2 } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
 import { firmaProfesional } from './clinicalUtils';
@@ -338,6 +338,12 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [expandMsg, setExpandMsg] = useState('');
   const [fichas, setFichas] = useState<any[]>([]);
   const [fichaAbierta, setFichaAbierta] = useState<string | null>(null);
+  // Banco de imágenes (Supabase Storage): archivos compartidos + asignación por ejercicio.
+  const [bancoArchivos, setBancoArchivos] = useState<any[]>([]);
+  const [imgAsignadas, setImgAsignadas] = useState<Record<string, string>>({});
+  const [imgPickerEx, setImgPickerEx] = useState<string | null>(null);
+  const [subiendoImg, setSubiendoImg] = useState(false);
+  const [imgMsg, setImgMsg] = useState('');
   const [profesional, setProfesional] = useState<Record<string, string>>(() => {
     try {
       const raw = localStorage.getItem('vocalislab_profesional');
@@ -408,7 +414,78 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
 
   useEffect(() => {
     loadBank();
+    cargarBancoImg();
   }, []);
+
+  const cargarBancoImg = async () => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagenes/banco`);
+      if (r.ok) {
+        const data = await r.json();
+        if (data.ok) {
+          setBancoArchivos(data.archivos || []);
+          setImgAsignadas(data.asignadas || {});
+        }
+      }
+    } catch {}
+  };
+
+  const asignarImagenBanco = async (storagePath: string) => {
+    if (!imgPickerEx) return;
+    setSubiendoImg(true);
+    setImgMsg('');
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen/asignar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exercise_id: imgPickerEx, storage_path: storagePath }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'No se pudo asignar');
+      await cargarBancoImg();
+      setImgMsg('Imagen asignada ✓ (saldrá en el PDF)');
+    } catch (e: any) {
+      setImgMsg(e.message || 'Error asignando imagen');
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
+
+  const subirImagenEjercicio = async (file: File | undefined) => {
+    if (!file || !imgPickerEx) return;
+    setSubiendoImg(true);
+    setImgMsg('');
+    try {
+      const fd = new FormData();
+      fd.append('exercise_id', imgPickerEx);
+      fd.append('archivo', file);
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen`, { method: 'POST', body: fd });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'No se pudo subir');
+      await cargarBancoImg();
+      setImgMsg('Imagen subida y asignada ✓ (saldrá en el PDF)');
+    } catch (e: any) {
+      setImgMsg(e.message || 'Error subiendo imagen');
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
+
+  const quitarImagenEjercicio = async () => {
+    if (!imgPickerEx) return;
+    setSubiendoImg(true);
+    setImgMsg('');
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen/${imgPickerEx}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error('No se pudo quitar');
+      await cargarBancoImg();
+      setImgMsg('Imagen quitada (vuelve el dibujo vectorial)');
+    } catch (e: any) {
+      setImgMsg(e.message || 'Error');
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
 
   // Pre-cargar el nombre desde la ficha clínica (sigue siendo editable).
   useEffect(() => {
@@ -1007,6 +1084,18 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                         onChange={() => toggleExercise(ex.id)}
                         className="mt-1 rounded text-indigo-600 focus:ring-indigo-500"
                       />
+                      {/* Miniatura: imagen asignada del banco o dibujo vectorial */}
+                      <button
+                        onClick={e => { e.preventDefault(); e.stopPropagation(); setImgPickerEx(ex.id); setImgMsg(''); }}
+                        title={imgAsignadas[ex.id] ? 'Cambiar imagen del ejercicio' : 'Elegir imagen del banco para este ejercicio'}
+                        className="shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-center hover:border-indigo-400 transition-all"
+                      >
+                        {imgAsignadas[ex.id] ? (
+                          <img src={imgAsignadas[ex.id]} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon size={20} className="text-gray-300 dark:text-gray-600" />
+                        )}
+                      </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{ex.name}</p>
@@ -1163,6 +1252,79 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
           </button>
         </div>
       </div>
+
+      {/* Modal banco de imágenes por ejercicio */}
+      {imgPickerEx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#111827] rounded-3xl border border-gray-200 dark:border-white/10 w-full max-w-2xl shadow-2xl overflow-hidden max-h-[92dvh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                <ImageIcon size={16} className="text-indigo-500" /> Imagen del ejercicio
+              </h3>
+              <button onClick={() => setImgPickerEx(null)} className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 text-xs">
+              <p className="text-gray-500 dark:text-gray-400">
+                Elegí del banco o subí una ilustración para <strong className="text-gray-800 dark:text-gray-200">{imgPickerEx}</strong>. La imagen asignada sale en la tarjeta del PDF.
+              </p>
+              {imgMsg && (
+                <p className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 font-semibold">{imgMsg}</p>
+              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-2 cursor-pointer transition-all">
+                  {subiendoImg ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  Subir imagen (PNG/JPG/WebP, máx 8 MB)
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={subiendoImg}
+                    onChange={e => { subirImagenEjercicio(e.target.files?.[0]); e.target.value = ''; }}
+                  />
+                </label>
+                {imgAsignadas[imgPickerEx] && (
+                  <button
+                    onClick={quitarImagenEjercicio}
+                    disabled={subiendoImg}
+                    className="px-4 py-2.5 rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-bold flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all disabled:opacity-50"
+                  >
+                    <Trash2 size={14} /> Quitar (volver al dibujo)
+                  </button>
+                )}
+              </div>
+              {imgAsignadas[imgPickerEx] && (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <img src={imgAsignadas[imgPickerEx]} alt="" className="w-16 h-16 rounded-lg object-cover border border-emerald-500/30" />
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-300">Imagen actual de este ejercicio</p>
+                </div>
+              )}
+              <div>
+                <p className="font-bold text-gray-700 dark:text-gray-300 mb-2">Banco compartido ({bancoArchivos.length}) — clic para asignar</p>
+                {bancoArchivos.length === 0 ? (
+                  <p className="text-gray-400">El banco está vacío: subí la primera imagen con el botón de arriba.</p>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                    {bancoArchivos.map((a: any) => (
+                      <button
+                        key={a.path}
+                        onClick={() => asignarImagenBanco(a.path)}
+                        disabled={subiendoImg}
+                        title={a.path}
+                        className="rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 hover:border-indigo-400 transition-all disabled:opacity-50 bg-gray-50 dark:bg-white/5"
+                      >
+                        <img src={a.url} alt={a.path} className="w-full h-20 object-cover" />
+                        <p className="px-1 py-1 text-[9px] text-gray-500 truncate">{a.path}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal envío por Email */}
       {showEmailModal && (
