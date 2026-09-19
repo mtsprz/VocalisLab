@@ -63,6 +63,24 @@ def test_contra_tags_con_mapa():
     assert not sin_mapa, f"Tags sin cobertura en CONTRA_MAP (guardia ciega): {sin_mapa}"
 
 
+def test_bank_schema_completo():
+    """Todo ejercicio del banco (incluidos los de la edición ampliada) trae
+    los campos que el PDF y el frontend necesitan."""
+    bank = _bank()
+    ids = []
+    for s in bank.get("sections", []):
+        assert s.get("id"), "sección sin id"
+        for e in s.get("exercises", []):
+            assert e.get("id"), f"ejercicio sin id en sección {s.get('id')}"
+            ids.append(e["id"])
+            assert (e.get("name") or "").strip(), f"{e['id']}: sin nombre"
+            assert len(e.get("steps", []) or []) >= 1, f"{e['id']}: sin pasos"
+            assert isinstance(e.get("duration_min"), int), f"{e['id']}: sin duration_min"
+            assert e.get("difficulty") in ("basico", "intermedio", "avanzado"), \
+                f"{e['id']}: difficulty inválida"
+    assert len(ids) == len(set(ids)), "IDs de ejercicio duplicados"
+
+
 def test_precauciones_cubren_ejercicios_con_contra():
     """Si un ejercicio del banco declara contraindicaciones, debe existir
     texto de precaución imprimible (ficha con bank_id) o el STOP no sale."""

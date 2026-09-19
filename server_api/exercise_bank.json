@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "version": "2026.1.0",
+    "version": "2026.2.0",
     "titulo": "Cuadernillo Clínico Edición 2026 - Manual de Entrenamiento y Rehabilitación Vocal",
     "autor": "Lic. Matías Pérez",
     "matricula": "M.P. 7276",
@@ -58,6 +58,36 @@
             "b) Inclinación cervical lateral: Inclinar cabeza llevando la oreja al hombro sin rotar (3 c/lado x 10 s).",
             "c) Rotación cervical: Girar cabeza a un lado hasta donde sea cómodo (5 c/lado x 5 s).",
             "d) Círculos cervicales: Círculos lentos y amplios sin retroflexionar por atrás (5 c/sentido). Stop si hay mareo."
+          ],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["tension_muscular", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "schultz_jacobson",
+          "name": "Relajación progresiva (Schultz y Jacobson)",
+          "description": "Descontracción progresiva pasiva y activa para reducir la tensión hiperfuncional global.",
+          "steps": [
+            "1. Recorrido corporal: tensar 5 s y soltar cada grupo (manos, brazos, hombros, cara, cuello).",
+            "2. Sensibilizar la diferencia entre tensión y soltura en cada zona.",
+            "3. Espirar suave en /f/ al soltar, sin apurar el ciclo.",
+            "4. Cerrar con 3 respiraciones tranquilas y señal de calma (mano al pecho)."
+          ],
+          "duration_min": 8,
+          "difficulty": "basico",
+          "indications": ["tension_muscular", "hiperfuncion", "dmt"],
+          "contraindications": []
+        },
+        {
+          "id": "pendulo_cervical",
+          "name": "Oscilación y péndulo cérvico-escapular",
+          "description": "Balanceo suave para liberar la constricción del vestíbulo laríngeo.",
+          "steps": [
+            "1. Balanceo suave de hombros adelante-atrás, amplitud cómoda (1 min).",
+            "2. Péndulo de cabeza: semicírculos lentos por delante, de hombro a hombro.",
+            "3. No retroflexionar por detrás ni forzar el rango.",
+            "Stop si hay mareo o dolor: frenar y avisar al profesional."
           ],
           "duration_min": 4,
           "difficulty": "basico",
@@ -135,6 +165,51 @@
           "difficulty": "avanzado",
           "indications": ["paralisis", "presbifonia", "hipofuncion"],
           "contraindications": ["hiperfuncion", "nodulo", "dmt"]
+        },
+        {
+          "id": "b_prolongada",
+          "name": "Consonante /b/ prolongada (posición vertical laríngea)",
+          "description": "Emisión de /b/ sostenida con descenso laríngeo y firmeza glótica sin golpe.",
+          "steps": [
+            "1. Descender la laringe con bostezo suave previo.",
+            "2. Emitir /b/ prolongada 3-4 s en tono cómodo, firme pero sin golpe.",
+            "3. Encadenar /b/ + vocal (ba, be, bi, bo, bu) manteniendo la posición baja.",
+            "4. 3 series de 5 emisiones con pausa de 10 s."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["hipofuncion", "dmt", "general"],
+          "contraindications": ["laringitis_aguda"]
+        },
+        {
+          "id": "masaje_aronson",
+          "name": "Masaje laríngeo circunstancial (Aronson/Roy)",
+          "description": "Masaje circular descendente profundo para DTM: hioides, tirohioideo y tiroides.",
+          "steps": [
+            "1. Localizar cuernos del hioides y espacio tirohioideo.",
+            "2. Presión circular descendente 30 s por zona, firme pero indolora.",
+            "3. Recorrer bordes del cartílago tiroides de arriba hacia abajo.",
+            "Stop ante dolor punzante, mareo o molestia que persiste: avisar al profesional."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["dmt", "hiperfuncion", "tension_muscular"],
+          "contraindications": ["laringitis_aguda"]
+        },
+        {
+          "id": "traccion_laringea",
+          "name": "Lateralización y tracción laríngea",
+          "description": "Desplazamiento manual lateral de la laringe durante fonación modal (desacople unilateral).",
+          "steps": [
+            "1. Emitir /a/ modal cómoda y sostenida.",
+            "2. Desplazar suavemente la laringe hacia un lado, 5 s, sin apretar.",
+            "3. Repetir al otro lado. Comparar simetría de la emisión.",
+            "Solo con guía del profesional. Stop ante dolor, tos o mareo."
+          ],
+          "duration_min": 4,
+          "difficulty": "avanzado",
+          "indications": ["dmt", "hiperfuncion"],
+          "contraindications": ["laringitis_aguda"]
         }
       ]
     },
@@ -205,6 +280,62 @@
           "duration_min": 5,
           "difficulty": "basico",
           "indications": ["soplo", "debilidad", "hipofuncion"],
+          "contraindications": []
+        },
+        {
+          "id": "soplo_fraccionado",
+          "name": "Soplo fraccionado y chistidos /ch-ch-ch/",
+          "description": "Dosificación del aire en tiempos con activación de la cincha abdominal.",
+          "steps": [
+            "1. Tomar aire en 2 tiempos, soltar en 2; luego tomar en 2, soltar en 3.",
+            "2. Chistidos rítmicos /ch-ch-ch/ con mano en abdomen (siente el impulso).",
+            "3. 3 series de 8 ciclos sin hiperventilar (pausa si hay mareo)."
+          ],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["soplo", "debilidad", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "respiracion_dinamica",
+          "name": "Respiración dinámica para el habla (/sh/ 1-2-3 tiempos)",
+          "description": "Inhalación rápida silenciosa abdominal con espiración en /sh/ por tiempos.",
+          "steps": [
+            "1. Inhalar rápido y silencioso por boca hacia el abdomen.",
+            "2. Espirar en /sh/ en 1 tiempo, luego 2 y luego 3 tiempos.",
+            "3. Sin ruido inspiratorio ni elevación de hombros."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["soplo", "fonastenia", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "automatismos_lenguaje",
+          "name": "Automatismos con apoyo (meses y días)",
+          "description": "Sustituir el soplo por lenguaje automático de extensión creciente con apoyo.",
+          "steps": [
+            "1. Inspirar abdominal rápido y decir 'Enero' con apoyo.",
+            "2. Extender: 'Enero-Febrero', luego sumar meses hasta el año.",
+            "3. Repetir con días de la semana y contar 1 a 20 sin perder el apoyo."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["fonastenia", "general", "transferencia"],
+          "contraindications": []
+        },
+        {
+          "id": "metodo_acento",
+          "name": "Método del acento (impulsos rítmicos espiratorios)",
+          "description": "Contracciones abdominodiafragmáticas coordinadas con fricativas y vocales acentuadas.",
+          "steps": [
+            "1. Marcar el pulso con la mano en abdomen: impulso corto por acento.",
+            "2. Emitir /s/ - /a/ acentuadas siguiendo el impulso (ta-TA-ta-TA).",
+            "3. Pasar a sílabas y palabras con el mismo patrón rítmico."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["dmt", "hipofuncion", "general"],
           "contraindications": []
         }
       ]
@@ -323,6 +454,135 @@
           "difficulty": "basico",
           "indications": ["rigidez", "flexibilidad", "general"],
           "contraindications": []
+        },
+        {
+          "id": "tubo_aire_libre",
+          "name": "Tubo libre en el aire (tubo finlandés)",
+          "description": "Fonación por tubo delgado (alta resistencia) o ancho (baja resistencia), sin agua.",
+          "steps": [
+            "1. Tubo ancho para empezar (baja resistencia); delgado solo con indicación.",
+            "2. Emitir /u/ cómoda por el tubo, 2 min por bloque.",
+            "3. Glissandos suaves por el tubo sin quiebres."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["general", "dmt", "fonastenia"],
+          "contraindications": []
+        },
+        {
+          "id": "fricativas_sonoras",
+          "name": "Fricativas sonoras /v/ /z/ sostenidas",
+          "description": "Fonación sostenida de /v/, /z/ con vibración anterior estable.",
+          "steps": [
+            "1. Emitir /v/ sostenida 5 s sintiendo vibración en labios.",
+            "2. Pasar a /z/ sostenida 5 s con la misma estabilidad.",
+            "3. Alternar /v/-/z/ y luego pegar vocal (/va/, /za/)."
+          ],
+          "duration_min": 5,
+          "difficulty": "basico",
+          "indications": ["general", "hipofuncion", "dmt"],
+          "contraindications": []
+        },
+        {
+          "id": "trino_labial",
+          "name": "Trino labial /br/ sostenido y con melodía",
+          "description": "Vibración labial en tonos sostenidos y variaciones tonales (masaje mucoso).",
+          "steps": [
+            "1. /br/ sostenido en tono cómodo 5 s, garganta abierta.",
+            "2. Subir y bajar tipo sirena con el trino sin cortarlo.",
+            "3. Si se corta: volver a tono más grave y menos aire."
+          ],
+          "duration_min": 5,
+          "difficulty": "basico",
+          "indications": ["general", "rigidez", "nodulo"],
+          "contraindications": []
+        },
+        {
+          "id": "trino_lingual",
+          "name": "Trino lingual /rr/ sostenido y con melodía",
+          "description": "Vibración lingual para movilizar la mucosa cordal (incluye variante raspberry).",
+          "steps": [
+            "1. /rr/ sostenido en tono cómodo 5 s.",
+            "2. Sirena suave con el trino; variante raspberry (labio-lingual) si cuesta.",
+            "3. Pegar vocal al final (/rra/) sin golpe."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["general", "rigidez"],
+          "contraindications": []
+        },
+        {
+          "id": "mano_boca",
+          "name": "Mano sobre la boca (hand-over-mouth)",
+          "description": "Fonación con la palma cubriendo la boca para presión retrorefleja.",
+          "steps": [
+            "1. Cubrir la boca con la palma sin apretar.",
+            "2. Emitir /a/ sostenida sintiendo la presión en la mano.",
+            "3. Glissando corto con la mano puesta."
+          ],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["general", "hipofuncion"],
+          "contraindications": []
+        },
+        {
+          "id": "finger_kazoo",
+          "name": "Finger Kazoo (dedo índice en labios)",
+          "description": "Soplo sonorizado con el dedo sobre los labios (semioclusión).",
+          "steps": [
+            "1. Apoyar el índice vertical sobre los labios apenas fruncidos.",
+            "2. Emitir /u/ dejando escapar aire por los costados del dedo.",
+            "3. Sirena corta manteniendo el escape de aire."
+          ],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["general", "dmt"],
+          "contraindications": []
+        },
+        {
+          "id": "vocales_cerradas",
+          "name": "Vocales cerradas /u/ /i/ sostenidas",
+          "description": "Emisión sostenida de vocales cerradas con tracto estrecho.",
+          "steps": [
+            "1. /u/ sostenida 5 s en tono cómodo.",
+            "2. /i/ sostenida 5 s sin abrir la boca.",
+            "3. Alternar /u/-/i/ manteniendo calidad y altura."
+          ],
+          "duration_min": 5,
+          "difficulty": "basico",
+          "indications": ["general", "dmt"],
+          "contraindications": []
+        },
+        {
+          "id": "laxvox_agua",
+          "name": "Tubo en agua (LaxVox/TRA)",
+          "description": "Fonación con tubo sumergido: 1-3 cm baja resistencia, 8-15 cm alta resistencia.",
+          "steps": [
+            "1. Tubo de silicona, labios sellados sin morder; 1-3 cm en agua para empezar.",
+            "2. Emitir /u/ cómoda con burbujeo constante, bloques de 2 min.",
+            "3. Alta resistencia (8-15 cm) SOLO con indicación y supervisión del profesional.",
+            "Stop ante mareo, dolor o esfuerzo: volver a 1 cm o frenar."
+          ],
+          "duration_min": 8,
+          "difficulty": "intermedio",
+          "indications": ["general", "paralisis", "nodulo", "dmt"],
+          "contraindications": [],
+          "precaucion": "Alta resistencia (más de 3 cm) solo con indicación y supervisión. Suspender ante mareo o dolor."
+        },
+        {
+          "id": "messa_di_voce",
+          "name": "Messa di voce (piano-forte-piano)",
+          "description": "Control fino de intensidad sobre tono sostenido: suave-fuerte-suave.",
+          "steps": [
+            "1. Elegir un tono cómodo y sostenerlo piano 4 s.",
+            "2. Crecer a forte en 4 s sin cambiar el tono ni apretar.",
+            "3. Volver a piano en 4 s. 5 repeticiones con pausa.",
+            "Prohibido el forte en lesión exofítica o fonotrauma: solo piano-medio."
+          ],
+          "duration_min": 5,
+          "difficulty": "avanzado",
+          "indications": ["cantante", "hipofuncion", "general"],
+          "contraindications": ["nodulo"]
         }
       ]
     },
@@ -423,6 +683,264 @@
           "difficulty": "basico",
           "indications": ["rlf"],
           "contraindications": []
+        }
+      ]
+    },
+    {
+      "id": "orofaringeo",
+      "seccion": 13,
+      "name": "Apertura Orofaríngea y Articulación",
+      "icon": "mouth",
+      "description": "Ampliar la orofaringe, ablandar la articulación y dar movilidad a la lengua.",
+      "exercises": [
+        {
+          "id": "apertura_fondo_boca",
+          "name": "Apertura del fondo bucal (isquiones, lengua, velo)",
+          "description": "Postura en isquiones frente al espejo con lengua plana y velo elevado.",
+          "steps": [
+            "1. Sentado sobre isquiones frente al espejo, apertura bucal máxima cómoda sin tensionar ATM.",
+            "2. Lengua plana en el piso de la boca, sin retracción faríngea.",
+            "3. Elevar el velo del paladar (sensación de pasillo amplio) y sostener 5 s.",
+            "4. 5 repeticiones respirando tranquilo."
+          ],
+          "duration_min": 5,
+          "difficulty": "basico",
+          "indications": ["dmt", "general", "articulacion"],
+          "contraindications": []
+        },
+        {
+          "id": "moldeado_vertical",
+          "name": "Moldeado vocálico vertical (O → pregunta)",
+          "description": "Secuencia de apertura vertical O → OA → OAO → OAOE → frase.",
+          "steps": [
+            "1. Emitir O, luego OA, luego OAO, sumando una vocal por vez.",
+            "2. Completar hasta OAOEA sin golpes glóticos ni pérdida de calidad.",
+            "3. Cerrar con la pregunta '¿Hola cómo estás?' en el mismo molde."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["dmt", "general", "articulacion"],
+          "contraindications": []
+        },
+        {
+          "id": "masticacion_froeschels",
+          "name": "Masticación sonorizada (Froeschels)",
+          "description": "Masticación exagerada con fonación continua para soltar mandíbula y faringe.",
+          "steps": [
+            "1. Masticar exagerado en silencio 30 s, mandíbula suelta.",
+            "2. Agregar voz continua grave mientras mastica (/mmm/).",
+            "3. Abrir progresivamente hacia /ma-ma-ma/ sin apretar."
+          ],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["dmt", "tension_muscular", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "bostezo_suspiro",
+          "name": "Bostezo-suspiro sonorizado (Yawn-Sigh)",
+          "description": "Inspiración de bostezo con exhalación soplada y sonorizada para máxima relajación.",
+          "steps": [
+            "1. Inspirar amplio simulando un bostezo (laringe baja).",
+            "2. Soltar el aire soplado y sonorizado en suspiro descendente.",
+            "3. 5 repeticiones sin forzar el grave."
+          ],
+          "duration_min": 4,
+          "difficulty": "basico",
+          "indications": ["dmt", "hiperfuncion", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "sobrearticulacion",
+          "name": "Sobrearticulación y boca abierta",
+          "description": "Exageración buco-facial para proyección, inteligibilidad y descarga laríngea.",
+          "steps": [
+            "1. Leer una frase exagerando labios, lengua y mandíbula.",
+            "2. Repetir la frase en tamaño normal conservando la claridad.",
+            "3. Probar con trabalenguas cortos sin acelerar."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["general", "articulacion", "fonastenia"],
+          "contraindications": []
+        },
+        {
+          "id": "desplazamiento_lingual",
+          "name": "Desplazamiento lingual (anterior/posterior/fuera)",
+          "description": "Anteriorización, posteriorización y exteriorización para liberar el espacio supraesfintérico.",
+          "steps": [
+            "1. Lengua retraída: llevarla adelante tocando labio inferior, sostener 5 s.",
+            "2. Lengua protruida: llevarla atrás sin empujar la faringe.",
+            "3. Sacar la lengua afuera relajada y emitir /a/ breve.",
+            "Sin náusea ni dolor: rango cómodo."
+          ],
+          "duration_min": 5,
+          "difficulty": "intermedio",
+          "indications": ["dmt", "articulacion", "general"],
+          "contraindications": []
+        }
+      ]
+    },
+    {
+      "id": "metodos",
+      "seccion": 14,
+      "name": "Métodos Fisiológicos y Técnicas Sintomáticas",
+      "icon": "method",
+      "description": "Programas (Stemple, Verdolini, LSVT) y maniobras especiales con supervisión.",
+      "exercises": [
+        {
+          "id": "efv_stemple",
+          "name": "Función vocal (Stemple: /i/, knoll, oll)",
+          "description": "Calentamiento, estiramiento, contracción y fortalecimiento aductor.",
+          "steps": [
+            "1. Calentamiento: /i/ suave en Fa el mayor tiempo posible, colocación anterior.",
+            "2. Estiramiento: glissando ascendente con 'knoll' hasta el agudo.",
+            "3. Contracción: glissando descendente con 'knoll' hasta el grave.",
+            "4. Fortalecimiento: Do-Re-Mi-Fa-Sol con 'oll' sostenido, sin apretar.",
+            "Notas cómodas, emisión suave: nunca forzar agudos ni volumen."
+          ],
+          "duration_min": 8,
+          "difficulty": "intermedio",
+          "indications": ["hipofuncion", "presbifonia", "general"],
+          "contraindications": [],
+          "precaucion": "Notas cómodas y emisión suave: no forzar agudos ni volumen."
+        },
+        {
+          "id": "tvr_verdolini",
+          "name": "Voz resonante (Verdolini: molm → conversación)",
+          "description": "Protocolo jerárquico de 7 estadios desde /molm/ hasta conversación plena.",
+          "steps": [
+            "1. /molm-molm-molm/ explorando vibración orofacial.",
+            "2. Contrastes /mamapapa/ sonoro-sordo.",
+            "3. Frases cantadas e inflectadas en nota cómoda.",
+            "4. Lectura de párrafos con marcadores respiratorios.",
+            "5. Conversación controlada y luego con ruido de fondo.",
+            "Avanzar de estadio solo con vibración fácil y sin esfuerzo."
+          ],
+          "duration_min": 8,
+          "difficulty": "intermedio",
+          "indications": ["general", "nodulo", "dmt", "fonastenia"],
+          "contraindications": []
+        },
+        {
+          "id": "voz_confidencial",
+          "name": "Voz confidencial (suave soplada)",
+          "description": "Volumen reducido tipo secreto con glotis semiabierta; jamás susurro áfono.",
+          "steps": [
+            "1. Hablar bajito como un secreto PERO con voz (nunca susurro sin voz).",
+            "2. Frases cortas con aire fluido, 2 min por bloque.",
+            "3. Volver a volumen normal conservando la suavidad."
+          ],
+          "duration_min": 5,
+          "difficulty": "basico",
+          "indications": ["nodulo", "laringitis_cronica", "fonotrauma", "general"],
+          "contraindications": [],
+          "precaucion": "Jamás susurro áfono: siempre con un hilo de voz."
+        },
+        {
+          "id": "flow_phonation",
+          "name": "Fonación fluida (flujo continuo)",
+          "description": "Gárgaras, soplo en papel/agua y habla soplada sin esfuerzo.",
+          "steps": [
+            "1. Gárgaras áfonas y luego sonoras 30 s.",
+            "2. Soplo continuo sobre papel o agua sin cortar el flujo.",
+            "3. Pasar al habla soplada: frases fluidas sin empujar."
+          ],
+          "duration_min": 5,
+          "difficulty": "basico",
+          "indications": ["hiperfuncion", "dmt", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "lsvt_fuerte",
+          "name": "Hablar fuerte (LSVT: pensar fuerte)",
+          "description": "Protocolo intensivo de reescalado del esfuerzo: pensar fuerte, hablar fuerte.",
+          "steps": [
+            "1. Emitir /a/ fuerte sostenida el mayor tiempo posible (meta diaria).",
+            "2. Frases funcionales en volumen fuerte con esfuerzo calibrado.",
+            "3. Trasladar el volumen a la conversación con recordatorios.",
+            "SOLO en hipofuncionales (Parkinson, presbifonía) con supervisión. Dosis diaria corta."
+          ],
+          "duration_min": 10,
+          "difficulty": "avanzado",
+          "indications": ["paralisis", "presbifonia", "hipofuncion"],
+          "contraindications": ["nodulo", "hiperfuncion", "dmt"]
+        },
+        {
+          "id": "pushing_terapeutico",
+          "name": "Empuje y esfuerzo (pushing/pulling) + AVD",
+          "description": "Esfuerzo físico con fonación (apretar puños, empujar pared, KIP/TEP) para cierre glótico.",
+          "steps": [
+            "1. Sentado firme: sujetar el asiento y tirar hacia arriba con fuerza.",
+            "2. En el pico del esfuerzo emitir 'KIP' o 'TEP' corto y firme.",
+            "3. Relajar de inmediato. 3 series de 10 con 1 min de pausa.",
+            "SOLO días alternos y con incompetencia confirmada. Stop ante dolor cervical o cefalea."
+          ],
+          "duration_min": 5,
+          "difficulty": "avanzado",
+          "indications": ["paralisis", "presbifonia", "hipofuncion"],
+          "contraindications": ["nodulo", "hiperfuncion", "dmt"]
+        },
+        {
+          "id": "fonacion_inspiratoria",
+          "name": "Fonación inspiratoria",
+          "description": "Emisión sonora durante la inhalación para abducir cuerdas y desacoplar bandas.",
+          "steps": [
+            "1. Inhalar emitiendo un sonido suave ~/a/ inspirada.",
+            "2. 3 emisiones cortas con pausa, sin jadear.",
+            "3. Volver a fonación espiratoria normal y comparar.",
+            "Solo con guía del profesional. Suspender ante mareo o tos."
+          ],
+          "duration_min": 4,
+          "difficulty": "avanzado",
+          "indications": ["dmt", "hiperfuncion"],
+          "contraindications": [],
+          "precaucion": "Solo con guía del profesional. Suspender ante mareo o tos."
+        },
+        {
+          "id": "fry_basal",
+          "name": "Fritura vocal / registro basal",
+          "description": "Emisión en el registro más grave para relajar el tiroaritenoideo.",
+          "steps": [
+            "1. Emitir fritura suave (como motor bajo) 10 s.",
+            "2. Deslizar desde la fritura a tono modal grave sin salto.",
+            "3. 5 repeticiones sin apretar."
+          ],
+          "duration_min": 3,
+          "difficulty": "basico",
+          "indications": ["hiperfuncion", "dmt", "general"],
+          "contraindications": []
+        },
+        {
+          "id": "falsete_agudos",
+          "name": "Falsete e hiperagudos (estiramiento CT)",
+          "description": "Emisiones agudas suaves para estiramiento cricotiroideo y desbloqueo.",
+          "steps": [
+            "1. Deslizar a falsete suave en /u/ sin empujar.",
+            "2. Sostener 3 s el agudo cómodo y bajar.",
+            "3. 5 repeticiones. Solo tonos cómodos, sin forzar.",
+            "Solo tonos cómodos, sin forzar el agudo."
+          ],
+          "duration_min": 4,
+          "difficulty": "intermedio",
+          "indications": ["rigidez", "puberfonia", "general"],
+          "contraindications": [],
+          "precaucion": "Solo tonos cómodos, sin forzar el agudo."
+        },
+        {
+          "id": "deglucion_sonorizada",
+          "name": "Deglución incompleta sonorizada",
+          "description": "Vocal al despegar la lengua del paladar: cierre glótico por ascenso laríngeo.",
+          "steps": [
+            "1. Tragar saliva y al despegar la lengua emitir /a/ breve.",
+            "2. Repetir 5 veces sintiendo el ascenso laríngeo.",
+            "3. Pasar a /a/ sostenida conservando la sensación.",
+            "Sin atragantarse: saliva poca, sin apuro."
+          ],
+          "duration_min": 4,
+          "difficulty": "avanzado",
+          "indications": ["paralisis", "hipofuncion", "presbifonia"],
+          "contraindications": ["nodulo"]
         }
       ]
     }
