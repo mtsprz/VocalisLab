@@ -175,18 +175,23 @@ _TILDES = [
 
 # Ejercicios NO fonatorios: jamás muestran curva tonal ("Su voz debe sonar
 # así"). Directiva 2026: sin curvas de tono en pautas digestivas/higiene.
-_SIN_CURVA = ("pautas_rlf",)
+# Sin curva melódica: ejercicios silenciosos (respiración, masajes,
+# movilidad) o de habla (monólogo). "Su voz debe sonar así" no aplica.
+_SIN_CURVA = ("pautas_rlf", "le_huche", "shiatsu_cabeza", "rotacion_hombros",
+              "masaje_laringeo", "respiracion_abdominal", "expansion_costo_lateral",
+              "soplo_escalonado", "descenso_laringeo", "escalas_vocalicas")
 
-# ─── Clasificación de curva melódica por ejercicio ─────────────────
+# ??? Clasificación de curva melódica por ejercicio ?????????
 _CURVA_STACCATO = ("staccato", "stacatto", "punteado", "punteo")
-_CURVA_SIRENA = ("sirena", "vibraci", "trill", "fluctu", "tubo_agua", "popote_aire",
-                 "escalas_vocalicas", "lax", "laxvox")
-_CURVA_DESCENSO = ("descenso", "bostezo", "enfriamiento", "suspiro", "le_huche",
-                   "shiatsu", "masaje_laringeo", "rotacion", "relaj", "pautas_rlf",
-                   "calentamiento")
-_CURVA_SOSTENIDO = ("humming", "frases_balanceadas", "respiracion_abdominal",
-                    "soplo_escalonado", "consonantes_fricativas", "oclusion_succion",
-                    "expansion_costo", "sostenid", "mantener", "lectura")
+_CURVA_SIRENA = ("sirena", "trill", "fluctu", "tubo_agua", "glissandos",
+                 "lax", "laxvox")
+_CURVA_DESCENSO = ("descenso", "bostezo", "enfriamiento", "suspiro",
+                   "relaj", "pautas_rlf")
+_CURVA_SOSTENIDO = ("humming", "frases_balanceadas",
+                    "consonantes_fricativas", "oclusion_succion",
+                    "vibracion_labial", "oclusion_nasal",
+                    "coordinacion_costo_abdominal", "empuje_glotico",
+                    "sostenid", "mantener", "lectura")
 
 
 def _tipo_curva(ex: dict) -> str:
@@ -429,35 +434,102 @@ def _svg_breathing_cycle():
 
 
 def _svg_pressure_points():
+    """Cabeza de perfil con los 4 puntos de digitopresión rotulados."""
     d = Drawing(150, 96)
     _cap(d, "Puntos de presión 30 seg")
-    d.add(Circle(75, 48, 28, strokeColor=INK, strokeWidth=1.5, fillColor=None))
-    for (x, y) in ((75, 76), (47, 48), (103, 48), (75, 30)):
-        d.add(Circle(x, y, 4, strokeColor=INK, strokeWidth=1.2, fillColor=INK))
-    _nota(d, "Coronilla, sienes y mandíbula")
+    # Perfil de cabeza esquemático
+    d.add(Circle(70, 50, 26, strokeColor=INK, strokeWidth=1.5, fillColor=None))
+    d.add(PolyLine([92, 40, 104, 36, 104, 52, 94, 54],
+                   strokeColor=INK, strokeWidth=1.2))
+    puntos = [
+        (70, 76, "coronilla"),
+        (48, 58, "sien"),
+        (88, 30, "mandíbula"),
+        (70, 22, "cuello"),
+    ]
+    for (x, y, _lab) in puntos:
+        d.add(Circle(x, y, 4.5, strokeColor=PRIMARY, strokeWidth=1.2,
+                     fillColor=PRIMARY))
+    d.add(String(78, 74, "coronilla", fontName="Helvetica", fontSize=6,
+                 fillColor=INK_SUAVE))
+    d.add(String(18, 56, "sien", fontName="Helvetica", fontSize=6,
+                 fillColor=INK_SUAVE))
+    d.add(String(94, 26, "mandíbula", fontName="Helvetica", fontSize=6,
+                 fillColor=INK_SUAVE))
+    d.add(String(78, 18, "cuello", fontName="Helvetica", fontSize=6,
+                 fillColor=INK_SUAVE))
+    _nota(d, "Presión firme, sin dolor")
     return d
 
 
 def _svg_shoulder_rotation():
+    """Torso con círculos de rotación en cada hombro (atrás y adelante)."""
     d = Drawing(150, 96)
     _cap(d, "Círculos de hombros")
-    d.add(Line(40, 30, 40, 60, strokeColor=INK, strokeWidth=1.5))
-    d.add(Line(110, 30, 110, 60, strokeColor=INK, strokeWidth=1.5))
-    d.add(Circle(75, 68, 10, strokeColor=INK, strokeWidth=1.5, fillColor=None))
-    _flecha(d, 30, 45, 22, 53)
-    _flecha(d, 120, 45, 128, 53)
-    _nota(d, "10 atrás + 10 adelante")
+    # Cabeza + torso esquemático
+    d.add(Circle(75, 72, 9, strokeColor=INK, strokeWidth=1.5, fillColor=None))
+    d.add(PolyLine([55, 60, 45, 30, 50, 22, 100, 22, 105, 30, 95, 60],
+                   strokeColor=INK, strokeWidth=1.5))
+    # Arco de rotación sobre hombro izquierdo (hacia atrás)
+    pts_izq = []
+    for i in range(17):
+        a = i / 16 * _math.pi * 1.5 - 0.4
+        pts_izq += [52 + 11 * _math.cos(a), 44 + 11 * _math.sin(a)]
+    d.add(PolyLine(pts_izq, strokeColor=PRIMARY, strokeWidth=1.6))
+    _flecha(d, pts_izq[-2], pts_izq[-1], pts_izq[-2] - 6, pts_izq[-1] + 5)
+    # Arco de rotación sobre hombro derecho (hacia adelante)
+    pts_der = []
+    for i in range(17):
+        a = i / 16 * _math.pi * 1.5 + _math.pi - 0.4
+        pts_der += [98 + 11 * _math.cos(a), 44 + 11 * _math.sin(a)]
+    d.add(PolyLine(pts_der, strokeColor=PRIMARY, strokeWidth=1.6))
+    _flecha(d, pts_der[-2], pts_der[-1], pts_der[-2] + 6, pts_der[-1] + 5)
+    d.add(String(22, 56, "atrás", fontName="Helvetica", fontSize=6,
+                 fillColor=INK_SUAVE))
+    d.add(String(112, 56, "adelante", fontName="Helvetica", fontSize=6,
+                 fillColor=INK_SUAVE))
+    _nota(d, "5 círculos por lado y sentido")
     return d
 
 
 def _svg_laryngeal_massage():
+    """Cuello con flecha circular: masajee en círculos, traslade a los lados."""
     d = Drawing(150, 96)
     _cap(d, "Masaje suave del cuello")
     d.add(Rect(58, 18, 34, 52, strokeColor=INK, strokeWidth=1.5, fillColor=None))
     d.add(Circle(75, 52, 12, strokeColor=INK, strokeWidth=1.2, fillColor=None))
-    _flecha(d, 63, 52, 63, 64)
-    _flecha(d, 87, 52, 87, 40)
+    # Flecha circular alrededor de la laringe (sentido horario)
+    arc = []
+    for i in range(21):
+        a = i / 20 * _math.pi * 1.7 + 0.5
+        arc += [75 + 19 * _math.cos(a), 52 + 19 * _math.sin(a)]
+    d.add(PolyLine(arc, strokeColor=PRIMARY, strokeWidth=1.6))
+    _flecha(d, arc[-2], arc[-1], arc[-2] - 7, arc[-1] + 2)
+    # Traslación lateral
+    _flecha(d, 52, 34, 40, 34)
+    _flecha(d, 98, 34, 110, 34)
+    d.add(String(36, 26, "lados", fontName="Helvetica", fontSize=6,
+                 fillColor=INK_SUAVE))
     _nota(d, "Círculos suaves, sin apretar")
+    return d
+
+
+def _svg_respiracion_3d():
+    """Torso con expansión en 3 direcciones: costados + lumbar (patrón 5-2-8)."""
+    d = Drawing(150, 96)
+    _cap(d, "Aire en 3D: 5-2-8")
+    d.add(Rect(55, 26, 40, 44, strokeColor=INK, strokeWidth=1.5, fillColor=None))
+    # Costados
+    _flecha(d, 55, 48, 37, 48)
+    _flecha(d, 95, 48, 113, 48)
+    # Lumbar (abajo, diagonal)
+    _flecha(d, 62, 26, 50, 14)
+    _flecha(d, 88, 26, 100, 14)
+    d.add(String(30, 56, "5 s", fontName="Helvetica-Bold", fontSize=7,
+                 fillColor=PRIMARY))
+    d.add(String(108, 36, "8 s", fontName="Helvetica-Bold", fontSize=7,
+                 fillColor=PRIMARY))
+    _nota(d, "Frente, costados y lumbar")
     return d
 
 
@@ -716,7 +788,7 @@ def _svg_sirena():
 
 
 def _svg_lectura():
-    """Libro abierto + arcos de voz proyectada: lectura y salmodia."""
+    """Libro abierto + arcos de voz proyectada: lectura en voz alta."""
     d = Drawing(150, 96)
     _cap(d, "Lectura en voz alta")
     d.add(Polygon([30, 30, 30, 58, 62, 52, 62, 24, 46, 28, 46, 56],
@@ -726,6 +798,27 @@ def _svg_lectura():
     for r in (10, 16, 22):
         d.add(Circle(128, 44, r, strokeColor=SECONDARY, strokeWidth=1.2, fillColor=None))
     _nota(d, "Claro, parejo y proyectado")
+    return d
+
+
+def _svg_salmodia():
+    """Libro de versos + nota musical + onda: refranes cantados-hablados."""
+    d = Drawing(150, 96)
+    _cap(d, "Versos cantados")
+    d.add(Polygon([28, 32, 28, 58, 58, 52, 58, 26, 43, 30, 43, 56],
+                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E8E6FB")))
+    # Nota musical (corchea)
+    d.add(Circle(84, 34, 5, strokeColor=INK, strokeWidth=1.4, fillColor=INK))
+    d.add(Line(89, 34, 89, 58, strokeColor=INK, strokeWidth=1.6))
+    d.add(PolyLine([89, 58, 97, 54, 97, 46], strokeColor=INK, strokeWidth=1.6))
+    # Onda de modulación leve
+    pts = []
+    for i in range(33):
+        x = 100 + i * 1.4
+        y = 40 + _math.sin(i / 32 * _math.pi * 2 * 2) * 5
+        pts += [x, y]
+    d.add(PolyLine(pts, strokeColor=SECONDARY, strokeWidth=1.4))
+    _nota(d, "Cante-hable parejo")
     return d
 
 
@@ -783,10 +876,10 @@ _SVG_POR_EJERCICIO = {
     "descenso_laringeo": (_svg_larynx_descent, "Bostezo: la laringe baja"),
     "oclusion_succion": (_svg_larynx_descent, "Laringe baja en 'hu-hu'"),
     "expansion_costo_lateral": (_svg_rib_expansion, "Expansión costo-lateral"),
-    "soplo_escalonado": (_svg_rib_expansion, "Expansión 3D (patrón 5-2-8)"),
+    "soplo_escalonado": (_svg_respiracion_3d, "Expansión 3D (patrón 5-2-8)"),
     "empuje_glotico": (_svg_vocales, "Moldeado O-A-U-I"),
     "vibracion_labial": (_svg_facial_mask, "Vibración en máscara /m/"),
-    "consonantes_fricativas": (_svg_lectura, "Versos salmodiados"),
+    "consonantes_fricativas": (_svg_salmodia, "Versos salmodiados"),
     "escalas_vocalicas": (_svg_habla, "Monólogo con apoyo (2-3 min)"),
     "pautas_rlf": (_svg_antireflux, "Pautas antirreflujo"),
     "oclusion_nasal": (_svg_vocales, "De /m/ a vocales abiertas"),
@@ -883,15 +976,15 @@ _EFECTO_POR_EJERCICIO = {
     "expansion_costo_lateral": "Más aire disponible al hablar",
     "masaje_laringeo": "Ablanda la musculatura del cuello",
     "pautas_rlf": "Protege las cuerdas del ácido",
-    "tubo_agua": "Masaje vocal por presión de aire",
-    "popote_aire": "Voz rendidora con poco esfuerzo",
-    "vibracion_labial": "Suelta la lengua y empareja la voz",
-    "consonantes_fricativas": "Lleva la voz hacia adelante",
+    "tubo_agua": "Voz flexible sin quiebres",
+    "popote_aire": "Agilidad y afinación por escalas",
+    "vibracion_labial": "Vibración anterior que empareja la voz",
+    "consonantes_fricativas": "Une respiración, laringe baja y voz",
     "oclusion_succion": "Baja la laringe y abre la faringe",
-    "soplo_escalonado": "Ataque suave sin golpe de glotis",
-    "empuje_glotico": "Cierre firme para voces débiles",
-    "escalas_vocalicas": "Flexibilidad de agudos y graves",
-    "humming_m": "Resonancia clara en la máscara",
+    "soplo_escalonado": "Expansión 3D completa del aire",
+    "empuje_glotico": "Moldea vocales con laringe baja",
+    "escalas_vocalicas": "Habla fluida con apoyo",
+    "humming_m": "Lectura clara para el habla diaria",
     "descenso_laringeo": "Garganta abierta y relajada",
     "calentamiento": "Prepara la voz antes de usarla",
     "enfriamiento": "Devuelve la voz al reposo",
