@@ -561,12 +561,35 @@ def _imagen_public_url(sb, path: str) -> str:
         return ""
 
 
+def _galeria_db(ex_id: str) -> list:
+    """Filas de la galería de un ejercicio ordenadas ([{...orden, epigrafe}])."""
+    res = supabase.table("ejercicio_imagenes").select(
+        "exercise_id, image_url, storage_path, orden, epigrafe")\
+        .eq("exercise_id", ex_id).order("orden").execute()
+    return res.data or []
+
+
+def _referencias_archivo(path: str, excluir_ex: str = "") -> int:
+    """Cuántas filas usan un archivo (para no borrarlo si está compartido)."""
+    q = supabase.table("ejercicio_imagenes").select("exercise_id").eq("storage_path", path)
+    if excluir_ex:
+        q = q.neq("exercise_id", excluir_ex)
+    return len((q.execute().data or []))
+
+
+def _borrar_archivo_storage(path: str):
+    try:
+        supabase.storage.from_("ejercicios").remove([path])
+    except Exception as e:
+        print(f"[api_clinica] no se pudo borrar {path} de Storage: {e}")
+
+
 @router.get("/api/ejercicios/imagenes/banco")
 async def banco_imagenes():
-    """Lista el banco compartido + qué imagen tiene asignada cada ejercicio."""
+    """Banco compartido + galería ordenada (con epígrafes) por ejercicio."""
     if not supabase:
-        return JSONResponse(content={"ok": False, "archivos": [], "asignadas": {},
-                                     "error": "Supabase no configurado"})
+        return JSONResponse(content={"ok": False, "archivos": [], "galerias": {},
+                                     "asignadas": {}, "error": "Supabase no configurado"})
     try:
         try:
             items = supabase.storage.from_("ejercicios").list(limit=1000) or []
@@ -581,25 +604,44 @@ async def banco_imagenes():
                              "url": _imagen_public_url(supabase, name)})
         archivos.sort(key=lambda a: a["path"])
     except Exception as e:
-        return JSONResponse(content={"ok": False, "archivos": [], "asignadas": {},
+        return JSONResponse(content={"ok": False, "archivos": [], "galerias": {},
+                                     "asignadas": {},
                                      "error": f"No se pudo listar el banco: {e}"})
-    asignadas = {}
+    galerias, asignadas = {}, {}
     try:
-        res = supabase.table("ejercicio_imagenes").select("exercise_id, image_url").execute()
+        try:
+            res = supabase.table("ejercicio_imagenes").select(
+                "exercise_id, image_url, storage_path, orden, epigrafe")\
+                .order("orden").execute()
+            cols_ok = True
+        except Exception:
+            res = supabase.table("ejercicio_imagenes").select(
+                "exercise_id, image_url, storage_path").execute()
+            cols_ok = False
         for row in (res.data or []):
-            if row.get("exercise_id") and row.get("image_url"):
-                asignadas[row["exercise_id"]] = row["image_url"]
+            eid = str(row.get("exercise_id", "")).strip().lower()
+            if not eid or not row.get("image_url"):
+                continue
+            item = {"image_url": row["image_url"],
+                    "storage_path": row.get("storage_path", ""),
+                    "orden": int(row.get("orden", 0) or 0) if cols_ok else 0,
+                    "epigrafe": str(row.get("epigrafe", "") or "") if cols_ok else ""}
+            galerias.setdefault(eid, []).append(item)
+        for eid, items in galerias.items():
+            asignadas[eid] = items[0]["image_url"]
     except Exception as e:
-        print(f"[api_clinica] banco: sin asignaciones ({e})")
-    return JSONResponse(content={"ok": True, "archivos": archivos, "asignadas": asignadas})
+        print(f"[api_clinica] banco: sin galerías ({e})")
+    return JSONResponse(content={"ok": True, "archivos": archivos,
+                                 "galerias": galerias, "asignadas": asignadas})
 
 
 @router.post("/api/ejercicios/imagen")
 async def subir_imagen_ejercicio(
     exercise_id: str = Form(...),
     archivo: UploadFile = File(...),
+    epigrafe: str = Form(""),
 ):
-    """Sube una ilustración al banco y la asigna al ejercicio indicado."""
+    """Sube una ilustración al banco y la AGREGA a la galería del ejercicio."""
     ex_id = (exercise_id or "").strip().lower()
     if not ex_id:
         raise HTTPException(status_code=400, detail="exercise_id requerido")
@@ -619,7 +661,12 @@ async def subir_imagen_ejercicio(
         raise HTTPException(status_code=400, detail="Formato no soportado (usá PNG, JPG o WebP)")
     if data[:2] == b"\xff\xd8" and ext == "png":
         ext = "jpg"  # contenido real manda sobre la extensión
-    storage_path = f"{ex_id}.{ext}"
+    try:
+        actual = _galeria_db(ex_id)
+        siguiente = max([int(r.get("orden", 0) or 0) for r in actual] + [-1]) + 1
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo leer la galería: {e}")
+    storage_path = f"{ex_id}-{siguiente}.{ext}"
     try:
         supabase.storage.from_("ejercicios").upload(
             storage_path, data,
@@ -632,23 +679,37 @@ async def subir_imagen_ejercicio(
             "exercise_id": ex_id,
             "image_url": url,
             "storage_path": storage_path,
+            "orden": siguiente,
+            "epigrafe": (epigrafe or "").strip()[:140],
             "proveedor": "profesional",
-        }, on_conflict="exercise_id").execute()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Subida OK pero no se pudo asignar: {e}")
+        }, on_conflict="exercise_id,orden").execute()
+    except Exception:
+        # DB sin migrar a galería (v1): fallback a PK simple
+        try:
+            supabase.table("ejercicio_imagenes").upsert({
+                "exercise_id": ex_id,
+                "image_url": url,
+                "storage_path": storage_path,
+                "proveedor": "profesional",
+            }, on_conflict="exercise_id").execute()
+            siguiente = 0
+        except Exception as e2:
+            raise HTTPException(status_code=502, detail=f"Subida OK pero no se pudo asignar: {e2}")
     return JSONResponse(content={"ok": True, "exercise_id": ex_id,
-                                 "image_url": url, "storage_path": storage_path})
+                                 "image_url": url, "storage_path": storage_path,
+                                 "orden": siguiente})
 
 
 @router.post("/api/ejercicios/imagen/asignar")
 async def asignar_imagen_banco(request: Request):
-    """Asigna al ejercicio una imagen ya existente en el banco compartido."""
+    """Agrega a la galería una imagen ya existente en el banco compartido."""
     try:
         body = await request.json()
     except Exception:
         body = {}
     ex_id = str(body.get("exercise_id", "")).strip().lower()
     path = str(body.get("storage_path", "")).strip().lstrip("/")
+    epigrafe = str(body.get("epigrafe", "") or "").strip()[:140]
     if not ex_id or not path:
         raise HTTPException(status_code=400, detail="exercise_id y storage_path requeridos")
     if not supabase:
@@ -657,28 +718,145 @@ async def asignar_imagen_banco(request: Request):
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo resolver la URL pública")
     try:
+        actual = _galeria_db(ex_id)
+        siguiente = max([int(r.get("orden", 0) or 0) for r in actual] + [-1]) + 1
         supabase.table("ejercicio_imagenes").upsert({
             "exercise_id": ex_id,
             "image_url": url,
             "storage_path": path,
+            "orden": siguiente,
+            "epigrafe": epigrafe,
             "proveedor": "profesional",
-        }, on_conflict="exercise_id").execute()
+        }, on_conflict="exercise_id,orden").execute()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"No se pudo asignar: {e}")
-    return JSONResponse(content={"ok": True, "exercise_id": ex_id, "image_url": url})
+    return JSONResponse(content={"ok": True, "exercise_id": ex_id,
+                                 "image_url": url, "orden": siguiente})
 
 
-@router.delete("/api/ejercicios/imagen/{exercise_id}")
-async def quitar_imagen_ejercicio(exercise_id: str):
-    """Quita la asignación (el PDF vuelve al dibujo vectorial). El archivo queda en el banco."""
+@router.put("/api/ejercicios/imagen/orden")
+async def reordenar_galeria(request: Request):
+    """Reescribe la galería en el orden dado: {exercise_id, items:[{storage_path, epigrafe?, image_url?}]}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    ex_id = str(body.get("exercise_id", "")).strip().lower()
+    items = body.get("items", []) or []
+    if not ex_id:
+        raise HTTPException(status_code=400, detail="exercise_id requerido")
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Supabase no configurado")
+    if not isinstance(items, list) or len(items) > 20:
+        raise HTTPException(status_code=400, detail="items inválidos (máx 20)")
+    nuevos = []
+    for i, it in enumerate(items):
+        if not isinstance(it, dict):
+            continue
+        path = str(it.get("storage_path", "")).strip().lstrip("/")
+        if not path:
+            continue
+        url = str(it.get("image_url", "")).strip() or _imagen_public_url(supabase, path)
+        nuevos.append({"exercise_id": ex_id, "image_url": url, "storage_path": path,
+                       "orden": i, "epigrafe": str(it.get("epigrafe", "") or "").strip()[:140],
+                       "proveedor": "profesional"})
+    try:
+        supabase.table("ejercicio_imagenes").delete().eq("exercise_id", ex_id).execute()
+        for row in nuevos:
+            supabase.table("ejercicio_imagenes").upsert(row, on_conflict="exercise_id,orden").execute()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo reordenar: {e}")
+    return JSONResponse(content={"ok": True, "exercise_id": ex_id, "total": len(nuevos)})
+
+
+@router.put("/api/ejercicios/imagen/epigrafe")
+async def editar_epigrafe(request: Request):
+    """Edita el epígrafe de una imagen: {exercise_id, orden, epigrafe}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    ex_id = str(body.get("exercise_id", "")).strip().lower()
+    try:
+        orden = int(body.get("orden", -1))
+    except Exception:
+        orden = -1
+    epigrafe = str(body.get("epigrafe", "") or "").strip()[:140]
+    if not ex_id or orden < 0:
+        raise HTTPException(status_code=400, detail="exercise_id y orden requeridos")
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Supabase no configurado")
+    try:
+        supabase.table("ejercicio_imagenes").update({"epigrafe": epigrafe})\
+            .eq("exercise_id", ex_id).eq("orden", orden).execute()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo guardar el epígrafe: {e}")
+    return JSONResponse(content={"ok": True, "exercise_id": ex_id, "orden": orden})
+
+
+@router.delete("/api/ejercicios/imagen/{exercise_id}/{orden}")
+async def quitar_imagen_posicion(exercise_id: str, orden: int):
+    """Quita UNA imagen de la galería y borra su archivo si nadie más lo usa."""
     ex_id = (exercise_id or "").strip().lower()
     if not supabase:
         raise HTTPException(status_code=503, detail="Supabase no configurado")
     try:
+        actual = _galeria_db(ex_id)
+        fila = next((r for r in actual if int(r.get("orden", -1) or -1) == int(orden)), None)
+        if not fila:
+            raise HTTPException(status_code=404, detail="Imagen no encontrada en la galería")
+        path = fila.get("storage_path", "")
+        supabase.table("ejercicio_imagenes").delete()\
+            .eq("exercise_id", ex_id).eq("orden", int(orden)).execute()
+        # Renumerar 0..n para que el orden quede compacto
+        resto = [r for r in actual if int(r.get("orden", -1) or -1) != int(orden)]
+        for i, r in enumerate(sorted(resto, key=lambda x: int(x.get("orden", 0) or 0))):
+            try:
+                supabase.table("ejercicio_imagenes").update({"orden": i})\
+                    .eq("exercise_id", ex_id).eq("orden", int(r.get("orden", 0) or 0)).execute()
+            except Exception:
+                pass
+        if path and _referencias_archivo(path) == 0:
+            _borrar_archivo_storage(path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo quitar: {e}")
+    return JSONResponse(content={"ok": True, "exercise_id": ex_id, "orden": int(orden)})
+
+
+@router.delete("/api/ejercicios/imagen/{exercise_id}")
+async def quitar_imagen_ejercicio(exercise_id: str):
+    """Vacía la galería del ejercicio y borra sus archivos si nadie más los usa."""
+    ex_id = (exercise_id or "").strip().lower()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Supabase no configurado")
+    try:
+        actual = _galeria_db(ex_id)
+        paths = [r.get("storage_path", "") for r in actual if r.get("storage_path")]
         supabase.table("ejercicio_imagenes").delete().eq("exercise_id", ex_id).execute()
+        for path in set(paths):
+            if _referencias_archivo(path) == 0:
+                _borrar_archivo_storage(path)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"No se pudo quitar: {e}")
     return JSONResponse(content={"ok": True, "exercise_id": ex_id})
+
+
+@router.delete("/api/ejercicios/imagenes/banco/{nombre}")
+async def borrar_archivo_banco(nombre: str):
+    """Borra un archivo del banco compartido y lo desasigna donde esté usado."""
+    path = (nombre or "").strip().lstrip("/")
+    if not path or "/" in path:
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Supabase no configurado")
+    try:
+        supabase.table("ejercicio_imagenes").delete().eq("storage_path", path).execute()
+        _borrar_archivo_storage(path)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo borrar: {e}")
+    return JSONResponse(content={"ok": True, "storage_path": path})
 
 
 PROMPT_EXPANDIR_BANCO = """Sos un fonoaudiólogo experto en voz. Tu marco teórico EXCLUSIVO:

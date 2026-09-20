@@ -338,9 +338,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [expandMsg, setExpandMsg] = useState('');
   const [fichas, setFichas] = useState<any[]>([]);
   const [fichaAbierta, setFichaAbierta] = useState<string | null>(null);
-  // Banco de imágenes (Supabase Storage): archivos compartidos + asignación por ejercicio.
+  // Banco de imágenes (Supabase Storage): archivos + galería ordenada por ejercicio.
   const [bancoArchivos, setBancoArchivos] = useState<any[]>([]);
   const [imgAsignadas, setImgAsignadas] = useState<Record<string, string>>({});
+  const [imgGalerias, setImgGalerias] = useState<Record<string, any[]>>({});
   const [imgPickerEx, setImgPickerEx] = useState<string | null>(null);
   const [subiendoImg, setSubiendoImg] = useState(false);
   const [imgMsg, setImgMsg] = useState('');
@@ -424,11 +425,16 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         const data = await r.json();
         if (data.ok) {
           setBancoArchivos(data.archivos || []);
+          setImgGalerias(data.galerias || {});
           setImgAsignadas(data.asignadas || {});
+        } else if (data.error) {
+          setImgMsg(data.error);
         }
       }
     } catch {}
   };
+
+  const galeriaActual = (): any[] => (imgPickerEx ? (imgGalerias[imgPickerEx] || []) : []);
 
   const asignarImagenBanco = async (storagePath: string) => {
     if (!imgPickerEx) return;
@@ -440,12 +446,12 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ exercise_id: imgPickerEx, storage_path: storagePath }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'No se pudo asignar');
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo asignar');
       await cargarBancoImg();
-      setImgMsg('Imagen asignada ✓ (saldrá en el PDF)');
+      setImgMsg('Imagen agregada a la galería ✓ (saldrá en el PDF)');
     } catch (e: any) {
-      setImgMsg(e.message || 'Error asignando imagen');
+      setImgMsg(`Error asignando imagen: ${e.message || e}`);
     } finally {
       setSubiendoImg(false);
     }
@@ -460,28 +466,109 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       fd.append('exercise_id', imgPickerEx);
       fd.append('archivo', file);
       const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen`, { method: 'POST', body: fd });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'No se pudo subir');
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo subir');
       await cargarBancoImg();
-      setImgMsg('Imagen subida y asignada ✓ (saldrá en el PDF)');
+      setImgMsg('Imagen subida y agregada ✓ (saldrá en el PDF)');
     } catch (e: any) {
-      setImgMsg(e.message || 'Error subiendo imagen');
+      setImgMsg(`Error subiendo imagen: ${e.message || e}`);
     } finally {
       setSubiendoImg(false);
     }
   };
 
-  const quitarImagenEjercicio = async () => {
+  const quitarImagenPosicion = async (orden: number) => {
     if (!imgPickerEx) return;
     setSubiendoImg(true);
     setImgMsg('');
     try {
-      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen/${imgPickerEx}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error('No se pudo quitar');
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen/${imgPickerEx}/${orden}`, { method: 'DELETE' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo quitar');
       await cargarBancoImg();
-      setImgMsg('Imagen quitada (vuelve el dibujo vectorial)');
+      setImgMsg('Imagen quitada y archivo borrado ✓');
     } catch (e: any) {
-      setImgMsg(e.message || 'Error');
+      setImgMsg(`Error: ${e.message || e}`);
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
+
+  const vaciarGaleria = async () => {
+    if (!imgPickerEx) return;
+    if (!confirm('¿Quitar todas las imágenes de este ejercicio? Se borran también sus archivos.')) return;
+    setSubiendoImg(true);
+    setImgMsg('');
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen/${imgPickerEx}`, { method: 'DELETE' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo vaciar');
+      await cargarBancoImg();
+      setImgMsg('Galería vaciada (vuelve el dibujo vectorial)');
+    } catch (e: any) {
+      setImgMsg(`Error: ${e.message || e}`);
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
+
+  const moverImagen = async (orden: number, dir: -1 | 1) => {
+    if (!imgPickerEx) return;
+    const gal = [...galeriaActual()].sort((a, b) => a.orden - b.orden);
+    const i = gal.findIndex(g => g.orden === orden);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= gal.length) return;
+    [gal[i], gal[j]] = [gal[j], gal[i]];
+    setSubiendoImg(true);
+    setImgMsg('');
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen/orden`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exercise_id: imgPickerEx, items: gal.map(g => ({ storage_path: g.storage_path, image_url: g.image_url, epigrafe: g.epigrafe || '' })) }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo reordenar');
+      await cargarBancoImg();
+    } catch (e: any) {
+      setImgMsg(`Error reordenando: ${e.message || e}`);
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
+
+  const guardarEpigrafe = async (orden: number, epigrafe: string) => {
+    if (!imgPickerEx) return;
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagen/epigrafe`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exercise_id: imgPickerEx, orden, epigrafe }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo guardar');
+      setImgGalerias(prev => ({
+        ...prev,
+        [imgPickerEx]: (prev[imgPickerEx] || []).map(g => g.orden === orden ? { ...g, epigrafe } : g),
+      }));
+      setImgMsg('Epígrafe guardado ✓');
+    } catch (e: any) {
+      setImgMsg(`Error: ${e.message || e}`);
+    }
+  };
+
+  const borrarArchivoBanco = async (path: string) => {
+    if (!confirm(`¿Borrar "${path}" del banco? Se desasigna donde esté usado.`)) return;
+    setSubiendoImg(true);
+    setImgMsg('');
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ejercicios/imagenes/banco/${encodeURIComponent(path)}`, { method: 'DELETE' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'No se pudo borrar');
+      await cargarBancoImg();
+      setImgMsg('Archivo borrado del banco ✓');
+    } catch (e: any) {
+      setImgMsg(`Error: ${e.message || e}`);
     } finally {
       setSubiendoImg(false);
     }
@@ -1084,14 +1171,19 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                         onChange={() => toggleExercise(ex.id)}
                         className="mt-1 rounded text-indigo-600 focus:ring-indigo-500"
                       />
-                      {/* Miniatura: imagen asignada del banco o dibujo vectorial */}
+                      {/* Miniatura: primera imagen de la galería o dibujo vectorial */}
                       <button
                         onClick={e => { e.preventDefault(); e.stopPropagation(); setImgPickerEx(ex.id); setImgMsg(''); }}
-                        title={imgAsignadas[ex.id] ? 'Cambiar imagen del ejercicio' : 'Elegir imagen del banco para este ejercicio'}
-                        className="shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-center hover:border-indigo-400 transition-all"
+                        title={(imgGalerias[ex.id]?.length || 0) > 0 ? `Galería: ${imgGalerias[ex.id].length} imagen(es) — clic para editar` : 'Elegir imágenes del banco para este ejercicio'}
+                        className="shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-center hover:border-indigo-400 transition-all relative"
                       >
                         {imgAsignadas[ex.id] ? (
-                          <img src={imgAsignadas[ex.id]} alt="" className="w-full h-full object-cover" />
+                          <>
+                            <img src={imgAsignadas[ex.id]} alt="" className="w-full h-full object-cover" />
+                            {(imgGalerias[ex.id]?.length || 0) > 1 && (
+                              <span className="absolute bottom-0 right-0 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-tl-lg">+{imgGalerias[ex.id].length - 1}</span>
+                            )}
+                          </>
                         ) : (
                           <ImageIcon size={20} className="text-gray-300 dark:text-gray-600" />
                         )}
@@ -1253,13 +1345,13 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         </div>
       </div>
 
-      {/* Modal banco de imágenes por ejercicio */}
+      {/* Modal galería de imágenes por ejercicio */}
       {imgPickerEx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#111827] rounded-3xl border border-gray-200 dark:border-white/10 w-full max-w-2xl shadow-2xl overflow-hidden max-h-[92dvh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex items-center justify-between">
               <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                <ImageIcon size={16} className="text-indigo-500" /> Imagen del ejercicio
+                <ImageIcon size={16} className="text-indigo-500" /> Galería del ejercicio ({galeriaActual().length})
               </h3>
               <button onClick={() => setImgPickerEx(null)} className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5">
                 <X size={18} />
@@ -1267,7 +1359,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
             </div>
             <div className="p-6 space-y-4 text-xs">
               <p className="text-gray-500 dark:text-gray-400">
-                Elegí del banco o subí una ilustración para <strong className="text-gray-800 dark:text-gray-200">{imgPickerEx}</strong>. La imagen asignada sale en la tarjeta del PDF.
+                Galería de <strong className="text-gray-800 dark:text-gray-200">{imgPickerEx}</strong>: subí varias imágenes en orden (guía por pasos) con su epígrafe. Salen apiladas en la tarjeta del PDF.
               </p>
               {imgMsg && (
                 <p className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 font-semibold">{imgMsg}</p>
@@ -1284,39 +1376,78 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
                     onChange={e => { subirImagenEjercicio(e.target.files?.[0]); e.target.value = ''; }}
                   />
                 </label>
-                {imgAsignadas[imgPickerEx] && (
+                {galeriaActual().length > 0 && (
                   <button
-                    onClick={quitarImagenEjercicio}
+                    onClick={vaciarGaleria}
                     disabled={subiendoImg}
                     className="px-4 py-2.5 rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-bold flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all disabled:opacity-50"
                   >
-                    <Trash2 size={14} /> Quitar (volver al dibujo)
+                    <Trash2 size={14} /> Vaciar galería
                   </button>
                 )}
               </div>
-              {imgAsignadas[imgPickerEx] && (
-                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                  <img src={imgAsignadas[imgPickerEx]} alt="" className="w-16 h-16 rounded-lg object-cover border border-emerald-500/30" />
-                  <p className="font-semibold text-emerald-700 dark:text-emerald-300">Imagen actual de este ejercicio</p>
+              {galeriaActual().length > 0 ? (
+                <div className="space-y-2">
+                  {[...galeriaActual()].sort((a, b) => a.orden - b.orden).map((g: any) => (
+                    <div key={`${g.orden}-${g.storage_path}`} className="flex items-center gap-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                      <img src={g.image_url} alt="" className="w-16 h-16 rounded-lg object-cover border border-emerald-500/30 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-emerald-700 dark:text-emerald-300">Paso {g.orden + 1}</p>
+                        <input
+                          defaultValue={g.epigrafe || ''}
+                          key={`${imgPickerEx}-${g.orden}-${g.epigrafe || ''}`}
+                          placeholder="Epígrafe (ej. Paso 1: …)"
+                          onBlur={e => { if (e.target.value !== (g.epigrafe || '')) guardarEpigrafe(g.orden, e.target.value); }}
+                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          className="mt-1 w-full px-2 py-1.5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <div className="flex gap-1">
+                          <button onClick={() => moverImagen(g.orden, -1)} disabled={subiendoImg} title="Subir orden" className="px-2 py-1 rounded-lg border border-gray-300 dark:border-white/10 font-bold hover:bg-gray-100 dark:hover:bg-white/5 disabled:opacity-40">↑</button>
+                          <button onClick={() => moverImagen(g.orden, 1)} disabled={subiendoImg} title="Bajar orden" className="px-2 py-1 rounded-lg border border-gray-300 dark:border-white/10 font-bold hover:bg-gray-100 dark:hover:bg-white/5 disabled:opacity-40">↓</button>
+                        </div>
+                        <button onClick={() => quitarImagenPosicion(g.orden)} disabled={subiendoImg} title="Quitar esta imagen (borra el archivo)" className="px-2 py-1 rounded-lg border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-bold hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40 flex items-center justify-center gap-1">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="text-gray-400">Sin imágenes: se usa el dibujo vectorial. Subí o elegí del banco.</p>
               )}
               <div>
-                <p className="font-bold text-gray-700 dark:text-gray-300 mb-2">Banco compartido ({bancoArchivos.length}) — clic para asignar</p>
+                <p className="font-bold text-gray-700 dark:text-gray-300 mb-2">Banco compartido ({bancoArchivos.length}) — clic para agregar a la galería</p>
                 {bancoArchivos.length === 0 ? (
                   <p className="text-gray-400">El banco está vacío: subí la primera imagen con el botón de arriba.</p>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                     {bancoArchivos.map((a: any) => (
-                      <button
+                      <div
                         key={a.path}
-                        onClick={() => asignarImagenBanco(a.path)}
-                        disabled={subiendoImg}
                         title={a.path}
-                        className="rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 hover:border-indigo-400 transition-all disabled:opacity-50 bg-gray-50 dark:bg-white/5"
+                        className="rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5"
                       >
-                        <img src={a.url} alt={a.path} className="w-full h-20 object-cover" />
-                        <p className="px-1 py-1 text-[9px] text-gray-500 truncate">{a.path}</p>
-                      </button>
+                        <button
+                          onClick={() => asignarImagenBanco(a.path)}
+                          disabled={subiendoImg}
+                          className="block w-full hover:opacity-80 transition-all disabled:opacity-50"
+                        >
+                          <img src={a.url} alt={a.path} className="w-full h-20 object-cover" />
+                        </button>
+                        <div className="flex items-center justify-between px-1 py-1 gap-1">
+                          <p className="text-[9px] text-gray-500 truncate flex-1">{a.path}</p>
+                          <button
+                            onClick={() => borrarArchivoBanco(a.path)}
+                            disabled={subiendoImg}
+                            title="Borrar archivo del banco"
+                            className="text-red-400 hover:text-red-600 shrink-0 disabled:opacity-40"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}

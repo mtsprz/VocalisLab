@@ -1450,38 +1450,54 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     # En modo 'ai' opt-in: IA encajada a 50 mm con fallback SVG.
     # Sin bloques full-width duplicados ni desbordes de columna.
     ex_id_vis = str(exercise.get("id", "")).strip().lower()
-    ai_img = exercise.get("_ai_pre") or None
-    # Banco del profesional: si hay imagen asignada en la tabla, gana siempre
+    # Galería: lista [{path, epigrafe}] (generar() la pre-carga vía _ai_pre).
+    _pre = exercise.get("_ai_pre")
+    if isinstance(_pre, dict):
+        _pre = [_pre]
+    ai_imgs = [dict(x) for x in (_pre or []) if isinstance(x, dict) and x.get("path")]
+    if not ai_imgs and isinstance(exercise.get("_ai_pre"), str) and exercise.get("_ai_pre"):
+        ai_imgs = [{"path": exercise["_ai_pre"], "epigrafe": ""}]
+    # Banco del profesional: si hay galería asignada en la tabla, gana siempre
     # (cubre llamadas directas a la tarjeta fuera de generar_cuadernillo_pdf).
-    if not ai_img and ex_id_vis:
+    if not ai_imgs and ex_id_vis:
         try:
-            from imagen_terapeutica import buscar_imagen_guardada as _db_img
-            ai_img = _db_img(ex_id_vis)
+            from imagen_terapeutica import galeria_guardada as _db_gal
+            ai_imgs = [dict(x) for x in (_db_gal(ex_id_vis) or [])]
         except Exception:
-            ai_img = None
-    if not ai_img and _modo_imagen() == "ai":
+            ai_imgs = []
+    if not ai_imgs and _modo_imagen() == "ai":
         try:
             from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
             if imagen_ia_habilitada():
-                ai_img = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
+                _gen = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
+                if _gen:
+                    ai_imgs = [{"path": _gen, "epigrafe": ""}]
         except Exception:
-            ai_img = None
+            ai_imgs = []
     try:
-        if ai_img:
-            from imagen_terapeutica import _es_imagen_valida as _img_ok
-            if not _img_ok(ai_img):
-                ai_img = None
+        from imagen_terapeutica import _es_imagen_valida as _img_ok
+        ai_imgs = [x for x in ai_imgs if _img_ok(x.get("path"))]
     except Exception:
         pass
 
     ilust_flow = []
-    if ai_img:
-        try:
-            ilust_flow.append(_imagen_contain(ai_img, box_mm=50))
-            ilust_flow.append(Paragraph("Ilustración de apoyo", styles['CaptionText']))
-        except Exception:
-            ai_img = None
-    if not ai_img:
+    if ai_imgs:
+        # Sin límite: apiladas; más chicas si hay varias para cuidar la página.
+        box = 50 if len(ai_imgs) == 1 else 40
+        validas = []
+        for i, item in enumerate(ai_imgs, 1):
+            try:
+                ilust_flow.append(_imagen_contain(item["path"], box_mm=box))
+                cap = (item.get("epigrafe") or "").strip()
+                ilust_flow.append(Paragraph(
+                    escape(cap) if cap else f"Ilustración {i} de {len(ai_imgs)}"
+                    if len(ai_imgs) > 1 else "Ilustración de apoyo",
+                    styles['CaptionText']))
+                validas.append(item)
+            except Exception:
+                continue
+        ai_imgs = validas
+    if not ai_imgs:
         ilust, ilust_cap = _ilustracion(exercise)
         ilust_flow.append(_con_fondo(ilust))
         ilust_flow.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))

@@ -570,8 +570,8 @@ def _ensure_bucket(sb) -> bool:
 
 
 def mapa_imagenes_db(exercise_ids: list) -> dict:
-    """{exercise_id: path_local} para los ejercicios con imagen asignada por
-    el profesional. UNA sola query (no una por ejercicio). Nunca lanza."""
+    """{exercise_id: [{path, epigrafe}, ...]} en orden, para los ejercicios
+    con imágenes asignadas por el profesional. UNA sola query. Nunca lanza."""
     out: dict = {}
     ids = [str(i or "").strip().lower() for i in (exercise_ids or []) if str(i or "").strip()]
     if not ids:
@@ -580,52 +580,48 @@ def mapa_imagenes_db(exercise_ids: list) -> dict:
         sb = _supabase()
         if not sb:
             return out
-        res = sb.table("ejercicio_imagenes").select("exercise_id, image_url, storage_path")\
-            .in_("exercise_id", ids).execute()
+        try:
+            res = sb.table("ejercicio_imagenes")\
+                .select("exercise_id, image_url, storage_path, orden, epigrafe")\
+                .in_("exercise_id", ids).order("orden").execute()
+            cols_nuevas = True
+        except Exception:
+            # DB sin migrar a galería (v1): una imagen por ejercicio
+            res = sb.table("ejercicio_imagenes")\
+                .select("exercise_id, image_url, storage_path")\
+                .in_("exercise_id", ids).execute()
+            cols_nuevas = False
         for row in (res.data or []):
             ex_id = str(row.get("exercise_id", "")).strip().lower()
-            if not ex_id or ex_id in out:
+            if not ex_id:
                 continue
-            dest = _cache_path(f"ejercicio:{ex_id}", "db")
-            if _es_imagen_valida(dest):
-                out[ex_id] = dest
-                continue
-            url = row.get("image_url", "")
-            if url and _descargar(url, dest, timeout=60):
-                out[ex_id] = dest
+            epi = str(row.get("epigrafe", "") or "").strip() if cols_nuevas else ""
+            try:
+                ordn = int(row.get("orden", 0)) if cols_nuevas else 0
+            except Exception:
+                ordn = 0
+            dest = _cache_path(f"ejercicio:{ex_id}:{ordn}", "db")
+            if not _es_imagen_valida(dest):
+                url = row.get("image_url", "")
+                if not (url and _descargar(url, dest, timeout=60)):
+                    continue
+            out.setdefault(ex_id, []).append({"path": dest, "epigrafe": epi})
     except Exception as e:
         print(f"[imagen_terapeutica] mapa DB falló: {e}")
     return out
 
 
 def buscar_imagen_guardada(exercise_id: str) -> str | None:
-    """Devuelve el path local de la imagen persistida para el ejercicio, o None.
-    1) Fila en ejercicio_imagenes → 2) descarga de Storage a caché local."""
-    ex_id = str(exercise_id or "").strip().lower()
-    if not ex_id:
-        return None
-    sb = _supabase()
-    if not sb:
-        return None
-    try:
-        res = sb.table("ejercicio_imagenes").select("image_url, storage_path")\
-            .eq("exercise_id", ex_id).limit(1).execute()
-        rows = res.data or []
-        if not rows:
-            return None
-        row = rows[0]
-        # 1) caché local por hash estable del exercise_id
-        dest = _cache_path(f"ejercicio:{ex_id}", "db")
-        if _es_imagen_valida(dest):
-            return dest
-        # 2) descargar desde la URL persistida
-        url = row.get("image_url", "")
-        if url and _descargar(url, dest, timeout=60):
-            return dest
-        return None
-    except Exception as e:
-        print(f"[imagen_terapeutica] Lookup DB falló: {e}")
-        return None
+    """Devuelve el path local de la PRIMERA imagen de la galería del
+    ejercicio, o None. Compat: delega en mapa_imagenes_db."""
+    gal = mapa_imagenes_db([exercise_id])
+    items = gal.get(str(exercise_id or "").strip().lower(), [])
+    return items[0]["path"] if items else None
+
+
+def galeria_guardada(exercise_id: str) -> list:
+    """[{path, epigrafe}, ...] en orden para un ejercicio. Lista vacía si no hay."""
+    return mapa_imagenes_db([exercise_id]).get(str(exercise_id or "").strip().lower(), [])
 
 
 def guardar_imagen_ejercicio(exercise_id: str, local_path: str, prompt: str = "",
