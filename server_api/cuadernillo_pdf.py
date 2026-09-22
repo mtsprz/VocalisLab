@@ -24,16 +24,20 @@ from reportlab.platypus import (
 from reportlab.graphics.shapes import Drawing, Line, String, PolyLine, Circle, Rect, Polygon
 
 
-PRIMARY = HexColor("#1a237e")
-SECONDARY = HexColor("#7c4dff")
-ACCENT = HexColor("#00c853")
-LIGHT_BG = HexColor("#f5f5f5")
-DARK_TEXT = HexColor("#212121")
-GRAY_TEXT = HexColor("#616161")
-LIGHT_GRAY = HexColor("#e0e0e0")
-CARD_BG = HexColor("#fafaff")
-CURVE_COLOR = HexColor("#1a237e")
-ARROW_COLOR = HexColor("#00c853")
+PRIMARY = HexColor("#0F172A")
+SECONDARY = HexColor("#0284C7")
+ACCENT = HexColor("#0284C7")
+LIGHT_BG = HexColor("#F8FAFC")
+DARK_TEXT = HexColor("#1E293B")
+GRAY_TEXT = HexColor("#64748B")
+LIGHT_GRAY = HexColor("#E2E8F0")
+CARD_BG = HexColor("#FFFFFF")
+CURVE_COLOR = HexColor("#0284C7")
+ARROW_COLOR = HexColor("#0284C7")
+STOP_BG = HexColor("#FEF2F2")
+STOP_BORDER = HexColor("#991B1B")
+STOP_TEXT = HexColor("#991B1B")
+IMG_BG = HexColor("#F8FAFC")
 
 # ─── Lenguaje cotidiano: jerga técnica → palabras simples ──────────
 _JERGA = [
@@ -125,11 +129,16 @@ def _sanear(texto: str) -> str:
     out = str(texto)
     for src, dst in _MOJIBAKE:
         out = out.replace(src, dst)
-    # Artefactos de sintaxis tipo $10=voz$ / $0=$ (restos de plantillas)
+    # Prohibido LaTeX en el PDF: se elimina TODA sintaxis ($...$, \frac{}{},
+    # \times, llaves de comando, ~ de no-ruptura). Solo texto plano.
     out = re.sub(r"\$[^$\n]*\$", "", out)
     out = out.replace("$", "")
-    # Backslashes sueltos y corchetes huérfanos (sin contenido útil)
+    out = re.sub(r"\\frac\s*\{[^}]*\}\s*\{[^}]*\}", "", out)
+    out = re.sub(r"\\[a-zA-Z]+\s*(\{[^}]*\})?", "", out)
     out = out.replace("\\", "")
+    out = out.replace("~", " ")
+    out = re.sub(r"\{[^{}]*\}", "", out)
+    # Backslashes sueltos y corchetes huérfanos (sin contenido útil)
     out = re.sub(r"\[[^\[\]\w]*\]", "", out)
     out = re.sub(r"\s+", " ", out).strip()
     # Colapsa palabra duplicada exacta consecutiva ("respiración respiración")
@@ -182,7 +191,7 @@ _SIN_CURVA = ("pautas_rlf", "le_huche", "shiatsu_cabeza", "rotacion_hombros",
               "soplo_escalonado", "descenso_laringeo", "escalas_vocalicas")
 
 # ??? Clasificación de curva melódica por ejercicio ?????????
-_CURVA_STACCATO = ("staccato", "stacatto", "punteado", "punteo")
+_CURVA_STACCATO = ("staccato", "stacatto", "punteado", "punteo", "acento")
 _CURVA_SIRENA = ("sirena", "trill", "fluctu", "tubo_agua", "glissandos",
                  "lax", "laxvox")
 _CURVA_DESCENSO = ("descenso", "bostezo", "enfriamiento", "suspiro",
@@ -191,7 +200,7 @@ _CURVA_SOSTENIDO = ("humming", "frases_balanceadas",
                     "consonantes_fricativas", "oclusion_succion",
                     "vibracion_labial", "oclusion_nasal",
                     "coordinacion_costo_abdominal", "empuje_glotico",
-                    "sostenid", "mantener", "lectura")
+                    "automatismo", "sostenid", "mantener", "lectura")
 
 
 def _tipo_curva(ex: dict) -> str:
@@ -758,8 +767,8 @@ def _con_fondo(d):
     except Exception:
         return d
     fondo = Drawing(w, h)
-    fondo.add(Rect(0, 0, w, h, strokeColor=HexColor("#E4E0FA"),
-                   strokeWidth=0.8, fillColor=HexColor("#F5F3FF")))
+    fondo.add(Rect(0, 0, w, h, strokeColor=HexColor("#E2E8F0"),
+                   strokeWidth=0.8, fillColor=HexColor("#F8FAFC")))
     try:
         for sh in list(d.contents):
             fondo.add(sh)
@@ -792,9 +801,9 @@ def _svg_lectura():
     d = Drawing(150, 96)
     _cap(d, "Lectura en voz alta")
     d.add(Polygon([30, 30, 30, 58, 62, 52, 62, 24, 46, 28, 46, 56],
-                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E8E6FB")))
+                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E0F2FE")))
     d.add(Polygon([120, 30, 120, 58, 88, 52, 88, 24, 104, 28, 104, 56],
-                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E8E6FB")))
+                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E0F2FE")))
     for r in (10, 16, 22):
         d.add(Circle(128, 44, r, strokeColor=SECONDARY, strokeWidth=1.2, fillColor=None))
     _nota(d, "Claro, parejo y proyectado")
@@ -806,7 +815,7 @@ def _svg_salmodia():
     d = Drawing(150, 96)
     _cap(d, "Versos cantados")
     d.add(Polygon([28, 32, 28, 58, 58, 52, 58, 26, 43, 30, 43, 56],
-                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E8E6FB")))
+                  strokeColor=PRIMARY, strokeWidth=1.6, fillColor=HexColor("#E0F2FE")))
     # Nota musical (corchea)
     d.add(Circle(84, 34, 5, strokeColor=INK, strokeWidth=1.4, fillColor=INK))
     d.add(Line(89, 34, 89, 58, strokeColor=INK, strokeWidth=1.6))
@@ -827,7 +836,7 @@ def _svg_habla():
     d = Drawing(150, 96)
     _cap(d, "Habla espontánea")
     d.add(Circle(52, 46, 18, strokeColor=PRIMARY, strokeWidth=1.8,
-                 fillColor=HexColor("#E8E6FB")))
+                 fillColor=HexColor("#E0F2FE")))
     d.add(Rect(78, 40, 52, 30, strokeColor=SECONDARY, strokeWidth=1.4,
                fillColor=white))
     d.add(Polygon([86, 40, 78, 30, 94, 40], fillColor=SECONDARY, strokeColor=SECONDARY))
@@ -846,7 +855,7 @@ def _svg_vocales():
     x = 22
     for v, a in zip(vocales, anchos):
         d.add(Circle(x, 44, a, strokeColor=PRIMARY, strokeWidth=1.5,
-                     fillColor=HexColor("#E8E6FB")))
+                     fillColor=HexColor("#E0F2FE")))
         d.add(String(x, 41, v, fontName="Helvetica-Bold", fontSize=7,
                      fillColor=PRIMARY, textAnchor="middle"))
         x += 24
@@ -1081,6 +1090,18 @@ _ICONO_SECCION = {
     "orofaringeo": "O", "metodos": "M",
 }
 
+# Etiquetas de categoría con texto completo (reemplazan las letras sueltas).
+_BADGE_CATEGORIA = {
+    "corporal": "Cuerpo / Postura",
+    "laringeo": "Laringe / Garganta",
+    "respiratorio": "Respiración",
+    "sovte": "Ajuste Vocal / TVSO",
+    "resonancia": "Habla / Resonancia",
+    "higiene": "Higiene Vocal",
+    "orofaringeo": "Apertura Orofaríngea",
+    "metodos": "Métodos Fisiológicos",
+}
+
 
 def _get_styles():
     styles = getSampleStyleSheet()
@@ -1123,9 +1144,18 @@ def _get_styles():
     # Seguridad clínica: banda roja STOP (precauciones por ejercicio y
     # advertencias del preset). Debe verse sí o sí en el PDF impreso.
     _add('StopText', parent=styles['Normal'], fontSize=11, leading=14,
-         textColor=HexColor("#b71c1c"), backColor=HexColor("#fdecea"),
-         borderWidth=0.6, borderColor=HexColor("#b71c1c"),
-         borderPadding=(4, 4, 4), spaceBefore=2 * mm, spaceAfter=2 * mm)
+          textColor=STOP_TEXT, backColor=STOP_BG,
+          borderWidth=0.7, borderColor=STOP_BORDER,
+          borderPadding=(5, 5, 5), spaceBefore=2 * mm, spaceAfter=2 * mm)
+    _add('TonalBadge', parent=styles['Normal'], fontSize=10, leading=13,
+          textColor=PRIMARY, backColor=HexColor("#F0F9FF"),
+          borderWidth=0.6, borderColor=SECONDARY,
+          borderPadding=(5, 5, 5), spaceBefore=2 * mm, spaceAfter=1 * mm,
+          alignment=TA_CENTER)
+    _add('FichaText', parent=styles['Normal'], fontSize=10, leading=13,
+          textColor=DARK_TEXT, spaceAfter=1 * mm)
+    _add('BadgeText', parent=styles['Normal'], fontSize=11, leading=14,
+          textColor=SECONDARY, spaceAfter=1 * mm)
     return styles
 
 
@@ -1384,65 +1414,29 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     desc = _sanear(_simplificar(exercise.get("description", "")))
     proposito = _PROPOSITO_SECCION.get(
         seccion_id, "Para entrenar y cuidar su voz todos los días.")
-    icono = _ICONO_SECCION.get(seccion_id, "V")
 
-    # Si quedan < 70 mm en la página, el ejercicio arranca en la siguiente:
-    # evita encabezados huérfanos al pie. El resto fluye partido entre filas
-    # (nunca a mitad de renglón) en vez de forzar saltos con blancos.
-    elements.append(CondPageBreak(70 * mm))
+    # Tarjeta indivisible en la práctica: si quedan < 120 mm, arranca en la
+    # página siguiente (equivale a page-break-inside: avoid para tarjetas
+    # normales; sin KeepTogether rígido para no romper el PDF con galerías
+    # largas, que fluyen a la página siguiente).
+    elements.append(CondPageBreak(120 * mm))
 
-    # Encabezado de tarjeta: ícono + título + propósito
-    header_data = [[
-        Paragraph(f"<font size=18 color='#ffffff'><b>{icono}</b></font>",
-                  ParagraphStyle('IconCell', parent=styles['Normal'],
-                                 alignment=TA_CENTER, textColor=white)),
-        [
-            Paragraph(f"{idx}. {escape(name)}", styles['ExerciseTitle']),
-            Paragraph(f"<i>¿Para qué sirve? {escape(proposito)}</i>",
-                      styles['PropositoText']),
-        ],
-    ]]
-    header_table = Table(header_data, colWidths=[16 * mm, 142 * mm])
-    header_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), SECONDARY),
-        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]))
-    elements.append(header_table)
-    elements.append(Spacer(1, 1 * mm))
-
-    # Badge de Nivel de Instrucción + efecto clínico (diferenciador)
     ex_id = str(exercise.get("id", "")).strip().lower()
     nivel = _NIVEL_POR_EJERCICIO.get(ex_id, 2)
     efecto = _EFECTO_POR_EJERCICIO.get(ex_id, "Entrena y cuida su voz")
-    badge = Table([[
-        Paragraph(f"<b>{_NIVEL_NOMBRE.get(nivel, 'Nivel 2: Ajuste TVSO')}</b>",
-                  ParagraphStyle('BadgeCell', parent=styles['Normal'],
-                                 fontSize=10, textColor=white, alignment=TA_CENTER)),
-        Paragraph(f"Efecto: {escape(efecto)}",
-                  ParagraphStyle('EfectoCell', parent=styles['Normal'],
-                                 fontSize=10, textColor=DARK_TEXT, alignment=TA_LEFT)),
-    ]], colWidths=[48 * mm, 112 * mm])
-    badge.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), PRIMARY),
-        ('ROUNDEDCORNERS', [3, 3, 3, 3]),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]))
-    elements.append(badge)
-    elements.append(Paragraph(
-        f"<i>{escape(_NIVEL_DESC.get(nivel, ''))}</i>", styles['CaptionText']))
-    elements.append(Spacer(1, 1 * mm))
+    categoria = _BADGE_CATEGORIA.get(seccion_id, "Ejercicio vocal")
 
+    # ── Columna izquierda (65 %): título + badge + propósito + pasos + STOP ──
+    left_flow = [
+        Paragraph(f"<b>{idx}. {escape(name)}</b>", styles['ExerciseTitle']),
+        Paragraph(f"<b>[{escape(categoria)}]</b> &nbsp;"
+                  f"<font color='#64748B'>{escape(efecto)}</font>",
+                  styles['BadgeText']),
+        Paragraph(f"<i>¿Para qué sirve? {escape(proposito)}</i>",
+                  styles['PropositoText']),
+    ]
     if desc:
-        elements.append(Paragraph(escape(desc), styles['CuadBody']))
+        left_flow.append(Paragraph(escape(desc), styles['CuadBody']))
 
     # ── Columna derecha: UNA ilustración + UNA curva, tamaño columna ──
     # En modo 'svg' (default) siempre el diagrama vectorial pre-aprobado
@@ -1480,9 +1474,29 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     except Exception:
         pass
 
+    # ── Columna derecha (35 %): ficha técnica + indicación tonal + imagen ──
+    # Regla clínica: NUNCA se generan SVGs dinámicos de tono/curvas ni
+    # dibujos sintéticos. Solo imágenes del banco + texto estructurado.
+    duration = exercise.get("duration_min", "")
+    nivel_txt = f"Nivel {nivel} de 4"
+    dosis_txt = f"Dosis: {duration} min/día" if duration else ""
+    ficha_lines = [Paragraph(f"<b>{escape(nivel_txt)}</b>", styles['FichaText'])]
+    ficha_lines.append(_barra_complejidad(nivel))
+    if dosis_txt:
+        ficha_lines.append(Paragraph(f"<b>{escape(dosis_txt)}</b>", styles['FichaText']))
+    right_flow = ficha_lines
+
+    tipo = _tipo_curva(exercise)
+    if tipo:
+        tonal_txt = _CURVA_TITULO.get(tipo, "Mantenga el sonido parejo y estable")
+        right_flow.append(Paragraph(
+            f"<b>[Indicación tonal]</b><br/>{escape(tonal_txt)}",
+            styles['TonalBadge']))
+
     ilust_flow = []
     if ai_imgs:
         # Sin límite: apiladas; más chicas si hay varias para cuidar la página.
+        # Contenedor neutro #F8FAFC, proporción contenida (object-fit: contain).
         box = 50 if len(ai_imgs) == 1 else 40
         validas = []
         for i, item in enumerate(ai_imgs, 1):
@@ -1498,18 +1512,21 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
                 continue
         ai_imgs = validas
     if not ai_imgs:
-        ilust, ilust_cap = _ilustracion(exercise)
-        ilust_flow.append(_con_fondo(ilust))
-        ilust_flow.append(Paragraph(f"Dibujo: {ilust_cap}", styles['CaptionText']))
-
-    tipo = _tipo_curva(exercise)
-    duration = exercise.get("duration_min", "")
-    seg_label = f"{duration} min" if tipo == "sostenido" and duration else ""
-    if tipo:
-        ilust_flow.append(Spacer(1, 2 * mm))
-        ilust_flow.append(_curva_melodica(tipo, segundos=seg_label))
-        ilust_flow.append(Paragraph(f"Su voz debe sonar así:<br/>{_CURVA_TITULO[tipo]}",
-                                    styles['CaptionText']))
+        # Caja neutra de referencia (sin dibujo sintético ni curvas).
+        caja_neutra = Table(
+            [[Paragraph("Imagen de referencia<br/>pendiente de carga",
+                        styles['CaptionText'])]],
+            colWidths=[55 * mm])
+        caja_neutra.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), IMG_BG),
+            ('BOX', (0, 0), (-1, -1), 0.6, LIGHT_GRAY),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        ilust_flow.append(caja_neutra)
+    right_flow.extend(ilust_flow)
 
     # Pasos numerados con casillas grandes para tildar (columna izquierda).
     # Se elimina la numeración propia del banco ("1. ...") porque la tarjeta
@@ -1524,55 +1541,41 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
                 _checkbox(),
                 Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText']),
             ])
-        pasos_tabla = Table(rows, colWidths=[10 * mm, 86 * mm])
+        pasos_tabla = Table(rows, colWidths=[10 * mm, 97 * mm])
         pasos_tabla.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ('LINEBELOW', (0, 0), (-1, -2), 0.4, LIGHT_GRAY),
             ('LEFTPADDING', (0, 0), (-1, -1), 1),
             ('RIGHTPADDING', (0, 0), (-1, -1), 1),
         ]))
     else:
-        pasos_tabla = Paragraph("Siga la curva y el dibujo de la derecha.",
+        pasos_tabla = Paragraph("Siga los pasos con su profesional.",
                                 styles['CuadBody'])
-
-    complejidad = Table([[
-        Paragraph("<b>Nivel de complejidad:</b>", styles['CaptionText']),
-        _barra_complejidad(nivel),
-        Paragraph(f"<b>{nivel}/4</b>", styles['CaptionText']),
-    ]], colWidths=[46 * mm, 36 * mm, 12 * mm])
-    complejidad.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 1),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
-    ]))
-    dosis_txt = f"<b>Dosis: {duration} min/día</b>" if duration else ""
-    left_cell = [pasos_tabla, Spacer(1, 2 * mm), complejidad]
-    if dosis_txt:
-        left_cell.append(Paragraph(dosis_txt, styles['CuadBody']))
-
-    # Tarjeta 2 columnas estrictas (izq: pasos | der: dibujo + curva).
-    # Sin KeepTogether: el flujo natural parte la tarjeta solo si excede
-    # la página, evitando saltos gigantes y páginas casi vacías.
-    card = Table([[left_cell, ilust_flow]], colWidths=[102 * mm, 56 * mm])
-    card.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 3),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('BOX', (0, 0), (-1, -1), 0.6, LIGHT_GRAY),
-        ('BACKGROUND', (1, 0), (1, 0), FONDO_SUAVE),
-    ]))
-    elements.append(card)
-    elements.append(Spacer(1, 3 * mm))
+    left_flow.extend([Spacer(1, 1 * mm), pasos_tabla])
 
     precaucion = str(exercise.get("precaucion") or "").strip()
     if precaucion:
-        elements.append(Paragraph(
+        left_flow.append(Paragraph(
             f"<b>STOP — {escape(_sanear(_simplificar(precaucion)))}</b>",
             styles['StopText']))
+
+    # Tarjeta 2 columnas (izq 65 % = 115 mm | der 35 % = 63 mm),
+    # borde sobrio + acento acero a la izquierda.
+    card = Table([[left_flow, right_flow]], colWidths=[115 * mm, 63 * mm])
+    card.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('BOX', (0, 0), (-1, -1), 0.6, LIGHT_GRAY),
+        ('LINEBEFORE', (0, 0), (0, 0), 4, SECONDARY),
+        ('BACKGROUND', (1, 0), (1, 0), IMG_BG),
+    ]))
+    elements.append(card)
+    elements.append(Spacer(1, 3 * mm))
 
     phrases = exercise.get("phrases", []) or []
     if phrases:
@@ -1759,7 +1762,7 @@ def generar_cuadernillo_pdf(
     story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph(
-        "Cada ejercicio trae su dibujo de cómo debe sonar su voz. "
+        "Cada ejercicio trae su imagen de referencia y su indicación tonal. "
         "Siga los pasos en orden y tilde cada casilla cuando lo complete.",
         styles['CuadBody']))
 

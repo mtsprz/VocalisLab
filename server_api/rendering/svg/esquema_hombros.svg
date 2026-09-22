@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
-  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
-  <circle cx="120" cy="48" r="20" fill="none" stroke="#1E1B4B" stroke-width="2.5"/>
-  <line x1="52" y1="118" x2="188" y2="118" stroke="#1E1B4B" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <circle cx="120" cy="48" r="20" fill="none" stroke="#0F172A" stroke-width="2.5"/>
+  <line x1="52" y1="118" x2="188" y2="118" stroke="#0F172A" stroke-width="2.5" stroke-linecap="round"/>
   <path d="M 60 96 A 30 30 0 0 1 96 84" fill="none" stroke="#10B981" stroke-width="2.5"/>
   <polygon points="98,78 100,92 88,86" fill="#10B981"/>
   <path d="M 180 96 A 30 30 0 0 0 144 84" fill="none" stroke="#10B981" stroke-width="2.5"/>
   <polygon points="142,78 140,92 152,86" fill="#10B981"/>
-  <text x="120" y="142" font-size="12" text-anchor="middle" fill="#1E1B4B">Hombros sueltos</text>
+  <text x="120" y="142" font-size="12" text-anchor="middle" fill="#0F172A">Hombros sueltos</text>
 </svg>

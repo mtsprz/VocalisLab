@@ -59,7 +59,8 @@
         <td><span class="card-num">{{ ex.n }}</span><span class="card-codigo">{{ ex.codigo }}</span><h2 class="ejercicio" style="display:inline">{{ ex.nombre }}</h2></td>
         <td class="dosis-cell"><span class="card-dosis">{{ ex.dosis_min }} min/día</span></td>
       </tr></table>
-      <span class="card-nivel">Nivel {{ ex.nivel }} · {{ ex.nivel_nombre }}</span>
+      <span class="card-nivel">Nivel {{ ex.nivel }} de 4 · {{ ex.nivel_nombre }}</span>
+      <span class="card-categoria">[{{ ex.categoria }}]</span>
     </div>
     <p class="card-paraque"><strong>¿Para qué sirve?</strong> {{ ex.para_que }}</p>
     {% if ex.nota_tecnica %}<p class="card-nota">{{ ex.nota_tecnica }}</p>{% endif %}
@@ -70,8 +71,8 @@
         {% endfor %}
       </td>
       <td class="card-ilust">
+        {% if ex.indicacion_tonal %}<p class="tonal"><strong>[Indicación tonal]</strong><br/>{{ ex.indicacion_tonal }}</p>{% endif %}
         {% if ex.svg %}{{ ex.svg | safe }}
-        {% if ex.familia == 'tonal' %}<p class="micro"><strong>Su voz debe sonar así:</strong></p>{% endif %}
         <p class="caption">{{ ex.caption }}</p>
         {% if ex.micro_leyenda %}<p class="micro">{{ ex.micro_leyenda }}</p>{% endif %}
         {% elif ex.tabla_registro %}
@@ -90,7 +91,7 @@
         {% endif %}
       </td>
     </tr></table>
-    {% if ex.precaucion %}<p class="stop">⚠ {{ ex.precaucion }}</p>{% endif %}
+    {% if ex.precaucion %}<p class="stop">STOP — {{ ex.precaucion }}</p>{% endif %}
   </div>
   {% endfor %}
 </section>

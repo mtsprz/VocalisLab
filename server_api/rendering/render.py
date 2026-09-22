@@ -71,6 +71,29 @@ def load_fixture(path: str) -> dict:
         return json.load(f)
 
 
+FAMILIA_CATEGORIA = {
+    "respiracion": "Respiración",
+    "masaje": "Laringe / Garganta",
+    "postural": "Cuerpo / Postura",
+    "articulacion": "Apertura Orofaríngea",
+    "tonal": "Ajuste Vocal / TVSO",
+    "sovte": "Ajuste Vocal / TVSO",
+    "habla": "Habla / Resonancia",
+    "rutina": "Higiene Vocal",
+    "higiene": "Higiene Vocal",
+}
+
+# Indicación tonal en texto (regla clínica: sin SVGs dinámicos de curvas).
+# Se deriva del asset de referencia, no se dibuja nada.
+TONAL_POR_SVG = {
+    "curva_f0_asc.svg": "Suba suave de grave a agudo",
+    "curva_f0_desc.svg": "Baje suave de agudo a grave",
+    "sirena.svg": "Sirena: suba y baje varias veces",
+    "escala_3ra.svg": "Suba por escalones (3.ª)",
+    "escala_5ta_8va.svg": "Suba por escalones (5.ª – 8.ª)",
+}
+
+
 def build_context(data: dict, svg_dir: str) -> dict:
     """Enriquece la prescripción para la plantilla (n, svg inline, oraciones)."""
     from .validators import ilustracion_para
@@ -93,6 +116,8 @@ def build_context(data: dict, svg_dir: str) -> dict:
             "codigo": ex["codigo"],
             "nombre": ex["nombre"],
             "familia": fam,
+            "categoria": FAMILIA_CATEGORIA.get(fam, "Ejercicio vocal"),
+            "indicacion_tonal": TONAL_POR_SVG.get(archivo or "", ""),
             "svg": svg,
             "tabla_registro": tabla_registro,
             "caption": caption,

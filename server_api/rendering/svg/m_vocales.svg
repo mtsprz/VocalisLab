@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
-  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
-  <path d="M 40 78 Q 80 58, 120 78 Q 80 98, 40 78" fill="none" stroke="#1E1B4B" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M 140 62 A 24 24 0 0 1 140 94" fill="none" stroke="#5B4BC4" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M 158 50 A 38 38 0 0 1 158 106" fill="none" stroke="#5B4BC4" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <path d="M 40 78 Q 80 58, 120 78 Q 80 98, 40 78" fill="none" stroke="#0F172A" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 140 62 A 24 24 0 0 1 140 94" fill="none" stroke="#0284C7" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 158 50 A 38 38 0 0 1 158 106" fill="none" stroke="#0284C7" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
   <path d="M 176 38 A 52 52 0 0 1 176 118" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
-  <text x="120" y="144" font-size="12" text-anchor="middle" fill="#1E1B4B">Vibración suave</text>
+  <text x="120" y="144" font-size="12" text-anchor="middle" fill="#0F172A">Vibración suave</text>
 </svg>

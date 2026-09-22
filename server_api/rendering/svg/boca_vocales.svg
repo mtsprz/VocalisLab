@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
-  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
-  <ellipse cx="120" cy="78" rx="58" ry="40" fill="none" stroke="#1E1B4B" stroke-width="2.5"/>
-  <line x1="120" y1="78" x2="196" y2="78" stroke="#5B4BC4" stroke-width="2.5"/>
-  <polygon points="204,78 190,70 190,86" fill="#5B4BC4"/>
-  <text x="120" y="140" font-size="12" text-anchor="middle" fill="#1E1B4B">Apertura bucal</text>
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <ellipse cx="120" cy="78" rx="58" ry="40" fill="none" stroke="#0F172A" stroke-width="2.5"/>
+  <line x1="120" y1="78" x2="196" y2="78" stroke="#0284C7" stroke-width="2.5"/>
+  <polygon points="204,78 190,70 190,86" fill="#0284C7"/>
+  <text x="120" y="140" font-size="12" text-anchor="middle" fill="#0F172A">Apertura bucal</text>
 </svg>

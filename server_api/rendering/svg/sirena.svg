@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
-  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
-  <line x1="28" y1="20" x2="28" y2="124" stroke="#E5E7EB" stroke-width="1.5"/>
-  <path d="M 28 90 C 60 90, 60 40, 92 40 S 124 90, 156 90 S 188 40, 212 52" fill="none" stroke="#5B4BC4" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <line x1="28" y1="20" x2="28" y2="124" stroke="#E2E8F0" stroke-width="1.5"/>
+  <path d="M 28 90 C 60 90, 60 40, 92 40 S 124 90, 156 90 S 188 40, 212 52" fill="none" stroke="#0284C7" stroke-width="2.5" stroke-linecap="round"/>
   <polygon points="220,56 206,50 208,64" fill="#10B981"/>
-  <text x="120" y="146" font-size="12" text-anchor="middle" fill="#1E1B4B">Subí y bajá</text>
+  <text x="120" y="146" font-size="12" text-anchor="middle" fill="#0F172A">Subí y bajá</text>
 </svg>

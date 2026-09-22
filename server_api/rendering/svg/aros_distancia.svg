@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
-  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
-  <circle cx="52" cy="80" r="11" fill="none" stroke="#1E1B4B" stroke-width="2.5"/>
-  <path d="M 84 52 A 48 48 0 0 1 84 108" fill="none" stroke="#5B4BC4" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M 112 38 A 76 76 0 0 1 112 122" fill="none" stroke="#5B4BC4" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <circle cx="52" cy="80" r="11" fill="none" stroke="#0F172A" stroke-width="2.5"/>
+  <path d="M 84 52 A 48 48 0 0 1 84 108" fill="none" stroke="#0284C7" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 112 38 A 76 76 0 0 1 112 122" fill="none" stroke="#0284C7" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
   <circle cx="188" cy="80" r="11" fill="none" stroke="#10B981" stroke-width="2.5"/>
-  <text x="120" y="146" font-size="12" text-anchor="middle" fill="#1E1B4B">Proyectá tu voz</text>
+  <text x="120" y="146" font-size="12" text-anchor="middle" fill="#0F172A">Proyectá tu voz</text>
 </svg>

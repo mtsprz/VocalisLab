@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" font-family="DejaVu Sans, sans-serif">
-  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F5F3FF" stroke="#E5E7EB" stroke-width="1.5"/>
-  <circle cx="52" cy="72" r="17" fill="none" stroke="#5B4BC4" stroke-width="2.5"/>
-  <text x="52" y="78" font-size="14" text-anchor="middle" fill="#1E1B4B">1</text>
-  <circle cx="120" cy="72" r="17" fill="none" stroke="#5B4BC4" stroke-width="2.5"/>
-  <text x="120" y="78" font-size="14" text-anchor="middle" fill="#1E1B4B">2</text>
-  <circle cx="188" cy="72" r="17" fill="none" stroke="#5B4BC4" stroke-width="2.5"/>
-  <text x="188" y="78" font-size="14" text-anchor="middle" fill="#1E1B4B">3</text>
+  <rect x="4" y="4" width="232" height="152" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <circle cx="52" cy="72" r="17" fill="none" stroke="#0284C7" stroke-width="2.5"/>
+  <text x="52" y="78" font-size="14" text-anchor="middle" fill="#0F172A">1</text>
+  <circle cx="120" cy="72" r="17" fill="none" stroke="#0284C7" stroke-width="2.5"/>
+  <text x="120" y="78" font-size="14" text-anchor="middle" fill="#0F172A">2</text>
+  <circle cx="188" cy="72" r="17" fill="none" stroke="#0284C7" stroke-width="2.5"/>
+  <text x="188" y="78" font-size="14" text-anchor="middle" fill="#0F172A">3</text>
   <line x1="71" y1="72" x2="99" y2="72" stroke="#10B981" stroke-width="2.5"/>
   <polygon points="103,72 93,66 93,78" fill="#10B981"/>
   <line x1="139" y1="72" x2="167" y2="72" stroke="#10B981" stroke-width="2.5"/>
