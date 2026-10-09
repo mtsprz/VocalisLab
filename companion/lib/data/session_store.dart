@@ -73,6 +73,48 @@ class SessionStore {
   Future<List<Map<String, dynamic>>> clips(String id) =>
       db.query('clips', where: 'device_session_id = ?', whereArgs: [id]);
 
+  Future<void> guardarServidor(String id, String serverId) async {
+    await db.update('sessions', {'server_session_id': serverId},
+        where: 'device_session_id = ?', whereArgs: [id]);
+  }
+
+  /// Arma el payload exacto del contrato POST /sessions desde la base local.
+  Future<Map<String, dynamic>> payloadParaServidor(String id) async {
+    final ses = await leer(id);
+    if (ses == null) throw Exception('Sesión inexistente en base local');
+    final segs = await segmentos(id);
+    final acs = await acustica(id);
+    final cl = await clips(id);
+    return {
+      'device_session_id': id,
+      'patient_id': ses['patient_id'],
+      'recorded_at': ses['recorded_at'],
+      'audio_duration_sec': ses['audio_duration_sec'],
+      'audio_codec': ses['audio_codec'],
+      'audio_bitrate_kbps': ses['audio_bitrate_kbps'],
+      'dsp_version': ses['dsp_version'],
+      'device_info': jsonDecode('${ses['device_info'] ?? '{}'}'),
+      'consent_recorded': (ses['consent_recorded'] ?? 0) == 1,
+      'segments': [
+        for (final s in segs)
+          {
+            'task_type': s['task_type'],
+            'speaker': s['speaker'],
+            'start_sec': s['start_sec'],
+            'end_sec': s['end_sec'],
+          }
+      ],
+      'acoustics': [
+        for (final a in acs) (jsonDecode('${a['payload']}') as Map<String, dynamic>)
+          ..['task_type'] = a['task_type'],
+      ],
+      'clips': [
+        for (final c in cl)
+          {'task_type': c['task_type'], 'duration_sec': c['duration_sec']},
+      ],
+    };
+  }
+
   Future<void> borrarSesionLocal(String id) async {
     for (final t in ['clips', 'acoustics', 'segments', 'sessions']) {
       await db.delete(t, where: 'device_session_id = ?', whereArgs: [id]);
