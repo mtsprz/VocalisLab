@@ -1,0 +1,13 @@
+{
+  "name": "Consultorio de Voz — Fonoaudiología",
+  "short_name": "ConsultorioVoz",
+  "description": "Plataforma clínica de bioacústica vocal. Funciona sin internet tras la primera visita.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f19",
+  "theme_color": "#4F46E5",
+  "lang": "es",
+  "icons": []
+}

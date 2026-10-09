@@ -59,7 +59,16 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
     try {
       const q = buscar ? `?buscar=${encodeURIComponent(buscar)}` : '';
       const r = await fetch(`${BACKEND_URL}/api/pacientes${q}`);
-      if (r.ok) setPacientes(await r.json());
+      if (r.ok) {
+        const data = await r.json();
+        setPacientes(data);
+        if (!buscar) {
+          try {
+            const { guardarPacientesMinimos } = await import('../utils/pwa');
+            guardarPacientesMinimos(data);
+          } catch {}
+        }
+      }
     } catch {}
     setLoading(false);
   };

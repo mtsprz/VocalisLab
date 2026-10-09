@@ -20,8 +20,9 @@ import RecomendacionIAModule from './RecomendacionIAModule';
 import VideoconferenciaModule from './VideoconferenciaModule';
 import CloudflareImageGenerator from './CloudflareImageGenerator';
 import SesionesVozModule from './SesionesVozModule';
+import GrabadorEmergencia from './GrabadorEmergencia';
 
-type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia' | 'imagenes' | 'sesiones';
+type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia' | 'imagenes' | 'sesiones' | 'grabador';
 
 const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -31,6 +32,7 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
   { id: 'escalas', label: 'Riesgo & Escalas', icon: <BarChart3 size={20} /> },
   { id: 'analisis', label: 'Análisis Praat', icon: <Activity size={20} /> },
   { id: 'sesiones', label: 'Voz y sesiones', icon: <AudioWaveform size={20} /> },
+  { id: 'grabador', label: 'Grabador offline', icon: <Mic size={20} /> },
   { id: 'recomendacion', label: 'Motor IA', icon: <Sparkles size={20} /> },
   { id: 'pitch', label: 'Pitch Meter', icon: <Music size={20} /> },
   { id: 'cuadernillo', label: 'Cuadernillo', icon: <FileText size={20} /> },
@@ -49,9 +51,19 @@ function AppInner() {
   const [initialExerciseIds, setInitialExerciseIds] = useState<string[]>([]);
   const [videoconfTurno, setVideoconfTurno] = useState<any | null>(null);
 
-  // Restaurar último paciente tras refresh e hidratar desde backend
+  // Restaurar último paciente tras refresh e hidratar desde backend.
+  // Deep-link (Telegram): /?paciente=<id> abre directo en Voz y sesiones.
   useEffect(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      const deep = params.get('paciente');
+      if (deep) {
+        setSelectedPacienteId(deep);
+        clinical.cargarPaciente(deep).catch(() => {});
+        setActiveModule('sesiones');
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
       const lastId = localStorage.getItem('vocalislab_last_paciente');
       if (lastId && !selectedPacienteId) {
         setSelectedPacienteId(lastId);
@@ -104,6 +116,8 @@ function AppInner() {
         return <AnalisisModule pacienteId={selectedPacienteId} />;
       case 'sesiones':
         return <SesionesVozModule pacienteId={selectedPacienteId} />;
+      case 'grabador':
+        return <GrabadorEmergencia />;
       case 'recomendacion':
         return (
           <RecomendacionIAModule

@@ -69,6 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem('vocalislab_user');
+    try {
+      // PWA: la lista mínima offline se borra al cerrar sesión (sin diagnósticos igual)
+      localStorage.removeItem('vocalislab_pacientes_min');
+    } catch {}
     setUser(null);
   };
 
