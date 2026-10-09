@@ -371,6 +371,18 @@ app.include_router(informes_orl_router)
 app.include_router(teleconsulta_zoom_router)
 app.include_router(whatsapp_cloud_router)
 app.include_router(gmail_api_router)
+try:
+    from companion import router as companion_router, start_companion_worker
+    app.include_router(companion_router)
+
+    @app.on_event("startup")
+    def _arranque_companion():
+        try:
+            start_companion_worker()
+        except Exception as _e:
+            print(f"[index] worker companion omitido: {_e}")
+except Exception as _e:
+    print(f"[index] companion no disponible: {_e}")
 
 
 @app.get("/api/health")
