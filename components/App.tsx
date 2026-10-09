@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Calendar, Users, FileText, Mic, BarChart3, Music,
-  Stethoscope, Activity, ChevronRight, Menu, X, Sun, Moon, Sparkles, LogOut
+  Stethoscope, Activity, ChevronRight, Menu, X, Sun, Moon, Sparkles, LogOut,
+  AudioWaveform
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginScreen from './LoginScreen';
@@ -18,8 +19,9 @@ import PitchMeterModule from './PitchMeterModule';
 import RecomendacionIAModule from './RecomendacionIAModule';
 import VideoconferenciaModule from './VideoconferenciaModule';
 import CloudflareImageGenerator from './CloudflareImageGenerator';
+import SesionesVozModule from './SesionesVozModule';
 
-type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia' | 'imagenes';
+type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia' | 'imagenes' | 'sesiones';
 
 const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -28,6 +30,7 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
   { id: 'anamnesis', label: 'Anamnesis', icon: <Mic size={20} /> },
   { id: 'escalas', label: 'Riesgo & Escalas', icon: <BarChart3 size={20} /> },
   { id: 'analisis', label: 'Análisis Praat', icon: <Activity size={20} /> },
+  { id: 'sesiones', label: 'Voz y sesiones', icon: <AudioWaveform size={20} /> },
   { id: 'recomendacion', label: 'Motor IA', icon: <Sparkles size={20} /> },
   { id: 'pitch', label: 'Pitch Meter', icon: <Music size={20} /> },
   { id: 'cuadernillo', label: 'Cuadernillo', icon: <FileText size={20} /> },
@@ -99,6 +102,8 @@ function AppInner() {
         return <EscalasModule pacienteId={selectedPacienteId} />;
       case 'analisis':
         return <AnalisisModule pacienteId={selectedPacienteId} />;
+      case 'sesiones':
+        return <SesionesVozModule pacienteId={selectedPacienteId} />;
       case 'recomendacion':
         return (
           <RecomendacionIAModule
