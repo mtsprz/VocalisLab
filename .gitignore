@@ -6,3 +6,20 @@ __pycache__/
 *.pyc
 .DS_Store
 package-lock.json
+
+# ─── Flutter (companion/) ───
+companion/.dart_tool/
+companion/.flutter-plugins
+companion/.flutter-plugins-dependencies
+companion/build/
+companion/android/.gradle/
+companion/android/app/build/
+companion/android/local.properties
+companion/*.iml
+companion/.idea/
+companion/*.jks
+companion/*.keystore
+companion/windows/flutter/ephemeral/
+# Audios locales de desarrollo (nunca commitear sesiones reales)
+companion/test/fixtures/*.wav
+!companion/test/fixtures/.gitkeep
