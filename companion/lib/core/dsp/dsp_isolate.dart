@@ -59,8 +59,8 @@ Map<String, dynamic> analizarTarea(DspJob job) {
           ))
       .toList();
   for (final w in wins) {
-    final start = w.$1.clamp(0, samples.length);
-    final end = w.$2.clamp(0, samples.length);
+    final start = ((w.$1.clamp(0, samples.length))).toInt();
+    final end = ((w.$2.clamp(0, samples.length))).toInt();
     var pos = start;
     while (pos + win <= end) {
       all.add(tracker.process(samples.sublist(pos, pos + win)));

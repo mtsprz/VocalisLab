@@ -83,7 +83,7 @@ double _median(List<double> v) {
 
 double _percentile(List<double> sorted, double p) {
   if (sorted.isEmpty) return 0.0;
-  final k = ((p / 100) * (sorted.length - 1)).round().clamp(0, sorted.length - 1);
+  final k = (((p / 100) * (sorted.length - 1)).round().clamp(0, sorted.length - 1)).toInt();
   return sorted[k];
 }
 
@@ -144,7 +144,7 @@ TaskMetrics computeTaskMetrics({
     }
     shimmer = sd / (amps.length - 1) / aMean * 100;
     // HNR estilo Praat: 10·log10(r/(1−r)) con r = pico autocorrelación medio.
-    final rs = voiced.map((f) => f.strength.clamp(0.0, 0.999)).toList();
+    final rs = voiced.map((f) => (f.strength.clamp(0.0, 0.999)).toDouble()).toList();
     final rMean = rs.reduce((a, b) => a + b) / rs.length;
     hnr = 10 * (math.log(rMean / (1 - rMean)) / math.ln10);
   }

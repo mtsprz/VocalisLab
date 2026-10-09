@@ -75,7 +75,7 @@ class RecorderService {
     }
     final rms = n == 0 ? 0.0 : math.sqrt(sum / n);
     final db = rms <= 0 ? -90.0 : 20 * (math.log(rms) / math.ln10);
-    onLevelDb?.call(db.clamp(-90.0, 0.0));
+    onLevelDb?.call((db.clamp(-90.0, 0.0)).toDouble());
     // Rotación por tamaño (≈30 s).
     var resto = chunk;
     while (resto.isNotEmpty) {

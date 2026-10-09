@@ -70,7 +70,7 @@ class TusClient implements TusGateway {
     try {
       await raf.setPosition(off);
       while (off < total) {
-        final n = (total - off).clamp(0, chunk);
+        final n = ((total - off).clamp(0, chunk)).toInt();
         final buf = await raf.read(n);
         final req = http.StreamedRequest('PATCH', Uri.parse(locationUrl))
           ..headers['Tus-Resumable'] = '1.0.0'

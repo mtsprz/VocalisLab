@@ -1,0 +1,22 @@
+<!-- Overlay: copiar sobre un proyecto generado con
+     `flutter create --platforms=android,windows --org com.vocalis .`
+     (mantener el <application> y activities que genera Flutter; solo
+     sumar los permisos de abajo). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Micrófono (grabación PCM) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Red -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Grabación con pantalla bloqueada / segundo plano -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Reprogramar sincronización tras reinicio (workmanager) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Biometría -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+</manifest>

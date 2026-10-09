@@ -167,7 +167,7 @@ class SyncEngine {
     var espera = 5;
     while (DateTime.now().isBefore(limite)) {
       await Future.delayed(Duration(seconds: espera));
-      espera = (espera * 2).clamp(5, 60);
+      espera = ((espera * 2).clamp(5, 60)).toInt();
       final d = await _conBackoff(() => api.getSession(serverId), paso: 'poll');
       final st = (d['status'] ?? d['sesion']?['status'] ?? '').toString();
       if (st == 'processed') {

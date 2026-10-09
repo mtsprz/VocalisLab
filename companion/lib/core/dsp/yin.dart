@@ -115,18 +115,18 @@ class YinTracker {
       }
     }
     // 5. Interpolación parabólica.
-    final t0 = math.max(best - 1, 1);
-    final t2 = math.min(best + 1, tauMax + 1);
+    final t0 = best - 1 < 1 ? 1 : best - 1;
+    final t2 = best + 1 > tauMax + 1 ? tauMax + 1 : best + 1;
     final y0 = _diff[t0], y1 = _diff[best], y2 = _diff[t2];
     var denom = (y0 + y2 - 2 * y1);
     var shift = 0.0;
     if (denom.abs() > 1e-9) {
       shift = 0.5 * (y0 - y2) / denom;
-      shift = shift.clamp(-1.0, 1.0);
+      shift = (shift.clamp(-1.0, 1.0)).toDouble();
     }
     final period = best + shift;
     if (period <= 0) return YinFrame(0.0, 0.0, rms);
-    final strength = (1.0 - y1).clamp(0.0, 1.0);
+    final strength = ((1.0 - y1).clamp(0.0, 1.0)).toDouble();
     return YinFrame(sampleRate / period, strength, rms);
   }
 }

@@ -35,6 +35,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  msix: ^3.16.0
+
+# Instalador Windows (dart run msix:create). Requiere certificado para firmar.
+msix_config:
+  display_name: Vocalis Companion
+  publisher_display_name: Consultorio de Voz
+  identity_name: ConsultorioDeVoz.VocalisCompanion
+  msix_version: 1.0.0.0
+  capabilities: microphone, internetClient
+  certificate_path: vocalis.pfx
+  certificate_password: CAMBIAR
 
 flutter:
   uses-material-design: true

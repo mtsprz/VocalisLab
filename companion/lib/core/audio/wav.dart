@@ -95,6 +95,21 @@ Future<List<String>> recuperarBloques(Directory dir) async {
   return out;
 }
 
+/// Concatena bloques WAV (misma geometría) en un único WAV válido.
+Future<String> concatenarBloques(List<String> bloques, String destino,
+    {int sampleRate = 44100}) async {
+  final w = WavBlockWriter(destino, sampleRate: sampleRate);
+  await w.open();
+  for (final b in bloques) {
+    final bytes = await File(b).readAsBytes();
+    if (bytes.length > 44) {
+      await w.appendBytes(bytes.sublist(44));
+    }
+  }
+  await w.close();
+  return destino;
+}
+
 /// Lee PCM16 mono normalizado de un WAV estándar (para DSP y clips).
 List<double> leerPcmNormalizado(String path, {int sampleRateEsperado = 44100}) {
   final bytes = File(path).readAsBytesSync();
@@ -118,8 +133,8 @@ Future<String> recortarWav({
   int sampleRate = 44100,
 }) async {
   final pcm = leerPcmNormalizado(origen, sampleRateEsperado: sampleRate);
-  final a = (desdeSec * sampleRate).round().clamp(0, pcm.length);
-  final b = ((desdeSec + segundos) * sampleRate).round().clamp(0, pcm.length);
+  final a = (((desdeSec * sampleRate).round().clamp(0, pcm.length))).toInt();
+  final b = ((((desdeSec + segundos) * sampleRate).round().clamp(0, pcm.length))).toInt();
   final w = WavBlockWriter(destino, sampleRate: sampleRate);
   await w.open();
   final bd = ByteData((b - a) * 2);
