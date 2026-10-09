@@ -191,8 +191,10 @@ class _RecordingScreenState extends State<RecordingScreen> {
     });
     await widget.deps.store.guardarSegmentos(_dsid, _marcas);
 
-    // 3. DSP por tarea (isolate, solo tramos del paciente)
+    // 3. DSP por tarea (isolate, solo tramos del paciente).
+    // OJO: el closure de Isolate.run no puede capturar `this`: todo resuelto antes.
     final cal = await _leerCalibracion();
+    final sexoRef = await _sexoReferencia();
     final porTarea = <String, List<Map<String, dynamic>>>{};
     for (final m in _marcas) {
       porTarea.putIfAbsent('${m['task_type']}', () => []).add(m);
@@ -206,10 +208,17 @@ class _RecordingScreenState extends State<RecordingScreen> {
             .map((m) => (m['end_sec'] as num).toDouble() - (m['start_sec'] as num).toDouble())
             .fold(0.0, (a, b) => a > b ? a : b);
       }
+      final segs = entry.value
+          .map((m) => {
+                'speaker': '${m['speaker']}',
+                'start_sec': (m['start_sec'] as num).toDouble(),
+                'end_sec': (m['end_sec'] as num).toDouble(),
+              })
+          .toList();
       final res = await Isolate.run(() => analizarTarea(DspJob(
             wavPath: wavPath,
-            segments: entry.value,
-            sexoReferencia: await _sexoReferencia(),
+            segments: segs,
+            sexoReferencia: sexoRef,
             sostenida: sostenida,
             mptSec: mpt,
             calibrationDbOffset: cal,
