@@ -55,6 +55,5 @@ String mensajeErrorGoogle(String error, [String? email, String? detalle]) => swi
       'google_token' => 'Google rechazó el inicio de sesión. Probá de nuevo.',
       'sin_base' => 'El servidor no tiene la base configurada.',
       _ => 'No se pudo vincular ($error). Probá de nuevo.'
-          '${detalle == null ? '' : '
-Detalle: $detalle'}',
+          '${detalle == null ? '' : '\nDetalle: $detalle'}',
     };
