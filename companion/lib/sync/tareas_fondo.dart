@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../data/audio_vault.dart';
 import '../data/db.dart';
 import '../data/secure_store.dart';
 import '../data/session_store.dart';
@@ -29,31 +30,39 @@ void tareaFondoDispatcher() {
         store: store,
         leerToken: secure.readDeviceToken,
       );
+      final vault = AudioVault(secure.audioKey);
       final docs = await getApplicationDocumentsDirectory();
+      final tmpBase = (await getTemporaryDirectory()).path;
       for (final s in await store.pendientes()) {
         final dsid = '${s['device_session_id']}';
-        final m4a = File(p.join(docs.path, 'sesiones', dsid, 'sesion.m4a'));
-        if (!await m4a.exists()) continue; // lo comprime el primer plano
-        final clips = [
-          for (final c in await store.clips(dsid))
-            if (await File('${c['path']}').exists())
-              {'task': '${c['task_type']}', 'path': '${c['path']}', 'mime': 'audio/wav'},
-        ];
+        final tmp = p.join(tmpBase, 'vocalis_tmp', 'fondo_$dsid');
         try {
+          final m4a = await rutaPlana(
+              vault, p.join(docs.path, 'sesiones', dsid, 'sesion.m4a'), tmpDir: tmp,);
+          if (m4a == null) continue; // lo comprime el primer plano
+          final clips = [
+            for (final c in await store.clips(dsid))
+              if (await rutaPlana(vault, '${c['path']}', tmpDir: tmp) case final ruta?)
+                {'task': '${c['task_type']}', 'path': ruta, 'mime': 'audio/wav'},
+          ];
           await engine.sincronizar(dsid, {
-            'audioPath': m4a.path,
+            'audioPath': m4a,
             'audioMime': 'audio/mp4',
             'clips': clips,
             'wifiOnly': settings.wifiOnly,
           });
         } catch (_) {
           // Queda encolado para el próximo ciclo.
+        } finally {
+          try {
+            await Directory(tmp).delete(recursive: true);
+          } catch (_) {}
         }
       }
       await db.close();
-      return Future.value(true);
+      return true;
     } catch (_) {
-      return Future.value(false);
+      return false;
     }
   });
 }
@@ -62,13 +71,13 @@ void tareaFondoDispatcher() {
 Future<void> programarSyncFondo() async {
   try {
     if (!Platform.isAndroid) return;
-    await Workmanager().initialize(tareaFondoDispatcher, isInDebugMode: false);
+    await Workmanager().initialize(tareaFondoDispatcher);
     await Workmanager().registerPeriodicTask(
       'vocalis-sync',
       'syncPendientes',
       frequency: const Duration(minutes: 15),
       constraints: Constraints(networkType: NetworkType.connected),
-      existingWorkPolicy: ExistingWorkPolicy.keep,
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
     );
   } catch (_) {}
 }

@@ -4,7 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -16,7 +16,7 @@ import java.nio.ByteBuffer
  * WAV PCM16 mono 44.1 kHz → AAC/m4a mono ~48 kbps con MediaCodec + MediaMuxer.
  * Lectura por streaming (no carga el WAV completo en memoria).
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val channel = "vocalis_companion/audio"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

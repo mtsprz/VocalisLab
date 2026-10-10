@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'data/audio_vault.dart';
 import 'data/secure_store.dart';
 import 'data/session_store.dart';
 import 'data/patient_repository.dart';
@@ -25,11 +26,13 @@ class Deps {
   final SecureStore secure = SecureStore();
   late final ApiClient api;
   late final SyncEngine sync;
+  late final AudioVault vault;
 
   Deps({required this.db}) {
     store = SessionStore(db);
     pacientes = MockPatientRepository(db);
     api = ApiClient(secure: secure);
+    vault = AudioVault(secure.audioKey);
     sync = SyncEngine(
       api: api,
       tus: TusClient(),
@@ -124,7 +127,7 @@ class _PuertaAuthState extends State<PuertaAuth> {
               },
               child: const Text('Abrir con PIN'),
             ),
-          ]),
+          ],),
         ),
       ),
     );
@@ -176,6 +179,7 @@ class HomeTabs extends StatefulWidget {
 
 class _HomeTabsState extends State<HomeTabs> {
   int _i = 0;
+  int _visitasSync = 0;
   String? _pacienteId;
   bool _consent = false;
 
@@ -189,14 +193,19 @@ class _HomeTabsState extends State<HomeTabs> {
         consent: _consent,
         onConsent: (v) => setState(() => _consent = v),
       ),
-      SyncScreen(deps: widget.deps),
+      // Key nueva en cada visita: recarga la cola como antes.
+      SyncScreen(key: ValueKey(_visitasSync), deps: widget.deps),
       SettingsScreen(deps: widget.deps),
     ];
     return Scaffold(
-      body: SafeArea(child: pantallas[_i]),
+      // IndexedStack: cambiar de pestaña NO desmonta la grabación en curso.
+      body: SafeArea(child: IndexedStack(index: _i, children: pantallas)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _i,
-        onDestinationSelected: (v) => setState(() => _i = v),
+        onDestinationSelected: (v) => setState(() {
+          if (v == 1) _visitasSync++;
+          _i = v;
+        }),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.mic, size: 30), label: 'Grabar'),
           NavigationDestination(icon: Icon(Icons.cloud_upload, size: 30), label: 'Sincronizar'),

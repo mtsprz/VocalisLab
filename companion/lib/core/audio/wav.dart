@@ -77,7 +77,8 @@ Future<List<String>> recuperarBloques(Directory dir) async {
         continue;
       }
       final dataBytes = len - 44;
-      final rw = await e.open(mode: FileMode.writeOnly);
+      // append: lectura/escritura SIN truncar (writeOnly vaciaba el bloque).
+      final rw = await e.open(mode: FileMode.append);
       await rw.setPosition(4);
       final fix = ByteData(4)..setUint32(0, 36 + dataBytes, Endian.little);
       await rw.writeFrom(fix.buffer.asUint8List());
@@ -97,7 +98,7 @@ Future<List<String>> recuperarBloques(Directory dir) async {
 
 /// Concatena bloques WAV (misma geometría) en un único WAV válido.
 Future<String> concatenarBloques(List<String> bloques, String destino,
-    {int sampleRate = 44100}) async {
+    {int sampleRate = 44100,}) async {
   final w = WavBlockWriter(destino, sampleRate: sampleRate);
   await w.open();
   for (final b in bloques) {

@@ -1,0 +1,16 @@
+{
+  "_instrucciones": [
+    "Copiar en test/fixtures/ 4-5 WAV reales: PCM 16-bit, mono, 44100 Hz, cabecera de 44 bytes (exportar desde Praat: Save as WAV file).",
+    "Cada WAV debe contener SOLO voz del paciente (se analiza el archivo completo como tramo 'paciente').",
+    "Completar f0_median_hz y f0_mean_hz con lo que da Praat (To Pitch, ac, 75-600 Hz o el rango del sexo) o SpeechPitch.",
+    "Mientras un valor siga en null, ese archivo se omite. Tolerancia: ±1 Hz o ±1 % (lo mayor).",
+    "sexo_referencia: masculino | femenino | ninex (fija el rango de búsqueda de YIN)."
+  ],
+  "casos": [
+    {"archivo": "voz_masculina.wav",  "sexo_referencia": "masculino", "f0_median_hz": null, "f0_mean_hz": null, "herramienta": "Praat"},
+    {"archivo": "voz_femenina.wav",   "sexo_referencia": "femenino",  "f0_median_hz": null, "f0_mean_hz": null, "herramienta": "Praat"},
+    {"archivo": "voz_infantil.wav",   "sexo_referencia": "ninex",     "f0_median_hz": null, "f0_mean_hz": null, "herramienta": "Praat"},
+    {"archivo": "vocal_sostenida.wav","sexo_referencia": "femenino",  "f0_median_hz": null, "f0_mean_hz": null, "herramienta": "SpeechPitch"},
+    {"archivo": "conversacion.wav",   "sexo_referencia": "masculino", "f0_median_hz": null, "f0_mean_hz": null, "herramienta": "Praat"}
+  ]
+}

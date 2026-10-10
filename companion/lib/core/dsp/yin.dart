@@ -39,10 +39,10 @@ class YinFrame {
   /// F0 en Hz (0 = sordo).
   final double f0;
 
-  /// Pico de autocorrelación normalizada (0..1). Sirve para HNR.
+  /// Pico de autocorrelación normalizada (0..1): confianza de periodicidad.
   final double strength;
 
-  /// RMS del cuadro (para shimmer/intensidad).
+  /// RMS del cuadro (compuerta de energía).
   final double rms;
 
   const YinFrame(this.f0, this.strength, this.rms);
@@ -64,7 +64,7 @@ class YinTracker {
         tauMin = (sampleRate / (config ?? const YinConfig()).maxHz).floor(),
         tauMax = (sampleRate / (config ?? const YinConfig()).minHz).ceil(),
         _diff = List<double>.filled(
-            (sampleRate / (config ?? const YinConfig()).minHz).ceil() + 2, 0.0);
+            (sampleRate / (config ?? const YinConfig()).minHz).ceil() + 2, 0.0,);
 
   /// `frame` debe tener al menos [windowSize] muestras normalizadas (-1..1).
   YinFrame process(List<double> frame) {

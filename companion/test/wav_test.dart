@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:vocalis_companion/core/audio/wav.dart';
 
 Future<void> main() async {
@@ -25,7 +26,7 @@ Future<void> main() async {
     test('recuperarBloques finaliza cabeceras huérfanas', () async {
       final dir = await Directory.systemTemp.createTemp('wavrec');
       // Simular cierre forzado: 44 bytes de cabecera sin parchar + datos.
-      final path = '${dir.path}/b0.wav';
+      final path = p.join(dir.path, 'b0.wav'); // separador nativo (Windows)
       final raf = await File(path).open(mode: FileMode.write);
       await raf.writeFrom(List<int>.filled(44, 0));
       await raf.writeFrom(List<int>.filled(90000 * 2, 7));

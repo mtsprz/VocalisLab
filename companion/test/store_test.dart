@@ -29,13 +29,14 @@ void main() {
         {'task_type': 'conversacion_espontanea', 'speaker': 'fonoaudiologo', 'start_sec': 20, 'end_sec': 40},
       ]);
       await store.guardarAcustica('ds-1', 'vocal_sostenida_a',
-          {'f0_median_hz': 210.0, 'jitter_pct': 0.4, 'dsp_version': 'dsp/1'});
+          {'f0_median_hz': 210.0, 'jitter_pct': null, 'dsp_version': 'dsp/1'},);
       final p = await store.payloadParaServidor('ds-1');
       expect(p['device_session_id'], 'ds-1');
       expect(p['consent_recorded'], true);
       expect((p['segments'] as List).length, 2);
       expect((p['acoustics'] as List).first['task_type'], 'vocal_sostenida_a');
-      expect((p['acoustics'] as List).first['jitter_pct'], 0.4);
+      expect((p['acoustics'] as List).first['f0_median_hz'], 210.0);
+      expect((p['acoustics'] as List).first['jitter_pct'], isNull);
       expect((p['clips'] as List), isEmpty);
       await store.estado('ds-1', 'synced');
       expect((await store.leer('ds-1'))!['status'], 'synced');

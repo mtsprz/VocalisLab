@@ -1,7 +1,9 @@
 /// Configuración global de Vocalis Companion.
 /// Sin secretos hardcodeados: el device_token vive en almacenamiento seguro.
 class AppConfig {
-  static const String backendBase = 'https://vocalislab-api.onrender.com';
+  // Backend real de vocalis-lab.vercel.app (verificado en su bundle JS el
+  // 2026-10-09). `vocalislab-api.onrender.com` (docs §0) no existe en Render.
+  static const String backendBase = 'https://vocalislab.onrender.com';
   static const String apiPrefix = '/api/companion';
 
   /// true cuando el backend agregue GET /api/companion/pacientes

@@ -11,30 +11,34 @@ class SessionStore {
 
   Future<void> crear(Map<String, dynamic> fila) async {
     await db.insert('sessions', fila,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+        conflictAlgorithm: ConflictAlgorithm.replace,);
   }
 
   Future<Map<String, dynamic>?> leer(String deviceSessionId) async {
     final r = await db.query('sessions',
-        where: 'device_session_id = ?', whereArgs: [deviceSessionId], limit: 1);
+        where: 'device_session_id = ?', whereArgs: [deviceSessionId], limit: 1,);
     return r.isEmpty ? null : r.first;
   }
 
   Future<List<Map<String, dynamic>>> pendientes() async {
     return db.query('sessions',
         where: "status IN ('ready','queued','uploading','confirming','watching','error')",
-        orderBy: 'created_at');
+        orderBy: 'created_at',);
   }
 
   /// Sesiones sin finalizar (cierre forzado): con bloques en disco.
   Future<List<Map<String, dynamic>>> incompletas() async {
     return db.query('sessions',
-        where: "status IN ('recording') OR (status = 'ready' AND finalized = 0)");
+        where: "status IN ('recording') OR (status = 'ready' AND finalized = 0)",);
+  }
+
+  Future<void> actualizar(String id, Map<String, Object?> campos) async {
+    await db.update('sessions', campos, where: 'device_session_id = ?', whereArgs: [id]);
   }
 
   Future<void> estado(String id, String status, {String error = ''}) async {
     await db.update('sessions', {'status': status, 'error_detail': error},
-        where: 'device_session_id = ?', whereArgs: [id]);
+        where: 'device_session_id = ?', whereArgs: [id],);
   }
 
   Future<void> guardarSegmentos(String id, List<Map<String, dynamic>> segs) async {
@@ -59,7 +63,7 @@ class SessionStore {
     await db.insert(
         'acoustics',
         {'device_session_id': id, 'task_type': task, 'payload': jsonEncode(payload), 'validada': 1},
-        conflictAlgorithm: ConflictAlgorithm.replace);
+        conflictAlgorithm: ConflictAlgorithm.replace,);
   }
 
   Future<List<Map<String, dynamic>>> acustica(String id) =>
@@ -67,7 +71,7 @@ class SessionStore {
 
   Future<void> agregarClip(String id, String task, String path, double dur) async {
     await db.insert('clips',
-        {'device_session_id': id, 'task_type': task, 'path': path, 'duration_sec': dur});
+        {'device_session_id': id, 'task_type': task, 'path': path, 'duration_sec': dur},);
   }
 
   Future<List<Map<String, dynamic>>> clips(String id) =>
@@ -75,7 +79,7 @@ class SessionStore {
 
   Future<void> guardarServidor(String id, String serverId) async {
     await db.update('sessions', {'server_session_id': serverId},
-        where: 'device_session_id = ?', whereArgs: [id]);
+        where: 'device_session_id = ?', whereArgs: [id],);
   }
 
   /// Arma el payload exacto del contrato POST /sessions desde la base local.
@@ -102,7 +106,7 @@ class SessionStore {
             'speaker': s['speaker'],
             'start_sec': s['start_sec'],
             'end_sec': s['end_sec'],
-          }
+          },
       ],
       'acoustics': [
         for (final a in acs) (jsonDecode('${a['payload']}') as Map<String, dynamic>)

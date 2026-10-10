@@ -26,9 +26,9 @@ abstract class AudioCompressor {
 class _SinSoporte implements AudioCompressor {
   @override
   Future<String> compressToM4a(
-      {required String wavPath, required String outPath, int bitrateKbps = 48}) {
+      {required String wavPath, required String outPath, int bitrateKbps = 48,}) {
     throw const SinCompresor(
-        'Compresión no disponible en esta plataforma (solo Android/Windows)');
+        'Compresión no disponible en esta plataforma (solo Android/Windows)',);
   }
 }
 
@@ -44,7 +44,7 @@ class _MediaCodecCompressor implements AudioCompressor {
 
   @override
   Future<String> compressToM4a(
-      {required String wavPath, required String outPath, int bitrateKbps = 48}) async {
+      {required String wavPath, required String outPath, int bitrateKbps = 48,}) async {
     // Implementación nativa en android/.../MainActivity.kt (method 'compressToAac').
     final ok = await _ch.invokeMethod<bool>('compressToAac', {
       'in': wavPath,
@@ -59,11 +59,11 @@ class _MediaCodecCompressor implements AudioCompressor {
 class _FfmpegCompressor implements AudioCompressor {
   @override
   Future<String> compressToM4a(
-      {required String wavPath, required String outPath, int bitrateKbps = 48}) async {
+      {required String wavPath, required String outPath, int bitrateKbps = 48,}) async {
     final exe = _buscarFfmpeg();
     if (exe == null) {
       throw const SinCompresor(
-          'Falta ffmpeg.exe junto a la app o en PATH (ver README §Windows)');
+          'Falta ffmpeg.exe junto a la app o en PATH (ver README §Windows)',);
     }
     final r = await Process.run(exe, [
       '-y', '-i', wavPath, '-ac', '1', '-ar', '44100',
@@ -86,7 +86,7 @@ class _FfmpegCompressor implements AudioCompressor {
     // En PATH (where/which según plataforma).
     try {
       final probe = Process.runSync(
-          Platform.isWindows ? 'where' : 'which', ['ffmpeg']);
+          Platform.isWindows ? 'where' : 'which', ['ffmpeg'],);
       if (probe.exitCode == 0) {
         final first = '${probe.stdout}'.split(RegExp(r'\r?\n')).first.trim();
         if (first.isNotEmpty) return first;

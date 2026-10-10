@@ -68,7 +68,7 @@ class _PairingScreenState extends State<PairingScreen> {
               style: const TextStyle(fontSize: 26, letterSpacing: 6),
               textAlign: TextAlign.center,
               decoration: const InputDecoration(
-                labelText: 'Código', border: OutlineInputBorder()),
+                labelText: 'Código', border: OutlineInputBorder(),),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -76,7 +76,7 @@ class _PairingScreenState extends State<PairingScreen> {
               style: const TextStyle(fontSize: 18),
               decoration: const InputDecoration(
                 labelText: 'Nombre de este equipo (ej. Moto G consultorio)',
-                border: OutlineInputBorder()),
+                border: OutlineInputBorder(),),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
@@ -87,7 +87,7 @@ class _PairingScreenState extends State<PairingScreen> {
               onPressed: _busy ? null : _go,
               child: Text(_busy ? 'Verificando…' : 'Emparejar'),
             ),
-          ]),
+          ],),
         ),
       ),
     );

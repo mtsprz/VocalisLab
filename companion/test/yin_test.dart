@@ -10,7 +10,7 @@ List<double> _tono(double freq, {double amp = 0.5, double segundos = 1.0}) {
 }
 
 List<double> _analizar(
-    List<double> samples, YinConfig config, {int window = 1764, int step = 441}) {
+    List<double> samples, YinConfig config, {int window = 1764, int step = 441,}) {
   final t = YinTracker(sampleRate: 44100, config: config);
   final out = <double>[];
   for (var pos = 0; pos + window <= samples.length; pos += step) {
@@ -22,7 +22,7 @@ List<double> _analizar(
 void _cerca(double medido, double esperado) {
   final tol = math.max(1.0, esperado * 0.01); // ±1 Hz o ±1 %
   expect((medido - esperado).abs() <= tol, true,
-      reason: 'F0=$medido esperado=$esperado tol=$tol');
+      reason: 'F0=$medido esperado=$esperado tol=$tol',);
 }
 
 void main() {

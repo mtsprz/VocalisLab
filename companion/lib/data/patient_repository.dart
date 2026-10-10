@@ -60,7 +60,7 @@ class MockPatientRepository implements PatientRepository {
             'fecha_nacimiento': p.fechaNacimiento,
             'updated_at': DateTime.now().toIso8601String(),
           },
-          conflictAlgorithm: ConflictAlgorithm.replace);
+          conflictAlgorithm: ConflictAlgorithm.replace,);
     }
     await b.commit(noResult: true);
   }

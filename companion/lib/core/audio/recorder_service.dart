@@ -13,7 +13,7 @@ import 'wav.dart';
 /// - Sin AGC, sin supresión de ruido, sin cancelación de eco (config explícita).
 /// - Cada bloque se finaliza al rotar; ante un cierre forzado los bloques
 ///   quedan con cabecera recuperable ([recuperarBloques]).
-/// - `onLevelDb` entrega dBFS del trozo para el medidor anti-saturación.
+/// - `onNivel` entrega un nivel 0..1 y aviso de saturación (sin cifras de dB).
 class RecorderService {
   final AudioRecorder _rec = AudioRecorder();
   StreamSubscription<Uint8List>? _sub;
@@ -21,14 +21,20 @@ class RecorderService {
   String _blocksDir = '';
   int _blockIndex = 0;
   int _bytesInBlock = 0;
-  int _bytesPerBlock = 44100 * 2 * 30;
+  final int _bytesPerBlock = 44100 * 2 * 30;
 
   bool get isRecording => _recorderBusy;
 
   bool _recorderBusy = false;
 
-  /// RMS→dBFS del último trozo (para UI).
-  void Function(double dbfs)? onLevelDb;
+  // Escrituras en serie: RandomAccessFile no admite operaciones solapadas y
+  // el stream entrega trozos sin esperar a que termine el anterior.
+  Future<void> _cola = Future.value();
+
+  /// Nivel de entrada del último trozo para el indicador anti-saturación:
+  /// [nivel] 0..1 (escala visual, sin cifras) y [satura] si algún pico
+  /// llegó al tope digital.
+  void Function(double nivel, bool satura)? onNivel;
 
   Future<bool> tienePermiso() => _rec.hasPermission();
 
@@ -41,6 +47,10 @@ class RecorderService {
     await for (final e in Directory(blocksDir).list()) {
       if (e is File && e.path.endsWith('.wav')) _blockIndex++;
     }
+    // Android: además de apagar los efectos (record los crea con
+    // enabled=false), se usa la fuente VOICE_RECOGNITION: el CDD de Android
+    // exige que no aplique AGC ni reducción de ruido, a diferencia de
+    // DEFAULT/MIC, que puede traer procesamiento del fabricante.
     const config = RecordConfig(
       encoder: AudioEncoder.pcm16bits,
       sampleRate: 44100,
@@ -48,11 +58,18 @@ class RecorderService {
       autoGain: false,
       echoCancel: false,
       noiseSuppress: false,
+      androidConfig: AndroidRecordConfig(
+        audioSource: AndroidAudioSource.voiceRecognition,
+      ),
     );
     final stream = await _rec.startStream(config);
     _recorderBusy = true;
     await _abrirBloque();
-    _sub = stream.listen(_onChunk, onError: (_) {}, cancelOnError: false);
+    _sub = stream.listen(
+      (c) => _cola = _cola.then((_) => _onChunk(c)).catchError((_) {}),
+      onError: (_) {},
+      cancelOnError: false,
+    );
   }
 
   Future<void> _abrirBloque() async {
@@ -65,17 +82,20 @@ class RecorderService {
   }
 
   Future<void> _onChunk(Uint8List chunk) async {
-    // Medidor de nivel (RMS → dBFS).
+    // Indicador de nivel: RMS en escala logarítmica de 60 pasos → 0..1,
+    // y saturación si algún pico toca el tope (≥ 98 % de escala).
     var sum = 0.0;
+    var pico = 0.0;
     final n = chunk.length ~/ 2;
     final bd = ByteData.sublistView(chunk);
     for (var i = 0; i < n; i++) {
       final v = bd.getInt16(i * 2, Endian.little) / 32768.0;
       sum += v * v;
+      if (v.abs() > pico) pico = v.abs();
     }
     final rms = n == 0 ? 0.0 : math.sqrt(sum / n);
-    final db = rms <= 0 ? -90.0 : 20 * (math.log(rms) / math.ln10);
-    onLevelDb?.call((db.clamp(-90.0, 0.0)).toDouble());
+    final log = rms <= 0 ? -60.0 : 20 * (math.log(rms) / math.ln10);
+    onNivel?.call((((log + 60) / 60).clamp(0.0, 1.0)).toDouble(), pico >= 0.98);
     // Rotación por tamaño (≈30 s).
     var resto = chunk;
     while (resto.isNotEmpty) {
@@ -116,6 +136,7 @@ class RecorderService {
       await _rec.stop();
     } catch (_) {}
     _recorderBusy = false;
+    await _cola; // terminar de escribir lo recibido antes de cerrar
     await _writer?.close();
     _writer = null;
   }

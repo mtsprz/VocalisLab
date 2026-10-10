@@ -19,17 +19,21 @@ class SyncEngine {
   final Future<String?> Function() leerToken;
   final Future<bool> Function()? hayRed;
 
+  /// Esperas entre reintentos (inyectable para tests).
+  final List<int> backoffSeconds;
+
   SyncEngine({
     required this.api,
     required this.tus,
     required this.store,
     required this.leerToken,
     this.hayRed,
+    this.backoffSeconds = AppConfig.backoffSeconds,
   });
 
   Future<T> _conBackoff<T>(Future<T> Function() fn, {String? paso}) async {
     Object? last;
-    for (var i = 0; i <= AppConfig.backoffSeconds.length; i++) {
+    for (var i = 0; i <= backoffSeconds.length; i++) {
       try {
         return await fn();
       } catch (e) {
@@ -37,8 +41,8 @@ class SyncEngine {
         if (e is ApiException && e.status >= 400 && e.status < 500 && e.status != 409) {
           rethrow; // 4xx (salvo 409) no se reintenta
         }
-        if (i < AppConfig.backoffSeconds.length) {
-          await Future.delayed(Duration(seconds: AppConfig.backoffSeconds[i]));
+        if (i < backoffSeconds.length) {
+          await Future.delayed(Duration(seconds: backoffSeconds[i]));
         }
       }
     }
@@ -74,7 +78,7 @@ class SyncEngine {
       await store.estado(deviceSessionId, 'uploading');
       await _conBackoff(() => api.health(), paso: 'health');
       final created = await _conBackoff(
-          () => api.postSessions(payload), paso: 'sessions');
+          () => api.postSessions(payload), paso: 'sessions',);
       final serverId = '${created['session_id'] ?? ''}';
       if (serverId.isNotEmpty) {
         await store.guardarServidor(deviceSessionId, serverId);
@@ -100,14 +104,14 @@ class SyncEngine {
       // 4. Confirmar → el servidor encola el procesamiento.
       await _conBackoff(
           () => api.confirmUpload({'device_session_id': deviceSessionId, 'kind': 'session_audio'}),
-          paso: 'confirm');
+          paso: 'confirm',);
       await store.estado(deviceSessionId, 'watching');
       // 5. Seguimiento hasta processed/error (máx. 30 min).
       await _esperarProcesado(deviceSessionId, serverId);
     } on ApiException catch (e) {
       if (e.needsAction) {
         await store.estado(deviceSessionId, 'error',
-            error: 'ACCION_REQUERIDA: ${e.message}');
+            error: 'ACCION_REQUERIDA: ${e.message}',);
       } else {
         await store.estado(deviceSessionId, 'error', error: e.message);
       }
@@ -138,19 +142,28 @@ class SyncEngine {
               'mime': mime,
               'size_bytes': size,
             }),
-        paso: 'uploads');
+        paso: 'uploads',);
     final uploadUrl = '${up['upload_url']}';
     final token = await leerToken() ?? '';
-    final loc = await _conBackoff(
-        () => tus.create(uploadUrl, size, path.split('/').last),
-        paso: 'tus-create');
-    var off = 0;
-    try {
-      off = await tus.offset(loc, bearerToken: token);
-    } catch (_) {
-      off = 0; // el servidor no conserva offset: empezar de cero
+    // null = el objeto ya está completo en Storage (reintento tras un corte
+    // entre la subida y el confirm): se saltea la subida.
+    final loc = await _conBackoff<String?>(() async {
+      try {
+        return await tus.create(uploadUrl, size, path.split(Platform.pathSeparator).last,
+            mime: mime,);
+      } on TusYaSubido {
+        return null;
+      }
+    }, paso: 'tus-create',);
+    if (loc != null) {
+      var off = 0;
+      try {
+        off = await tus.offset(loc, bearerToken: token);
+      } catch (_) {
+        off = 0; // el servidor no conserva offset: empezar de cero
+      }
+      await tus.uploadFile(loc, file, offset: off, bearerToken: token);
     }
-    await tus.uploadFile(loc, file, offset: off, bearerToken: token);
     if (kind == 'clip') {
       await _conBackoff(
           () => api.confirmUpload({
@@ -158,12 +171,12 @@ class SyncEngine {
                 'kind': 'clip',
                 'task_type': task,
               }),
-          paso: 'confirm-clip');
+          paso: 'confirm-clip',);
     }
   }
 
   Future<void> _esperarProcesado(String deviceSessionId, String serverId) async {
-    final limite = DateTime.now().add(Duration(minutes: AppConfig.pollMinutesMax));
+    final limite = DateTime.now().add(const Duration(minutes: AppConfig.pollMinutesMax));
     var espera = 5;
     while (DateTime.now().isBefore(limite)) {
       await Future.delayed(Duration(seconds: espera));
@@ -181,19 +194,19 @@ class SyncEngine {
       }
     }
     await store.estado(deviceSessionId, 'watching',
-        error: 'Sigue en proceso; se reintentará el seguimiento');
+        error: 'Sigue en proceso; se reintentará el seguimiento',);
   }
 
   /// Reproceso tras corregir (ej. consentimiento): reenvía metadata con
   /// consent_recorded=true y confirma con reprocesar:true.
   Future<void> reprocesarConConsentimiento(
-      String deviceSessionId, Map<String, dynamic> payload) async {
+      String deviceSessionId, Map<String, dynamic> payload,) async {
     final p = Map<String, dynamic>.from(payload)..['consent_recorded'] = true;
     await _conBackoff(() => api.postSessions(p), paso: 'sessions');
     await _conBackoff(
         () => api.confirmUpload(
-            {'device_session_id': deviceSessionId, 'kind': 'session_audio', 'reprocesar': true}),
-        paso: 'confirm');
+            {'device_session_id': deviceSessionId, 'kind': 'session_audio', 'reprocesar': true},),
+        paso: 'confirm',);
     await store.estado(deviceSessionId, 'watching');
     final fila = await store.leer(deviceSessionId);
     final serverId = '${fila?['server_session_id'] ?? ''}';

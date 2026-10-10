@@ -14,17 +14,11 @@ class DspJob {
   final String wavPath;
   final List<Map<String, dynamic>> segments;
   final String sexoReferencia;
-  final bool sostenida;
-  final double? mptSec;
-  final double calibrationDbOffset;
 
   const DspJob({
     required this.wavPath,
     required this.segments,
     required this.sexoReferencia,
-    this.sostenida = false,
-    this.mptSec,
-    this.calibrationDbOffset = 0.0,
   });
 }
 
@@ -47,7 +41,7 @@ Map<String, dynamic> analizarTarea(DspJob job) {
   const sr = 44100;
   final samples = leerPcm16Mono(job.wavPath);
   final tracker = YinTracker(
-      sampleRate: sr, config: configParaSexo(job.sexoReferencia));
+      sampleRate: sr, config: configParaSexo(job.sexoReferencia),);
   final win = (sr * 0.040).round();
   final step = (sr * 0.010).round();
   final all = <YinFrame>[];
@@ -56,7 +50,7 @@ Map<String, dynamic> analizarTarea(DspJob job) {
       .map((s) => (
             ((s['start_sec'] as num).toDouble() * sr).round(),
             ((s['end_sec'] as num).toDouble() * sr).round()
-          ))
+          ),)
       .toList();
   for (final w in wins) {
     final start = ((w.$1.clamp(0, samples.length))).toInt();
@@ -69,13 +63,8 @@ Map<String, dynamic> analizarTarea(DspJob job) {
   }
   final f0 = medianFilter5(all.map((f) => f.f0).toList());
   final frames = List<YinFrame>.generate(
-      all.length, (i) => YinFrame(f0[i], all[i].strength, all[i].rms));
-  final m = computeTaskMetrics(
-    frames: frames,
-    sostenida: job.sostenida,
-    mptSec: job.mptSec,
-    calibrationDbOffset: job.calibrationDbOffset,
-  );
+      all.length, (i) => YinFrame(f0[i], all[i].strength, all[i].rms),);
+  final m = computeTaskMetrics(frames: frames);
   return {
     'metrics': m.toJson('companion-dsp/1.0'),
     'frames_total': all.length,

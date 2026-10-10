@@ -1,8 +1,7 @@
-import 'dart:async';
 import 'dart:io';
 
-
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vocalis_companion/data/session_store.dart';
 import 'package:vocalis_companion/sync/api_client.dart';
 import 'package:vocalis_companion/sync/sync_engine.dart';
 import 'package:vocalis_companion/sync/tus_client.dart';
@@ -63,7 +62,7 @@ class FakeTus implements TusGateway {
   int startOffset = 0;
 
   @override
-  Future<String> create(String u, int l, String f) async {
+  Future<String> create(String u, int l, String f, {String mime = ''}) async {
     calls.add('create');
     return 'https://tus/x/loc';
   }
@@ -76,7 +75,7 @@ class FakeTus implements TusGateway {
 
   @override
   Future<int> uploadFile(String l, File f,
-      {int offset = 0, required String bearerToken, void Function(int, int)? onProgress}) async {
+      {int offset = 0, required String bearerToken, void Function(int, int)? onProgress,}) async {
     calls.add('upload@$offset');
     return offset + await f.length();
   }
@@ -108,9 +107,10 @@ void main() {
       final eng = SyncEngine(
         api: api,
         tus: tus,
-        store: fake as dynamic,
+        store: fake,
         leerToken: () async => 'tok',
         hayRed: () async => true,
+        backoffSeconds: const [0, 0, 0, 0],
       );
       await eng.sincronizar('ds-1', {'audioPath': audio.path, 'audioMime': 'audio/mp4', 'wifiOnly': false});
       expect(fake.estados.last, 'synced');
@@ -126,11 +126,12 @@ void main() {
       final api = FakeApi()..conflict409 = true;
       final fake = _StoreFake({});
       final eng = SyncEngine(
-        api: api, tus: FakeTus(), store: fake as dynamic,
-        leerToken: () async => 'tok', hayRed: () async => true);
+        api: api, tus: FakeTus(), store: fake,
+        leerToken: () async => 'tok', hayRed: () async => true,
+        backoffSeconds: const [0, 0, 0, 0],);
       // payload mínimo: el engine lo pide al store
       await expectLater(eng.sincronizar('ds-x', {'audioPath': '/no', 'wifiOnly': false}),
-          throwsA(isA<ApiException>()));
+          throwsA(isA<ApiException>()),);
       expect(fake.estados.last, 'error');
       expect(fake.ultimoError, contains('ACCION_REQUERIDA'));
     });
@@ -142,8 +143,9 @@ void main() {
       final api = FakeApi()..healthFails = 1;
       final fake = _StoreFake({'device_session_id': 'ds-2'});
       final eng = SyncEngine(
-        api: api, tus: FakeTus(), store: fake as dynamic,
-        leerToken: () async => 'tok', hayRed: () async => true);
+        api: api, tus: FakeTus(), store: fake,
+        leerToken: () async => 'tok', hayRed: () async => true,
+        backoffSeconds: const [0, 0, 0, 0],);
       await eng.sincronizar('ds-2', {'audioPath': audio.path, 'audioMime': 'audio/mp4', 'wifiOnly': false});
       expect(api.calls.where((c) => c == 'health').length, 2);
       expect(fake.estados.last, 'synced');
@@ -158,8 +160,9 @@ void main() {
       final tus = FakeTus()..startOffset = 500;
       final fake = _StoreFake({'device_session_id': 'ds-3'});
       final eng = SyncEngine(
-        api: api, tus: tus, store: fake as dynamic,
-        leerToken: () async => 'tok', hayRed: () async => true);
+        api: api, tus: tus, store: fake,
+        leerToken: () async => 'tok', hayRed: () async => true,
+        backoffSeconds: const [0, 0, 0, 0],);
       await eng.sincronizar('ds-3', {'audioPath': audio.path, 'audioMime': 'audio/mp4', 'wifiOnly': false});
       expect(tus.calls, contains('upload@500'));
       await dir.delete(recursive: true);
@@ -168,19 +171,25 @@ void main() {
 }
 
 /// Doble mínimo del SessionStore (solo lo que usa el engine).
-class _StoreFake {
+class _StoreFake implements SessionStore {
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+
   final Map<String, dynamic> payload;
   final List<String> estados = [];
   String ultimoError = '';
 
   _StoreFake(this.payload);
 
+  @override
   Future<Map<String, dynamic>> payloadParaServidor(String id) async => payload;
 
+  @override
   Future<void> estado(String id, String status, {String error = ''}) async {
     estados.add(status);
     ultimoError = error;
   }
 
+  @override
   Future<void> guardarServidor(String id, String serverId) async {}
 }

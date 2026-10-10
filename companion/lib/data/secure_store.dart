@@ -5,7 +5,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Secretos en keystore (Android) / keychain-DPAPI (Windows).
 /// - device_token del emparejamiento.
-/// - clave AES/Salsa20 para cifrar audios en reposo (se genera una vez).
+/// - clave AES-256-GCM para cifrar audios en reposo (se genera una vez;
+///   ver AudioVault y README §Seguridad si se pierde).
 /// - hash del PIN de apertura (la biometría se verifica con local_auth en UI).
 class SecureStore {
   static const _tokenKey = 'device_token';
@@ -20,7 +21,7 @@ class SecureStore {
   Future<String?> readDeviceToken() => _s.read(key: _tokenKey);
   Future<void> clearDeviceToken() => _s.delete(key: _tokenKey);
 
-  /// Clave de 32 bytes para Salsa20 (audios). Se crea una sola vez.
+  /// Clave de 32 bytes para AES-256-GCM (audios). Se crea una sola vez.
   Future<List<int>> audioKey() async {
     final saved = await _s.read(key: _audioKey);
     if (saved != null && saved.isNotEmpty) return base64Decode(saved);

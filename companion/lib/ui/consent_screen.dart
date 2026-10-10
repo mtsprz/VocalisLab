@@ -39,7 +39,7 @@ class ConsentScreen extends StatelessWidget {
           value: consent,
           onChanged: (v) => onConsent(v ?? false),
           title: const Text('Consentimiento verbal registrado',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),),
           controlAffinity: ListTileControlAffinity.leading,
           contentPadding: EdgeInsets.zero,
         ),
@@ -50,7 +50,7 @@ class ConsentScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         TextButton(onPressed: onCambiarPaciente, child: const Text('Cambiar paciente')),
-      ]),
+      ],),
     );
   }
 }

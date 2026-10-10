@@ -37,12 +37,12 @@ class _PatientScreenState extends State<PatientScreen> {
         const Text('Elegir paciente', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         const Text('Lista local (caché). Sin internet igual funciona.',
-            style: TextStyle(fontSize: 15, color: Colors.black54)),
+            style: TextStyle(fontSize: 15, color: Colors.black54),),
         const SizedBox(height: 12),
         TextField(
           style: const TextStyle(fontSize: 18),
           decoration: const InputDecoration(
-              labelText: 'Buscar', border: OutlineInputBorder(), prefixIcon: Icon(Icons.search)),
+              labelText: 'Buscar', border: OutlineInputBorder(), prefixIcon: Icon(Icons.search),),
           onChanged: (v) => setState(() => _q = v),
         ),
         const SizedBox(height: 12),
@@ -65,7 +65,7 @@ class _PatientScreenState extends State<PatientScreen> {
                   },
                 ),
         ),
-      ]),
+      ],),
     );
   }
 }

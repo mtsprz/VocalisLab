@@ -1,7 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Base local. En Windows/Linux usa sqflite_common_ffi; en Android/iOS, sqflite.
@@ -45,6 +44,6 @@ Future<Database> openAppDb({String? pathOverride}) async {
         id INTEGER PRIMARY KEY AUTOINCREMENT, device_session_id TEXT NOT NULL,
         task_type TEXT NOT NULL, path TEXT NOT NULL, duration_sec REAL DEFAULT 0)''');
     await db.execute(
-        'CREATE INDEX idx_segments_sesion ON segments(device_session_id)');
-  });
+        'CREATE INDEX idx_segments_sesion ON segments(device_session_id)',);
+  },);
 }

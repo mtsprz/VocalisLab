@@ -53,10 +53,10 @@ class ApiClient implements CompanionApi {
   }
 
   Future<Map<String, dynamic>> _post(
-      String path, Map<String, dynamic> body, Duration timeout) async {
+      String path, Map<String, dynamic> body, Duration timeout,) async {
     final r = await _http
         .post(Uri.parse('$_base$path'),
-            headers: await _headers(), body: jsonEncode(body))
+            headers: await _headers(), body: jsonEncode(body),)
         .timeout(timeout);
     return _decode(r);
   }
@@ -88,7 +88,7 @@ class ApiClient implements CompanionApi {
   Future<Map<String, dynamic>> health() async {
     final r = await _http
         .get(Uri.parse('$_base/health'))
-        .timeout(Duration(seconds: AppConfig.healthTimeoutSeconds));
+        .timeout(const Duration(seconds: AppConfig.healthTimeoutSeconds));
     return _decode(r);
   }
 
@@ -97,7 +97,7 @@ class ApiClient implements CompanionApi {
     final r = await http
         .post(Uri.parse('$_base/pair'),
             headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode({'code': code.trim().toUpperCase(), 'device_name': deviceName}))
+            body: jsonEncode({'code': code.trim().toUpperCase(), 'device_name': deviceName}),)
         .timeout(const Duration(seconds: 75));
     return _decode(r);
   }

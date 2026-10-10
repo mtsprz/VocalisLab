@@ -18,19 +18,25 @@ class ForegroundGuard {
           priority: NotificationPriority.LOW,
         ),
         iosNotificationOptions: const IOSNotificationOptions(),
-        foregroundTaskOptions: const ForegroundTaskOptions(
-          interval: 5000,
-          isOnceEvent: false,
+        foregroundTaskOptions: ForegroundTaskOptions(
+          eventAction: ForegroundTaskEventAction.repeat(5000),
           autoRunOnBoot: false,
           allowWakeLock: true,
           allowWifiLock: true,
         ),
       );
-      await FlutterForegroundTask.startService(
+      // Android 13+: sin este permiso el servicio corre pero la notificación
+      // no se ve. Se pide al empezar la primera grabación.
+      if (await FlutterForegroundTask.checkNotificationPermission() !=
+          NotificationPermission.granted) {
+        await FlutterForegroundTask.requestNotificationPermission();
+      }
+      // 8.x no lanza excepción al fallar: devuelve ServiceRequestFailure.
+      final r = await FlutterForegroundTask.startService(
         notificationTitle: titulo,
         notificationText: 'Grabando sesión vocal',
       );
-      _activo = true;
+      _activo = r is ServiceRequestSuccess;
     } catch (_) {
       // Sin foreground service: el Wake Lock de la UI igual protege en uso.
     }

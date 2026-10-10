@@ -13,7 +13,7 @@ class ClinicaTheme {
     final base = ThemeData.light(useMaterial3: true);
     return base.copyWith(
       scaffoldBackgroundColor: lino,
-      colorScheme: ColorScheme.light(
+      colorScheme: const ColorScheme.light(
         primary: salviaOscura,
         secondary: terracota,
         surface: Colors.white,
@@ -22,9 +22,9 @@ class ClinicaTheme {
       ),
       textTheme: base.textTheme.copyWith(
         displaySmall: base.textTheme.displaySmall?.copyWith(
-            fontSize: 28, fontWeight: FontWeight.bold, color: tinta),
+            fontSize: 28, fontWeight: FontWeight.bold, color: tinta,),
         titleLarge: base.textTheme.titleLarge?.copyWith(
-            fontSize: 22, fontWeight: FontWeight.bold, color: tinta),
+            fontSize: 22, fontWeight: FontWeight.bold, color: tinta,),
         titleMedium: base.textTheme.titleMedium?.copyWith(fontSize: 19, color: tinta),
         bodyLarge: base.textTheme.bodyLarge?.copyWith(fontSize: 18, color: tinta),
         bodyMedium: base.textTheme.bodyMedium?.copyWith(fontSize: 16, color: tinta),

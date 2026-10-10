@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import '../app.dart';
 import '../config.dart';
 import '../core/audio/compressor.dart';
+import '../core/finalizar_sesion.dart';
+import '../data/audio_vault.dart';
 import '../data/settings_store.dart';
 
 const _estadoColor = {
@@ -44,12 +46,16 @@ class _SyncScreenState extends State<SyncScreen> {
 
   Future<void> _recargar() async {
     final l = await widget.deps.store.pendientes();
+    // Interrumpidas por cierre forzado (no la que se está grabando ahora).
+    final inc = (await widget.deps.store.incompletas())
+        .where((s) => s['device_session_id'] != sesionEnCurso)
+        .toList();
     final todas = await _todas();
     if (mounted) {
       setState(() {
-        _lista = [...l, ...todas.where((s) =>
+        _lista = [...inc, ...l, ...todas.where((s) =>
             (s['status'] == 'synced') &&
-            !l.any((x) => x['device_session_id'] == s['device_session_id']))];
+            !l.any((x) => x['device_session_id'] == s['device_session_id']),),];
       });
     }
   }
@@ -75,18 +81,24 @@ class _SyncScreenState extends State<SyncScreen> {
       var ok = 0, fail = 0;
       for (final s in pend) {
         final dsid = '${s['device_session_id']}';
+        final tmp = await _tmpDir(dsid);
         try {
           await _prepararActivos(dsid);
           await widget.deps.sync.sincronizar(dsid, {
-            'audioPath': await _rutaComprimida(dsid),
+            'audioPath': await _rutaComprimida(dsid, tmp),
             'audioMime': 'audio/mp4',
-            'clips': await _clipsParaSubir(dsid),
+            'clips': await _clipsParaSubir(dsid, tmp),
             'wifiOnly': settings.wifiOnly,
           });
           ok++;
         } catch (e) {
           fail++;
           _msg = '$e';
+        } finally {
+          // Solo copias descifradas temporales; el audio cifrado queda.
+          try {
+            await Directory(tmp).delete(recursive: true);
+          } catch (_) {}
         }
         if (mounted) await _recargar();
       }
@@ -100,29 +112,75 @@ class _SyncScreenState extends State<SyncScreen> {
 
   void setMsg(String m) => setState(() => _msg = m);
 
-  /// Comprime la sesión a m4a ~48 kbps si aún no existe (Fase 3).
-  Future<String> _rutaComprimida(String dsid) async {
+  Future<String> _tmpDir(String dsid) async =>
+      p.join((await getTemporaryDirectory()).path, 'vocalis_tmp', dsid);
+
+  /// m4a ~48 kbps listo para subir (copia descifrada en [tmp]). Si aún no
+  /// existe, comprime desde el WAV y guarda el m4a cifrado (.enc).
+  Future<String> _rutaComprimida(String dsid, String tmp) async {
     final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'sesiones', dsid));
-    final wav = File(p.join(dir.path, 'sesion.wav'));
-    final m4a = File(p.join(dir.path, 'sesion.m4a'));
-    if (await m4a.exists()) return m4a.path;
-    if (!await wav.exists()) throw Exception('Falta sesion.wav local');
+    final dir = p.join(docs.path, 'sesiones', dsid);
+    final vault = widget.deps.vault;
+    final m4a = await rutaPlana(vault, p.join(dir, 'sesion.m4a'), tmpDir: tmp);
+    if (m4a != null) return m4a;
+    final wav = await rutaPlana(vault, p.join(dir, 'sesion.wav'), tmpDir: tmp);
+    if (wav == null) throw Exception('Falta el audio local de la sesión');
+    final destino = p.join(dir, 'sesion.m4a');
     await AudioCompressor.platform().compressToM4a(
-      wavPath: wav.path,
-      outPath: m4a.path,
+      wavPath: wav,
+      outPath: destino,
       bitrateKbps: AppConfig.aacBitrate ~/ 1000,
     );
-    return m4a.path;
+    await vault.cifrarArchivo(destino);
+    return (await rutaPlana(vault, destino, tmpDir: tmp))!;
   }
 
-  Future<List<Map<String, dynamic>>> _clipsParaSubir(String dsid) async {
+  Future<List<Map<String, dynamic>>> _clipsParaSubir(String dsid, String tmp) async {
     final clips = await widget.deps.store.clips(dsid);
     return [
       for (final c in clips)
-        if (await File('${c['path']}').exists())
-          {'task': '${c['task_type']}', 'path': '${c['path']}', 'mime': 'audio/wav'},
+        if (await rutaPlana(widget.deps.vault, '${c['path']}', tmpDir: tmp) case final ruta?)
+          {'task': '${c['task_type']}', 'path': ruta, 'mime': 'audio/wav'},
     ];
+  }
+
+  /// Termina una sesión interrumpida (cierre forzado / batería) con los
+  /// bloques y marcas que quedaron en disco.
+  Future<void> _recuperar(Map<String, dynamic> s) async {
+    final dsid = '${s['device_session_id']}';
+    setState(() => _busy = true);
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final sesDir = p.join(docs.path, 'sesiones', dsid);
+      var segs = await marcasRecuperadas(sesDir);
+      if (segs.isEmpty) {
+        // Sin marcas guardadas: toda la grabación como habla del paciente.
+        final dur = await duracionBloques(sesDir);
+        segs = [
+          {'task_type': 'conversacion_espontanea', 'speaker': 'paciente',
+           'start_sec': 0.0, 'end_sec': dur,},
+        ];
+      }
+      var sexo = '';
+      try {
+        final ps = await widget.deps.pacientes.listar();
+        sexo = ps.firstWhere((e) => e.id == s['patient_id']).sexoReferencia;
+      } catch (_) {}
+      await finalizarSesion(
+        store: widget.deps.store,
+        vault: widget.deps.vault,
+        dsid: dsid,
+        sesDir: sesDir,
+        sexoReferencia: sexo,
+        segmentos: segs,
+      );
+      setMsg('Sesión recuperada ✓ (queda en cola para sincronizar)');
+    } catch (e) {
+      setMsg('No se pudo recuperar: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+      _recargar();
+    }
   }
 
   /// Garantiza clips WAV de la vocal sostenida antes de subir.
@@ -180,7 +238,7 @@ class _SyncScreenState extends State<SyncScreen> {
         const Text('Sincronización', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         const Text('Solo Wi-Fi por defecto. SYNCED = el servidor devolvió processed.',
-            style: TextStyle(fontSize: 15, color: Colors.black54)),
+            style: TextStyle(fontSize: 15, color: Colors.black54),),
         const SizedBox(height: 12),
         if (_msg != null)
           Container(
@@ -189,7 +247,7 @@ class _SyncScreenState extends State<SyncScreen> {
             decoration: BoxDecoration(
                 color: const Color(0xFFF7F3EA),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black12)),
+                border: Border.all(color: Colors.black12),),
             child: Text(_msg!, style: const TextStyle(fontSize: 16)),
           ),
         Row(children: [
@@ -200,19 +258,19 @@ class _SyncScreenState extends State<SyncScreen> {
               label: Text(_busy ? 'Sincronizando…' : 'Sincronizar todo'),
             ),
           ),
-        ]),
+        ],),
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: _busy ? null : _limpiarAntiguas,
           icon: const Icon(Icons.cleaning_services),
           label: const Text('Liberar espacio (synced + retención)',
-              style: TextStyle(fontSize: 16)),
+              style: TextStyle(fontSize: 16),),
         ),
         const SizedBox(height: 12),
         Expanded(
           child: _lista.isEmpty
               ? const Center(
-                  child: Text('Sin sesiones pendientes', style: TextStyle(fontSize: 17)))
+                  child: Text('Sin sesiones pendientes', style: TextStyle(fontSize: 17)),)
               : ListView.separated(
                   itemCount: _lista.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -232,21 +290,28 @@ class _SyncScreenState extends State<SyncScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                      color: color.withOpacity(0.12),
+                                      color: color.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: color)),
+                                      border: Border.all(color: color),),
                                   child: Text(st.toUpperCase(),
                                       style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
-                                          color: color)),
+                                          color: color,),),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text('${s['device_session_id']}',
-                                      style: const TextStyle(fontSize: 14, color: Colors.black54)),
+                                      style: const TextStyle(fontSize: 14, color: Colors.black54),),
                                 ),
-                              ]),
+                              ],),
+                              if (st == 'recording')
+                                TextButton.icon(
+                                  onPressed: _busy ? null : () => _recuperar(s),
+                                  icon: const Icon(Icons.restore),
+                                  label: const Text('Grabación interrumpida: recuperar',
+                                      style: TextStyle(fontSize: 16),),
+                                ),
                               if (err.isNotEmpty) ...[
                                 const SizedBox(height: 6),
                                 Text(
@@ -260,29 +325,29 @@ class _SyncScreenState extends State<SyncScreen> {
                                     onPressed: () => _reprocesar('${s['device_session_id']}'),
                                     icon: const Icon(Icons.refresh),
                                     label: const Text('Marcar consentimiento y reprocesar',
-                                        style: TextStyle(fontSize: 16)),
+                                        style: TextStyle(fontSize: 16),),
                                   ),
                               ],
                               TextButton.icon(
                                 onPressed: () {
                                   Clipboard.setData(ClipboardData(
                                       text:
-                                          'https://vocalis-lab.vercel.app/?paciente=${s['patient_id']}'));
+                                          'https://vocalis-lab.vercel.app/?paciente=${s['patient_id']}',),);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                          content: Text('Enlace a la ficha copiado')));
+                                          content: Text('Enlace a la ficha copiado'),),);
                                 },
                                 icon: const Icon(Icons.open_in_new),
                                 label: const Text('Abrir ficha en la web',
-                                    style: TextStyle(fontSize: 16)),
+                                    style: TextStyle(fontSize: 16),),
                               ),
-                            ]),
+                            ],),
                       ),
                     );
                   },
                 ),
         ),
-      ]),
+      ],),
     );
   }
 }

@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../app.dart';
+import '../core/dsp/nota.dart';
+import '../core/finalizar_sesion.dart' show archivoTonoGlobal;
 
 const _labels = {
   'vocal_sostenida_a': 'Vocal /a/ sostenida',
@@ -13,11 +17,47 @@ const _labels = {
   'conversacion_espontanea': 'Conversación espontánea',
 };
 
-String _f(dynamic v, [int d = 1]) =>
-    v == null ? '—' : (v as num).toStringAsFixed(d);
+String _hz(dynamic v) => v == null ? '—' : '${(v as num).round()}';
 
-/// Resumen inmediato: métricas por tarea + histograma F0 + comparación
-/// con el rango esperado (caché de /referencias; funciona offline).
+/// Edad en años cumplidos desde 'AAAA-MM-DD' (null si no se puede leer).
+int? edadDesde(String fechaNacimiento, {DateTime? hoy}) {
+  final f = DateTime.tryParse(fechaNacimiento);
+  if (f == null) return null;
+  final h = hoy ?? DateTime.now();
+  var e = h.year - f.year;
+  if (h.month < f.month || (h.month == f.month && h.day < f.day)) e--;
+  return e < 0 ? null : e;
+}
+
+/// Rango de referencia para sexo y edad desde la tabla de /referencias.
+/// Si la edad cae en una fila de niñez se usa esa; si no hay edad, solo sexo.
+Map<String, dynamic>? rangoPara(List<dynamic> rangos, String sexo, int? edad) {
+  final s = sexo.toLowerCase();
+  final buscado = s.startsWith('masc') || s == 'm'
+      ? 'masculino'
+      : (s.startsWith('fem') || s == 'f' ? 'femenino' : '');
+  bool enEdad(Map m) {
+    if (edad == null) return true;
+    final a = (m['edad_min'] as num?)?.toInt() ?? 0;
+    final b = (m['edad_max'] as num?)?.toInt() ?? 200;
+    return edad >= a && edad <= b;
+  }
+
+  final filas = rangos.whereType<Map>().map((m) => m.cast<String, dynamic>());
+  if (edad != null) {
+    for (final m in filas) {
+      if (m['sexo_referencia'] == 'ninex' && enEdad(m)) return m;
+    }
+  }
+  for (final m in filas) {
+    if (m['sexo_referencia'] == buscado && enEdad(m)) return m;
+  }
+  return null;
+}
+
+/// Resumen inmediato: altura tonal principal (mediana en Hz + nota),
+/// rango p5–p95, histograma de F0 y comparación con el rango esperado
+/// (caché de /referencias; funciona sin internet).
 class SummaryScreen extends StatefulWidget {
   final Deps deps;
   final String deviceSessionId;
@@ -29,7 +69,7 @@ class SummaryScreen extends StatefulWidget {
       required this.deps,
       required this.deviceSessionId,
       this.pacienteId = '',
-      required this.onVolver});
+      required this.onVolver,});
 
   @override
   State<SummaryScreen> createState() => _SummaryScreenState();
@@ -37,67 +77,85 @@ class SummaryScreen extends StatefulWidget {
 
 class _SummaryScreenState extends State<SummaryScreen> {
   List<Map<String, dynamic>> _ac = [];
+  Map<String, dynamic>? _global;
   List<dynamic> _rangos = [];
   String _sexo = '';
+  int? _edad;
 
   @override
   void initState() {
     super.initState();
-    widget.deps.store.acustica(widget.deviceSessionId).then((rows) async {
-      final list = [
-        for (final r in rows)
-          {'task_type': r['task_type'], ...(jsonDecode('${r['payload']}') as Map<String, dynamic>)}
-      ];
-      List<dynamic> rangos = [];
-      try {
-        final f = File('${(await getApplicationDocumentsDirectory()).path}/referencias.json');
-        if (await f.exists()) {
-          rangos = jsonDecode(await f.readAsString()) as List<dynamic>;
-        }
-      } catch (_) {}
-      // Refrescar caché si hay red (no bloquea).
-      widget.deps.api.getReferencias().then((r) async {
-        final rr = (r['rangos'] as List?) ?? [];
-        if (rr.isNotEmpty) {
-          try {
-            final f = File('${(await getApplicationDocumentsDirectory()).path}/referencias.json');
-            await f.writeAsString(jsonEncode(rr));
-          } catch (_) {}
-          if (mounted) setState(() => _rangos = rr);
-        }
-      }).catchError((_) {});
-      String sexo = '';
-      try {
-        final ps = await widget.deps.pacientes.listar();
-        sexo = ps.firstWhere((e) => e.id == widget.pacienteId).sexoReferencia;
-      } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _ac = list;
-          _rangos = rangos;
-          _sexo = sexo;
-        });
-      }
-    });
+    _cargar();
   }
 
-  Map<String, dynamic>? _rangoPara(String sexo) {
-    final s = sexo.toLowerCase();
-    for (final r in _rangos) {
-      final m = r as Map<String, dynamic>;
-      if (s.startsWith('masc') && m['sexo_referencia'] == 'masculino') return m;
-      if (s.startsWith('fem') && m['sexo_referencia'] == 'femenino') return m;
+  Future<void> _cargar() async {
+    final rows = await widget.deps.store.acustica(widget.deviceSessionId);
+    final list = [
+      for (final r in rows)
+        {'task_type': r['task_type'], ...(jsonDecode('${r['payload']}') as Map<String, dynamic>)},
+    ];
+    final docs = (await getApplicationDocumentsDirectory()).path;
+    Map<String, dynamic>? global;
+    try {
+      final f = File(p.join(docs, 'sesiones', widget.deviceSessionId, archivoTonoGlobal));
+      if (await f.exists()) global = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+    } catch (_) {}
+    List<dynamic> rangos = [];
+    final cache = File(p.join(docs, 'referencias.json'));
+    try {
+      if (await cache.exists()) rangos = jsonDecode(await cache.readAsString()) as List<dynamic>;
+    } catch (_) {}
+    // Refrescar caché si hay red (no bloquea).
+    widget.deps.api.getReferencias().then((r) async {
+      final rr = (r['rangos'] as List?) ?? [];
+      if (rr.isNotEmpty) {
+        try {
+          await cache.writeAsString(jsonEncode(rr));
+        } catch (_) {}
+        if (mounted) setState(() => _rangos = rr);
+      }
+    }).catchError((_) {});
+    var sexo = '';
+    int? edad;
+    try {
+      final ps = await widget.deps.pacientes.listar();
+      final pac = ps.firstWhere((e) => e.id == widget.pacienteId);
+      sexo = pac.sexoReferencia;
+      edad = edadDesde(pac.fechaNacimiento);
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _ac = list;
+        _global = global;
+        _rangos = rangos;
+        _sexo = sexo;
+        _edad = edad;
+      });
     }
-    return null;
+  }
+
+  /// Métrica principal: conversación espontánea; si no hubo, todos los
+  /// tramos del paciente.
+  (String, Map<String, dynamic>?) _principal() {
+    for (final a in _ac) {
+      if (a['task_type'] == 'conversacion_espontanea' && a['f0_median_hz'] != null) {
+        return ('Conversación espontánea', a);
+      }
+    }
+    return ('Todos los tramos del paciente', _global);
   }
 
   @override
   Widget build(BuildContext context) {
+    final (origen, m) = _principal();
+    final ref = rangoPara(_rangos, _sexo, _edad);
     return Scaffold(
       appBar: AppBar(title: const Text('Resumen de la sesión')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          _Principal(origen: origen, m: m, ref: ref),
+          const SizedBox(height: 16),
           for (final a in _ac) _tarjeta(a),
           const SizedBox(height: 16),
           ElevatedButton.icon(
@@ -112,49 +170,82 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
   Widget _tarjeta(Map<String, dynamic> a) {
     final task = '${a['task_type']}';
+    final med = (a['f0_median_hz'] as num?)?.toDouble();
     return Card(
-      margin: const EdgeInsets.only(bottom: 14),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_labels[task] ?? task,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 16, runSpacing: 6, children: [
-            _met('F0 med', '${_f(a['f0_median_hz'], 0)} Hz'),
-            _met('SD', '${_f(a['f0_sd_semitones'], 2)} st'),
-            _met('dB', _f(a['intensity_mean_db'])),
-            if (a['jitter_pct'] != null) _met('Jitter', '${_f(a['jitter_pct'], 2)} %'),
-            if (a['shimmer_pct'] != null) _met('Shimmer', '${_f(a['shimmer_pct'], 2)} %'),
-            if (a['hnr_db'] != null) _met('HNR', '${_f(a['hnr_db'])} dB'),
-            if (a['mpt_sec'] != null) _met('MPT', '${_f(a['mpt_sec'])} s'),
-          ]),
-          const SizedBox(height: 8),
-          _Histograma(
-            hist: (a['f0_histogram'] as Map?)?.cast<String, dynamic>() ?? {},
-            ref: _rangoPara(_sexo),
-          ),
-        ]),
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        title: Text(_labels[task] ?? task, style: const TextStyle(fontSize: 18)),
+        subtitle: Text('Rango ${_hz(a['f0_p5_hz'])}–${_hz(a['f0_p95_hz'])} Hz',
+            style: const TextStyle(fontSize: 15),),
+        trailing: Text(alturaTonal(med),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),),
       ),
     );
   }
+}
 
-  Widget _met(String k, String v) => RichText(
-        text: TextSpan(
-          style: const TextStyle(fontSize: 17, color: Color(0xFF2E2A26)),
-          children: [
-            TextSpan(text: '$k: '),
-            TextSpan(text: v, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-      );
+class _Principal extends StatelessWidget {
+  final String origen;
+  final Map<String, dynamic>? m;
+  final Map<String, dynamic>? ref;
+
+  const _Principal({required this.origen, required this.m, required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final med = (m?['f0_median_hz'] as num?)?.toDouble();
+    final nota = notaDesdeHz(med);
+    final rMin = (ref?['f0_min_hz'] as num?)?.toDouble();
+    final rMax = (ref?['f0_max_hz'] as num?)?.toDouble();
+    String comparacion;
+    if (med == null) {
+      comparacion = 'Sin tramos sonoros del paciente: no se pudo medir el tono.';
+    } else if (rMin == null || rMax == null) {
+      comparacion = 'Sin rango de referencia para el sexo/edad del paciente '
+          '(se descarga de /referencias la primera vez que hay conexión).';
+    } else if (med < rMin) {
+      comparacion = 'Por debajo del rango esperado (${rMin.round()}–${rMax.round()} Hz).';
+    } else if (med > rMax) {
+      comparacion = 'Por encima del rango esperado (${rMin.round()}–${rMax.round()} Hz).';
+    } else {
+      comparacion = 'Dentro del rango esperado (${rMin.round()}–${rMax.round()} Hz).';
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Altura tonal · $origen', style: const TextStyle(fontSize: 16, color: Colors.black54)),
+          const SizedBox(height: 6),
+          Text(med == null ? '— Hz' : '${med.round()} Hz',
+              style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),),
+          if (nota != null)
+            Text(alturaTonal(med), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Text('Rango (p5–p95): ${_hz(m?['f0_p5_hz'])}–${_hz(m?['f0_p95_hz'])} Hz',
+              style: const TextStyle(fontSize: 18),),
+          const SizedBox(height: 10),
+          _Histograma(
+            hist: (m?['f0_histogram'] as Map?)?.cast<String, dynamic>() ?? {},
+            rMin: rMin,
+            rMax: rMax,
+          ),
+          const SizedBox(height: 8),
+          Text(comparacion, style: const TextStyle(fontSize: 17)),
+          const Text('Referencia orientativa: no reemplaza el criterio clínico.',
+              style: TextStyle(fontSize: 14, color: Colors.black54),),
+          const SizedBox(height: 4),
+          const Text(convencionOctavas, style: TextStyle(fontSize: 12, color: Colors.black45)),
+        ],),
+      ),
+    );
+  }
 }
 
 class _Histograma extends StatelessWidget {
   final Map<String, dynamic> hist;
-  final Map<String, dynamic>? ref;
+  final double? rMin, rMax;
 
-  const _Histograma({required this.hist, required this.ref});
+  const _Histograma({required this.hist, required this.rMin, required this.rMax});
 
   @override
   Widget build(BuildContext context) {
@@ -164,29 +255,21 @@ class _Histograma extends StatelessWidget {
       return const Text('Sin histograma', style: TextStyle(fontSize: 15));
     }
     final keys = bins.keys.map(int.parse).toList()..sort();
-    final max = keys.map((k) => (bins['$k'] as num).toDouble()).reduce((a, b) => a > b ? a : b);
-    double hz(int st) => refHz * _pow2(st / 12);
-    final rMin = (ref?['f0_min_hz'] as num?)?.toDouble();
-    final rMax = (ref?['f0_max_hz'] as num?)?.toDouble();
+    final max = keys.map((k) => (bins['$k'] as num).toDouble()).reduce(math.max);
+    double hz(num st) => refHz * math.pow(2, st / 12);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Histograma de F0 (1 barra = 1 semitono; azul = dentro del rango esperado)',
+          style: TextStyle(fontSize: 13, color: Colors.black54),),
+      const SizedBox(height: 4),
       CustomPaint(
         size: const Size(double.infinity, 110),
         painter: _HistPainter(keys, bins, max, hz, rMin, rMax),
       ),
-      Text('Ref: ${rMin?.toStringAsFixed(0) ?? '—'}–${rMax?.toStringAsFixed(0) ?? '—'} Hz (orientativo)',
-          style: const TextStyle(fontSize: 14, color: Colors.black54)),
-    ]);
-  }
-
-  double _pow2(double e) {
-    var r = 1.0;
-    final n = e.abs().floor();
-    for (var i = 0; i < n; i++) {
-      r *= 2;
-    }
-    final f = e.abs() - n;
-    if (f > 0) r *= 1 + 0.6931 * f; // aprox. suficiente para el gráfico
-    return e < 0 ? 1 / r : r;
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('${hz(keys.first - 0.5).round()} Hz', style: const TextStyle(fontSize: 13)),
+        Text('${hz(keys.last + 0.5).round()} Hz', style: const TextStyle(fontSize: 13)),
+      ],),
+    ],);
   }
 }
 
@@ -194,7 +277,7 @@ class _HistPainter extends CustomPainter {
   final List<int> keys;
   final Map<String, dynamic> bins;
   final double max;
-  final double Function(int) hz;
+  final double Function(num) hz;
   final double? rMin, rMax;
 
   _HistPainter(this.keys, this.bins, this.max, this.hz, this.rMin, this.rMax);
@@ -205,15 +288,13 @@ class _HistPainter extends CustomPainter {
     for (var i = 0; i < keys.length; i++) {
       final v = (bins['${keys[i]}'] as num).toDouble();
       final h = (v / max) * (size.height - 16);
-      final dentro = rMin != null &&
-          rMax != null &&
-          hz(keys[i] + 1) >= rMin! &&
-          hz(keys[i]) <= rMax!;
+      final centro = hz(keys[i]);
+      final dentro = rMin != null && rMax != null && centro >= rMin! && centro <= rMax!;
       final paint = Paint()..color = dentro ? const Color(0xFF0284C7) : const Color(0xFFCBD5E1);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(i * bw + 1, size.height - h, bw - 2, h),
-            const Radius.circular(2)),
+            const Radius.circular(2),),
         paint,
       );
     }
