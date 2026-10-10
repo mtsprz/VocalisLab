@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -82,7 +81,7 @@ class _MiVozCardState extends State<MiVozCard> {
       if (bloques.isEmpty) throw Exception('No se grabó audio');
       final wav = p.join(dir, 'mi_voz.wav');
       await concatenarBloques(bloques, wav);
-      final perfil = await Isolate.run(() => analizarPerfilVoz(wav));
+      final perfil = await analizarPerfilVozEnIsolate(wav);
       if (perfil == null) {
         setState(() => _msg = 'No se escuchó suficiente voz. Probá de nuevo, leyendo en voz alta.');
       } else {

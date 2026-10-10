@@ -181,26 +181,30 @@ Map<String, dynamic>? analizarPerfilVoz(String wavPath) {
   }
 }
 
+/// Entrada del isolate: función de nivel superior para que el mensaje no
+/// arrastre el contexto del llamador (una pantalla no se puede enviar).
+void _entradaAuto((SendPort, AutoJob) m) {
+  final (puerto, trabajo) = m;
+  try {
+    var ultimo = -1;
+    final r = analizarSesionAuto(trabajo, progreso: (p) {
+      final pct = (p * 100).floor();
+      if (pct != ultimo) {
+        ultimo = pct;
+        puerto.send(p);
+      }
+    },);
+    puerto.send({'ok': r});
+  } catch (e) {
+    puerto.send({'error': '$e'});
+  }
+}
+
 /// Corre [analizarSesionAuto] en otro isolate informando el avance (0..1).
 Future<Map<String, dynamic>> analizarSesionAutoEnIsolate(
     AutoJob job, void Function(double) onProgreso,) async {
   final rp = ReceivePort();
-  await Isolate.spawn<(SendPort, AutoJob)>((m) {
-    final (puerto, trabajo) = m;
-    try {
-      var ultimo = -1;
-      final r = analizarSesionAuto(trabajo, progreso: (p) {
-        final pct = (p * 100).floor();
-        if (pct != ultimo) {
-          ultimo = pct;
-          puerto.send(p);
-        }
-      },);
-      puerto.send({'ok': r});
-    } catch (e) {
-      puerto.send({'error': '$e'});
-    }
-  }, (rp.sendPort, job),);
+  await Isolate.spawn<(SendPort, AutoJob)>(_entradaAuto, (rp.sendPort, job));
   await for (final msg in rp) {
     if (msg is double) {
       onProgreso(msg);
@@ -212,3 +216,9 @@ Future<Map<String, dynamic>> analizarSesionAutoEnIsolate(
   }
   throw Exception('El análisis terminó sin resultado');
 }
+
+Map<String, dynamic>? _entradaPerfil(String wav) => analizarPerfilVoz(wav);
+
+/// [analizarPerfilVoz] en otro isolate (solo viaja la ruta del archivo).
+Future<Map<String, dynamic>?> analizarPerfilVozEnIsolate(String wavPath) =>
+    Isolate.run(() => _entradaPerfil(wavPath));

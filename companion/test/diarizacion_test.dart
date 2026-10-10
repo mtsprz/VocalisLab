@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -58,6 +59,31 @@ void main() {
     expect(((segs[1]['end_sec'] as double) - 12).abs() <= 0.5, true);
     expect(r['confianza'], 'alta');
     expect(((r['fraccion_paciente'] as double) - 7 / 15).abs() < 0.05, true);
+  });
+
+  test('por isolate, con avance que referencia algo no enviable (como una pantalla)', () async {
+    final noEnviable = ReceivePort(); // un ReceivePort no se puede mandar a otro isolate
+    final avances = <double>[];
+    final wav = await _wav(dir, [(5, 200), (7, 120)]);
+    final perfil = await analizarPerfilVozEnIsolate(await _wav(dir, [(3, 200)], nombre: 'voz.wav'));
+    expect(perfil, isNotNull);
+    final r = await analizarSesionAutoEnIsolate(
+      AutoJob(
+        wavPath: wav,
+        sexoReferencia: 'masculino',
+        fonoMedianaHz: perfil!['mediana_hz'] as double,
+        fonoSdSt: perfil['sd_st'] as double,
+        rangoMinHz: 100,
+        rangoMaxHz: 130,
+      ),
+      (v) {
+        noEnviable.hashCode; // la función captura el objeto no enviable
+        avances.add(v);
+      },
+    );
+    noEnviable.close();
+    expect(avances, isNotEmpty);
+    expect((r['metrics'] as Map)['f0_median_hz'], closeTo(120, 2));
   });
 
   test('sin rango de referencia: estima al paciente con lo que no es la voz del fono', () {
