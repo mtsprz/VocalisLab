@@ -41,18 +41,20 @@ Future<String> emparejarConGoogle({
   );
   final q = Uri.parse(resultado).queryParameters;
   final error = q['error'];
-  if (error != null) throw Exception(mensajeErrorGoogle(error, q['email']));
+  if (error != null) throw Exception(mensajeErrorGoogle(error, q['email'], q['detalle']));
   final code = q['code'] ?? '';
   if (code.isEmpty) throw Exception('Google no devolvió el código de vinculación');
   return emparejar(api: api, secure: secure, code: code, deviceName: deviceName);
 }
 
-String mensajeErrorGoogle(String error, [String? email]) => switch (error) {
+String mensajeErrorGoogle(String error, [String? email, String? detalle]) => switch (error) {
       'no_habilitado' =>
         'La cuenta ${email ?? ''} no está habilitada. Agregala en Render → '
             'COMPANION_GOOGLE_EMAILS.',
       'cuenta_invalida' => 'Google no confirmó el email de la cuenta.',
       'google_token' => 'Google rechazó el inicio de sesión. Probá de nuevo.',
       'sin_base' => 'El servidor no tiene la base configurada.',
-      _ => 'No se pudo vincular ($error). Probá de nuevo.',
+      _ => 'No se pudo vincular ($error). Probá de nuevo.'
+          '${detalle == null ? '' : '
+Detalle: $detalle'}',
     };

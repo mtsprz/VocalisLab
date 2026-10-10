@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.vocalis" "\0"
-            VALUE "FileDescription", "vocalis_companion" "\0"
+            VALUE "FileDescription", "Vocalis Companion" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "vocalis_companion" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.vocalis. All rights reserved." "\0"
             VALUE "OriginalFilename", "vocalis_companion.exe" "\0"
-            VALUE "ProductName", "vocalis_companion" "\0"
+            VALUE "ProductName", "Vocalis Companion" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

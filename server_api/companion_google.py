@@ -106,14 +106,45 @@ async def google_callback_companion(code: str, state: str) -> HTMLResponse:
         sb = _sb()
         if not sb:
             return _volver(return_to, error="sin_base")
+        _registrar_cuenta(sb, gid, email, str(info.get("name", "") or ""))
         codigo = _pairing_code()
         exp = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
         sb.table("companion_pairing_codes").insert({
             "code": codigo, "profesional_google_id": gid, "expires_at": exp}).execute()
         return _volver(return_to, code=codigo)
+    except Exception as e:
+        traceback.print_exc()
+        # Sin secretos: tipo + mensaje corto (ej. error de RLS de Supabase).
+        return _volver(return_to, error="servidor", detalle=f"{type(e).__name__}: {str(e)[:160]}")
+
+
+def _registrar_cuenta(sb, gid: str, email: str, nombre: str) -> None:
+    """Deja constancia gid→email en usuarios_google si la cuenta no existe
+    (login solo desde la app). Nunca pisa una fila de la web (tokens)."""
+    try:
+        r = sb.table("usuarios_google").select("google_id").eq("google_id", gid).execute()
+        if not (r.data or []):
+            sb.table("usuarios_google").insert(
+                {"google_id": gid, "email": email, "name": nombre}).execute()
     except Exception:
         traceback.print_exc()
-        return _volver(return_to, error="servidor")
+
+
+def _cuenta_autorizada(sb, gid: str) -> bool:
+    """La cuenta del dispositivo está en COMPANION_GOOGLE_EMAILS (vía
+    usuarios_google) o es PROFESIONAL_GOOGLE_ID. Evita que un dispositivo
+    vinculado con un user_id inventado (POST /pairing-code) lea pacientes."""
+    unico = _profesional_env()
+    if unico and gid == unico:
+        return True
+    emails = _emails_habilitados()
+    if not emails or not gid:
+        return False
+    try:
+        r = sb.table("usuarios_google").select("email").eq("google_id", gid).execute()
+    except Exception:
+        return False
+    return any(str(x.get("email", "")).strip().lower() in emails for x in (r.data or []))
 
 
 def _abreviar(nombre: str) -> str:
@@ -125,10 +156,12 @@ def _abreviar(nombre: str) -> str:
 
 @router.get("/api/companion/pacientes")
 async def pacientes_companion(request: Request, q: str = "", limit: int = 200):
-    _device_from_bearer(request)
+    dev = _device_from_bearer(request)
     sb = _sb()
     if not sb:
         raise HTTPException(status_code=503, detail="Supabase no configurado")
+    if not _cuenta_autorizada(sb, str(dev.get("profesional_google_id", ""))):
+        raise HTTPException(status_code=403, detail="Cuenta no habilitada para la lista de pacientes")
     limit = max(1, min(int(limit or 200), 1000))
     try:
         r = sb.table("pacientes").select("*").limit(limit).execute()
