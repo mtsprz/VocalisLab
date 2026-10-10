@@ -32,6 +32,7 @@ dependencies:
   cryptography: ^2.9.0
   cryptography_flutter: ^2.3.4
   flutter_web_auth_2: ^5.1.0
+  sherpa_onnx: ^1.13.8
 
 dev_dependencies:
   flutter_test:
@@ -51,3 +52,5 @@ msix_config:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/models/campplus_sv_16k.onnx

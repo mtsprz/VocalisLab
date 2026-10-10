@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
@@ -46,6 +47,8 @@ Future<void> finalizarSesion({
   double? vozFonoSdSt,
   double? rangoMinHz,
   double? rangoMaxHz,
+  String? modeloHuella,
+  Float32List? huellaFono,
   void Function(double)? onProgreso,
 }) async {
   final dirBloques = Directory(p.join(sesDir, 'bloques'));
@@ -72,6 +75,8 @@ Future<void> finalizarSesion({
       fonoSdSt: vozFonoSdSt,
       rangoMinHz: rangoMinHz,
       rangoMaxHz: rangoMaxHz,
+      modeloHuella: modeloHuella,
+      huellaFono: huellaFono,
     ),
     onProgreso ?? (_) {},
   );
@@ -93,6 +98,8 @@ Future<void> finalizarSesion({
       'confianza': res['confianza'],
       'fraccion_paciente': res['fraccion_paciente'],
       'separacion_st': res['separacion_st'],
+      'similitud_voces': res['similitud_voces'],
+      'metodo': res['metodo'],
     },
   }),);
 

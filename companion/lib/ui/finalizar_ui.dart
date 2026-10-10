@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../app.dart';
+import '../core/dsp/modelo_huella.dart';
 import '../core/finalizar_sesion.dart';
 import '../data/settings_store.dart';
 import 'summary_screen.dart' show edadDesde, rangoPara;
@@ -36,6 +37,8 @@ Future<void> finalizarConContexto({
     edad = edadDesde(pac.fechaNacimiento);
   } catch (_) {}
   final ref = rangoPara(await rangosCacheados(), sexo, edad);
+  final huellaValida = ajustes.vozFonoHuella != null && ajustes.vozFonoModelo == idModeloHuella;
+  final modelo = huellaValida ? await rutaModeloHuella() : null;
   await finalizarSesion(
     store: deps.store,
     vault: deps.vault,
@@ -46,6 +49,8 @@ Future<void> finalizarConContexto({
     vozFonoSdSt: ajustes.vozFonoSdSt,
     rangoMinHz: (ref?['f0_min_hz'] as num?)?.toDouble(),
     rangoMaxHz: (ref?['f0_max_hz'] as num?)?.toDouble(),
+    modeloHuella: modelo,
+    huellaFono: huellaValida ? ajustes.vozFonoHuella : null,
     onProgreso: onProgreso,
   );
 }

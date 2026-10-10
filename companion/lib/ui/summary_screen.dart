@@ -247,19 +247,28 @@ class _Principal extends StatelessWidget {
 /// Cómo salió la separación automática de voces (orientativo).
 Widget _lineaDiarizacion(Map<String, dynamic> d) {
   final conf = '${d['confianza'] ?? ''}';
+  final metodo = '${d['metodo'] ?? 'tono'}';
   final frac = (d['fraccion_paciente'] as num?)?.toDouble();
   final pct = frac == null ? '' : ' · paciente ${(frac * 100).round()} % del tiempo con voz';
+  final como = metodo == 'huella' ? 'por huella vocal (timbre)' : 'por altura tonal';
   final (texto, color) = switch (conf) {
-    'alta' => ('Voces separadas automáticamente (confianza alta)$pct', const Color(0xFF5C7A57)),
-    'media' => ('Voces separadas automáticamente (confianza media)$pct', const Color(0xFF8A6D3B)),
     'sin_perfil' => ('Sin "Mi voz" en Ajustes: se midió TODA la voz grabada, incluida la tuya.',
         const Color(0xFFC96F4A)),
-    _ => ('Las dos voces tienen tono parecido: la separación es estimada$pct. '
-        'Se revisa al sincronizar.', const Color(0xFFC96F4A)),
+    'alta' => ('Voces separadas $como, confianza alta$pct', const Color(0xFF5C7A57)),
+    'media' => ('Voces separadas $como, confianza media$pct', const Color(0xFF8A6D3B)),
+    _ => (metodo == 'huella'
+        ? 'Las dos voces tienen timbre parecido: separación $como con confianza baja$pct.'
+        : 'Separación $como con confianza baja (tonos parecidos)$pct. '
+            'Volvé a grabar "Mi voz" para separar por huella vocal.', const Color(0xFFC96F4A)),
   };
   return Padding(
     padding: const EdgeInsets.only(top: 6),
-    child: Text(texto, style: TextStyle(fontSize: 15, color: color)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(texto, style: TextStyle(fontSize: 15, color: color)),
+      if (metodo == 'tono_respaldo')
+        const Text('No se pudo usar la huella vocal en este equipo; se usó la altura tonal.',
+            style: TextStyle(fontSize: 14, color: Color(0xFFC96F4A)),),
+    ],),
   );
 }
 

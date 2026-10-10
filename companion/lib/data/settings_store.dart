@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -13,11 +14,17 @@ class AppSettings {
   double? vozFonoHz;
   double? vozFonoSdSt;
 
+  /// Huella vocal (timbre) de "Mi voz" y modelo con que se calculó.
+  Float32List? vozFonoHuella;
+  String? vozFonoModelo;
+
   AppSettings({
     this.wifiOnly = true,
     this.localRetentionDays = 30,
     this.vozFonoHz,
     this.vozFonoSdSt,
+    this.vozFonoHuella,
+    this.vozFonoModelo,
   });
 
   bool get tienePerfilVoz => vozFonoHz != null && vozFonoHz! > 0;
@@ -37,6 +44,10 @@ class AppSettings {
         localRetentionDays: (m['localRetentionDays'] as int?) ?? 30,
         vozFonoHz: (m['vozFonoHz'] as num?)?.toDouble(),
         vozFonoSdSt: (m['vozFonoSdSt'] as num?)?.toDouble(),
+        vozFonoHuella: m['vozFonoHuella'] is String
+            ? Float32List.view(base64Decode(m['vozFonoHuella'] as String).buffer)
+            : null,
+        vozFonoModelo: m['vozFonoModelo'] as String?,
       );
     } catch (_) {
       return AppSettings();
@@ -50,6 +61,10 @@ class AppSettings {
       'localRetentionDays': localRetentionDays,
       if (vozFonoHz != null) 'vozFonoHz': vozFonoHz,
       if (vozFonoSdSt != null) 'vozFonoSdSt': vozFonoSdSt,
+      if (vozFonoHuella != null)
+        'vozFonoHuella': base64Encode(vozFonoHuella!.buffer.asUint8List(
+            vozFonoHuella!.offsetInBytes, vozFonoHuella!.lengthInBytes,),),
+      if (vozFonoModelo != null) 'vozFonoModelo': vozFonoModelo,
     }),);
   }
 }

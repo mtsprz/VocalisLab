@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -8,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../core/audio/recorder_service.dart';
 import '../core/audio/wav.dart';
 import '../core/dsp/dsp_isolate.dart';
+import '../core/dsp/modelo_huella.dart';
 import '../core/dsp/nota.dart';
 import '../data/settings_store.dart';
 
@@ -81,14 +83,18 @@ class _MiVozCardState extends State<MiVozCard> {
       if (bloques.isEmpty) throw Exception('No se grabó audio');
       final wav = p.join(dir, 'mi_voz.wav');
       await concatenarBloques(bloques, wav);
-      final perfil = await analizarPerfilVozEnIsolate(wav);
+      final perfil = await analizarPerfilVozEnIsolate(wav, modeloHuella: await rutaModeloHuella());
       if (perfil == null) {
         setState(() => _msg = 'No se escuchó suficiente voz. Probá de nuevo, leyendo en voz alta.');
       } else {
         _s.vozFonoHz = (perfil['mediana_hz'] as num).toDouble();
         _s.vozFonoSdSt = (perfil['sd_st'] as num).toDouble();
+        _s.vozFonoHuella = perfil['huella'] as Float32List?;
+        _s.vozFonoModelo = _s.vozFonoHuella == null ? null : idModeloHuella;
         await _s.save();
-        setState(() => _msg = 'Listo ✓');
+        setState(() => _msg = _s.vozFonoHuella == null
+            ? 'Listo (solo tono: no se pudo calcular la huella vocal)'
+            : 'Listo ✓ (tono + huella vocal)');
       }
     } catch (e) {
       setState(() => _msg = 'No se pudo analizar: $e');
@@ -108,7 +114,8 @@ class _MiVozCardState extends State<MiVozCard> {
       Text(
         hz == null
             ? 'Sin grabar. La app la usa para separar automáticamente tu voz de la del paciente.'
-            : 'Guardada: ${alturaTonal(hz)}. Se usa para separar tu voz de la del paciente.',
+            : 'Guardada: ${alturaTonal(hz)}${_s.vozFonoHuella != null ? ' + huella vocal' : ''}. '
+                'Se usa para separar tu voz de la del paciente.',
         style: const TextStyle(fontSize: 16),
       ),
       const SizedBox(height: 8),
