@@ -8,9 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import '../app.dart';
 import '../config.dart';
 import '../core/audio/compressor.dart';
-import '../core/finalizar_sesion.dart';
+import '../core/finalizar_sesion.dart' show sesionEnCurso;
 import '../data/audio_vault.dart';
 import '../data/settings_store.dart';
+import 'finalizar_ui.dart';
 
 const _estadoColor = {
   'recording': Colors.red,
@@ -145,34 +146,23 @@ class _SyncScreenState extends State<SyncScreen> {
   }
 
   /// Termina una sesión interrumpida (cierre forzado / batería) con los
-  /// bloques y marcas que quedaron en disco.
+  /// bloques que quedaron en disco: misma separación automática de voces.
   Future<void> _recuperar(Map<String, dynamic> s) async {
     final dsid = '${s['device_session_id']}';
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _msg = 'Recuperando: separando voces y midiendo el tono…';
+    });
     try {
       final docs = await getApplicationDocumentsDirectory();
-      final sesDir = p.join(docs.path, 'sesiones', dsid);
-      var segs = await marcasRecuperadas(sesDir);
-      if (segs.isEmpty) {
-        // Sin marcas guardadas: toda la grabación como habla del paciente.
-        final dur = await duracionBloques(sesDir);
-        segs = [
-          {'task_type': 'conversacion_espontanea', 'speaker': 'paciente',
-           'start_sec': 0.0, 'end_sec': dur,},
-        ];
-      }
-      var sexo = '';
-      try {
-        final ps = await widget.deps.pacientes.listar();
-        sexo = ps.firstWhere((e) => e.id == s['patient_id']).sexoReferencia;
-      } catch (_) {}
-      await finalizarSesion(
-        store: widget.deps.store,
-        vault: widget.deps.vault,
+      await finalizarConContexto(
+        deps: widget.deps,
         dsid: dsid,
-        sesDir: sesDir,
-        sexoReferencia: sexo,
-        segmentos: segs,
+        sesDir: p.join(docs.path, 'sesiones', dsid),
+        pacienteId: '${s['patient_id']}',
+        onProgreso: (v) {
+          if (mounted) setMsg('Recuperando… ${(v * 100).round()} %');
+        },
       );
       setMsg('Sesión recuperada ✓ (queda en cola para sincronizar)');
     } catch (e) {

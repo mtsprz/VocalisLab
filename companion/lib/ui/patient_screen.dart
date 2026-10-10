@@ -1,7 +1,10 @@
 import 'dart:async';
-import 'dart:io' show SocketException;
+import 'dart:convert';
+import 'dart:io' show File, SocketException;
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../app.dart';
 import '../sync/api_client.dart';
@@ -49,6 +52,7 @@ class _PatientScreenState extends State<PatientScreen> {
     String? aviso;
     try {
       await widget.deps.pacientes.sincronizar(widget.deps.api.pacientes);
+      await _cachearReferencias();
       final nueva = await widget.deps.pacientes.listar();
       if (mounted) setState(() => _lista = nueva);
       if (nueva.isEmpty) aviso = 'El servidor no devolvió pacientes activos.';
@@ -67,6 +71,17 @@ class _PatientScreenState extends State<PatientScreen> {
         _cargando = false;
       });
     }
+  }
+
+  /// Tabla de rangos por sexo/edad para la separación de voces offline.
+  Future<void> _cachearReferencias() async {
+    try {
+      final r = await widget.deps.api.getReferencias();
+      final rr = (r['rangos'] as List?) ?? [];
+      if (rr.isEmpty) return;
+      final f = File(p.join((await getApplicationDocumentsDirectory()).path, 'referencias.json'));
+      await f.writeAsString(jsonEncode(rr));
+    } catch (_) {}
   }
 
   @override

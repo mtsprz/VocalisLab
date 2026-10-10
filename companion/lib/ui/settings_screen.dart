@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app.dart';
 import '../data/settings_store.dart';
+import 'mi_voz.dart';
 import 'pairing_screen.dart';
 
 /// Ajustes: red, retención local, PIN y cierre de sesión.
@@ -44,8 +45,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _guardar() async {
-    _s.localRetentionDays = int.tryParse(_ret.text) ?? 30;
-    await _s.save();
+    // Releer: no pisar el perfil de "Mi voz" grabado mientras la pantalla
+    // estaba abierta.
+    final actual = await AppSettings.load();
+    actual.wifiOnly = _s.wifiOnly;
+    actual.localRetentionDays = int.tryParse(_ret.text) ?? 30;
+    await actual.save();
+    _s = actual;
     if (mounted) setState(() => _msg = 'Ajustes guardados ✓');
   }
 
@@ -70,6 +76,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       const SizedBox(height: 12),
       ElevatedButton(onPressed: _guardar, child: const Text('Guardar ajustes')),
+      const SizedBox(height: 20),
+      const MiVozCard(),
       const SizedBox(height: 20),
       const Text('PIN de apertura', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
       Text(_tienePin ? 'PIN configurado ✓ (o biometría)' : 'Sin PIN: la app abre directo',

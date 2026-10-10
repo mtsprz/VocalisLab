@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vocalis_companion/core/finalizar_sesion.dart';
 import 'package:vocalis_companion/data/audio_vault.dart';
 
 List<int> _clave(int semilla) {
@@ -73,24 +72,5 @@ void main() {
     final r = await rutaPlana(vault, f.path, tmpDir: '${dir.path}/t');
     expect(r, startsWith('${dir.path}/t'));
     expect(await rutaPlana(vault, '${dir.path}/nada.wav', tmpDir: '${dir.path}/t'), isNull);
-  });
-
-  test('marcas recuperadas tras cierre forzado cierran la tarea abierta', () async {
-    await File('${dir.path}/$archivoMarcas').writeAsString('''
-{"t": 42.0, "speaker": "paciente", "inicio_turno": 30.0,
- "marcas": [{"task_type":"conteo","speaker":"paciente","start_sec":1.0,"end_sec":10.0}],
- "turnos": [],
- "abierta": {"task":"lectura","speaker":"paciente","inicio":30.0}}''');
-    final segs = await marcasRecuperadas(dir.path);
-    expect(segs.length, 2);
-    expect(segs.last['task_type'], 'lectura');
-    expect(segs.last['end_sec'], 42.0);
-  });
-
-  test('sin tareas: los turnos pasan a conversación espontánea', () {
-    final s = segmentosFinales([], [
-      {'speaker': 'paciente', 'start_sec': 0.0, 'end_sec': 5.0},
-    ]);
-    expect(s.single['task_type'], 'conversacion_espontanea');
   });
 }

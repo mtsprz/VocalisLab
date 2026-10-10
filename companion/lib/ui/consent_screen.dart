@@ -46,7 +46,7 @@ class ConsentScreen extends StatelessWidget {
         const Spacer(),
         ElevatedButton(
           onPressed: consent ? onSeguir : null,
-          child: const Text('Iniciar sesión'),
+          child: const Text('Continuar'),
         ),
         const SizedBox(height: 10),
         TextButton(onPressed: onCambiarPaciente, child: const Text('Cambiar paciente')),

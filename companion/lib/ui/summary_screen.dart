@@ -154,7 +154,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _Principal(origen: origen, m: m, ref: ref),
+          _Principal(origen: origen, m: m, ref: ref,
+              diar: (_global?['diarizacion'] as Map?)?.cast<String, dynamic>(),),
           const SizedBox(height: 16),
           for (final a in _ac) _tarjeta(a),
           const SizedBox(height: 16),
@@ -188,8 +189,9 @@ class _Principal extends StatelessWidget {
   final String origen;
   final Map<String, dynamic>? m;
   final Map<String, dynamic>? ref;
+  final Map<String, dynamic>? diar;
 
-  const _Principal({required this.origen, required this.m, required this.ref});
+  const _Principal({required this.origen, required this.m, required this.ref, this.diar});
 
   @override
   Widget build(BuildContext context) {
@@ -231,6 +233,7 @@ class _Principal extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(comparacion, style: const TextStyle(fontSize: 17)),
+          if (diar != null) _lineaDiarizacion(diar!),
           const Text('Referencia orientativa: no reemplaza el criterio clínico.',
               style: TextStyle(fontSize: 14, color: Colors.black54),),
           const SizedBox(height: 4),
@@ -239,6 +242,25 @@ class _Principal extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Cómo salió la separación automática de voces (orientativo).
+Widget _lineaDiarizacion(Map<String, dynamic> d) {
+  final conf = '${d['confianza'] ?? ''}';
+  final frac = (d['fraccion_paciente'] as num?)?.toDouble();
+  final pct = frac == null ? '' : ' · paciente ${(frac * 100).round()} % del tiempo con voz';
+  final (texto, color) = switch (conf) {
+    'alta' => ('Voces separadas automáticamente (confianza alta)$pct', const Color(0xFF5C7A57)),
+    'media' => ('Voces separadas automáticamente (confianza media)$pct', const Color(0xFF8A6D3B)),
+    'sin_perfil' => ('Sin "Mi voz" en Ajustes: se midió TODA la voz grabada, incluida la tuya.',
+        const Color(0xFFC96F4A)),
+    _ => ('Las dos voces tienen tono parecido: la separación es estimada$pct. '
+        'Se revisa al sincronizar.', const Color(0xFFC96F4A)),
+  };
+  return Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Text(texto, style: TextStyle(fontSize: 15, color: color)),
+  );
 }
 
 class _Histograma extends StatelessWidget {

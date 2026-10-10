@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io' show File, Platform;
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -12,23 +11,13 @@ import '../app.dart';
 import '../config.dart';
 import '../core/audio/recorder_service.dart';
 import '../core/finalizar_sesion.dart';
+import '../data/settings_store.dart';
 import '../sync/foreground_service.dart';
+import 'finalizar_ui.dart';
 
-const _tareas = [
-  ('vocal_sostenida_a', 'Vocal /a/ sostenida'),
-  ('conteo', 'Conteo'),
-  ('lectura', 'Lectura'),
-  ('conversacion_espontanea', 'Conversación espontánea'),
-];
-
-class _Marca {
-  String task;
-  String speaker;
-  double inicio;
-  _Marca(this.task, this.speaker, this.inicio);
-}
-
-/// Paso 3: grabación con línea de tiempo por tareas y hablante.
+/// Grabación de la sesión con un solo botón. Al detener, la app separa sola
+/// la voz del paciente de la del fonoaudiólogo/a (perfil "Mi voz") y mide su
+/// altura tonal; no hay que marcar tareas ni quién habla.
 class RecordingScreen extends StatefulWidget {
   final Deps deps;
   final String pacienteId;
@@ -49,26 +38,37 @@ class RecordingScreen extends StatefulWidget {
 
 class _RecordingScreenState extends State<RecordingScreen> {
   final _rec = RecorderService();
-  final _nivel = ValueNotifier<(double, bool)>((0.0, false));
+  final _nivel = ValueNotifier<double>(0.0);
+  final _saturaHasta = ValueNotifier<DateTime?>(null);
   bool _grabando = false;
   bool _procesando = false;
-  String _speaker = 'paciente';
-  _Marca? _abierta;
-  final List<Map<String, dynamic>> _marcas = [];
-  // Turnos de hablante de toda la sesión (para cuando no se marcan tareas).
-  final List<Map<String, dynamic>> _turnos = [];
-  double _inicioTurno = 0;
+  double _progreso = 0;
   DateTime? _t0;
   Duration _transcurrido = Duration.zero;
   Timer? _timer;
   String? _error;
+  String _nombre = '';
+  bool _tienePerfil = true;
   late String _dsid;
   late String _sesDir;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.deps.pacientes.listar().then((l) {
+      final p = l.where((e) => e.id == widget.pacienteId);
+      if (mounted && p.isNotEmpty) setState(() => _nombre = p.first.nombreAbreviado);
+    });
+    AppSettings.load().then((s) {
+      if (mounted) setState(() => _tienePerfil = s.tienePerfilVoz);
+    });
+  }
 
   @override
   void dispose() {
     _timer?.cancel();
     _nivel.dispose();
+    _saturaHasta.dispose();
     _rec.dispose();
     super.dispose();
   }
@@ -79,32 +79,40 @@ class _RecordingScreenState extends State<RecordingScreen> {
   Future<void> _iniciar() async {
     setState(() => _error = null);
     if (!await _rec.tienePermiso()) {
-      setState(() => _error = 'Sin permiso de micrófono');
+      setState(() => _error = 'Sin permiso de micrófono: habilitalo en Ajustes del teléfono.');
       return;
     }
-    final docs = await getApplicationDocumentsDirectory();
-    _dsid = _nuevoId();
-    _sesDir = p.join(docs.path, 'sesiones', _dsid);
-    final ahora = DateTime.now().toIso8601String();
-    // La fila existe desde el primer segundo: si la app muere, la sesión
-    // aparece como "interrumpida" y se puede recuperar desde Sincronizar.
-    await widget.deps.store.crear({
-      'device_session_id': _dsid,
-      'patient_id': widget.pacienteId,
-      'recorded_at': ahora,
-      'audio_codec': 'aac',
-      'audio_bitrate_kbps': AppConfig.aacBitrate ~/ 1000,
-      'dsp_version': AppConfig.dspVersion,
-      'device_info': _deviceInfo(),
-      'consent_recorded': widget.consent ? 1 : 0,
-      'status': 'recording',
-      'blocks_dir': p.join(_sesDir, 'bloques'),
-      'finalized': 0,
-      'created_at': ahora,
-    });
-    sesionEnCurso = _dsid;
-    await _rec.iniciar(p.join(_sesDir, 'bloques'));
-    _rec.onNivel = (nivel, satura) => _nivel.value = (nivel, satura);
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      _dsid = _nuevoId();
+      _sesDir = p.join(docs.path, 'sesiones', _dsid);
+      final ahora = DateTime.now().toIso8601String();
+      // La fila existe desde el primer segundo: si la app muere, la sesión
+      // aparece como "interrumpida" y se recupera desde Sincronizar.
+      await widget.deps.store.crear({
+        'device_session_id': _dsid,
+        'patient_id': widget.pacienteId,
+        'recorded_at': ahora,
+        'audio_codec': 'aac',
+        'audio_bitrate_kbps': AppConfig.aacBitrate ~/ 1000,
+        'dsp_version': AppConfig.dspVersion,
+        'device_info': _deviceInfo(),
+        'consent_recorded': widget.consent ? 1 : 0,
+        'status': 'recording',
+        'blocks_dir': p.join(_sesDir, 'bloques'),
+        'finalized': 0,
+        'created_at': ahora,
+      });
+      sesionEnCurso = _dsid;
+      await _rec.iniciar(p.join(_sesDir, 'bloques'));
+      _rec.onNivel = (nivel, satura) {
+        _nivel.value = nivel;
+        if (satura) _saturaHasta.value = DateTime.now().add(const Duration(milliseconds: 1500));
+      };
+    } catch (e) {
+      setState(() => _error = 'No se pudo empezar a grabar: $e');
+      return;
+    }
     try {
       await WakelockPlus.enable();
     } catch (_) {}
@@ -114,31 +122,10 @@ class _RecordingScreenState extends State<RecordingScreen> {
     setState(() {
       _grabando = true;
       _t0 = DateTime.now();
-      _inicioTurno = 0;
     });
-    var tick = 0;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _transcurrido = Duration(seconds: _segundos.round()));
-      if (++tick % 5 == 0) _guardarMarcas();
     });
-    await _guardarMarcas();
-  }
-
-  /// Persiste marcas y turnos (cada 5 s y en cada cambio) para poder
-  /// recuperar los tramos tras un cierre forzado.
-  Future<void> _guardarMarcas() async {
-    try {
-      await File(p.join(_sesDir, archivoMarcas)).writeAsString(jsonEncode({
-        't': _segundos,
-        'marcas': _marcas,
-        'turnos': _turnos,
-        'speaker': _speaker,
-        'inicio_turno': _inicioTurno,
-        'abierta': _abierta == null
-            ? null
-            : {'task': _abierta!.task, 'speaker': _abierta!.speaker, 'inicio': _abierta!.inicio},
-      }),);
-    } catch (_) {}
   }
 
   String _nuevoId() {
@@ -150,64 +137,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
   String _d2(int n) => n.toString().padLeft(2, '0');
 
-  /// Cierra la marca abierta en [fin] (descarta tramos de duración 0:
-  /// el servidor exige end_sec > start_sec).
-  void _cerrarMarca(double fin) {
-    final a = _abierta;
-    if (a == null) return;
-    if (fin > a.inicio) {
-      _marcas.add({
-        'task_type': a.task,
-        'speaker': a.speaker,
-        'start_sec': a.inicio,
-        'end_sec': fin,
-      });
-    }
-    _abierta = null;
-  }
-
-  void _cerrarTurno(double fin) {
-    if (fin > _inicioTurno) {
-      _turnos.add({'speaker': _speaker, 'start_sec': _inicioTurno, 'end_sec': fin});
-    }
-    _inicioTurno = fin;
-  }
-
-  void _toggleTarea(String task) {
-    if (!_grabando) return;
-    final ahora = _segundos;
-    setState(() {
-      final misma = _abierta?.task == task;
-      _cerrarMarca(ahora);
-      if (!misma) _abierta = _Marca(task, _speaker, ahora); // segundo toque: solo cierra
-    });
-    _guardarMarcas();
-  }
-
-  /// Cambio de hablante: corta el tramo en curso para que cada segmento
-  /// tenga un único hablante (el DSP solo usa los de "paciente").
-  void _cambiarHablante(String s) {
-    if (s == _speaker) return;
-    if (!_grabando) {
-      setState(() => _speaker = s);
-      return;
-    }
-    final ahora = _segundos;
-    setState(() {
-      final task = _abierta?.task;
-      _cerrarMarca(ahora);
-      _cerrarTurno(ahora);
-      _speaker = s;
-      if (task != null) _abierta = _Marca(task, s, ahora);
-    });
-    _guardarMarcas();
-  }
-
   Future<void> _detener() async {
-    final fin = _segundos;
-    _cerrarMarca(fin);
-    _cerrarTurno(fin);
-    await _guardarMarcas();
     await _rec.detener();
     try {
       await WakelockPlus.disable();
@@ -219,15 +149,17 @@ class _RecordingScreenState extends State<RecordingScreen> {
     setState(() {
       _grabando = false;
       _procesando = true;
+      _progreso = 0;
     });
     try {
-      await finalizarSesion(
-        store: widget.deps.store,
-        vault: widget.deps.vault,
+      await finalizarConContexto(
+        deps: widget.deps,
         dsid: _dsid,
         sesDir: _sesDir,
-        sexoReferencia: await _sexoReferencia(),
-        segmentos: segmentosFinales(_marcas, _turnos),
+        pacienteId: widget.pacienteId,
+        onProgreso: (v) {
+          if (mounted) setState(() => _progreso = v);
+        },
       );
       sesionEnCurso = null;
       widget.onTerminar(_dsid);
@@ -244,122 +176,113 @@ class _RecordingScreenState extends State<RecordingScreen> {
   String _deviceInfo() =>
       '{"modelo":"${Platform.operatingSystem}","so":"${Platform.operatingSystemVersion.replaceAll('"', '')}","microfono":"no especificado","distancia_cm":null,"calibracion_db":null}';
 
-  Future<String> _sexoReferencia() async {
-    try {
-      final lista = await widget.deps.pacientes.listar();
-      final p = lista.firstWhere((e) => e.id == widget.pacienteId);
-      return p.sexoReferencia;
-    } catch (_) {
-      return '';
-    }
+  String _hhmmss(Duration d) {
+    String dd(int n) => n.toString().padLeft(2, '0');
+    final h = d.inHours;
+    return h > 0
+        ? '$h:${dd(d.inMinutes.remainder(60))}:${dd(d.inSeconds % 60)}'
+        : '${dd(d.inMinutes)}:${dd(d.inSeconds % 60)}';
   }
-
-  String _mmss(Duration d) =>
-      '${d.inMinutes.remainder(60).toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(
-            child: Text(_mmss(_transcurrido),
-                style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),),
+        Text(_nombre.isEmpty ? 'Sesión' : 'Sesión con $_nombre',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),),
+        if (!_tienePerfil && !_grabando && !_procesando)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F3EA),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFC96F4A)),
+            ),
+            child: const Text(
+              'Todavía no grabaste "Mi voz" (Ajustes). Sin eso la app no puede '
+              'separar tu voz de la del paciente: la altura tonal incluiría las dos.',
+              style: TextStyle(fontSize: 16),
+            ),
           ),
-          if (_grabando)
-            const Row(children: [
-              Icon(Icons.fiber_manual_record, color: Colors.red, size: 28),
-              SizedBox(width: 6),
-              Text('GRABANDO', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
-            ],),
-        ],),
-        const SizedBox(height: 8),
-        // Indicador simple de nivel de entrada (anti-saturación, sin cifras)
-        ValueListenableBuilder<(double, bool)>(
-          valueListenable: _nivel,
-          builder: (_, v, __) {
-            final (t, satura) = v;
-            final color = satura ? Colors.red : (t > 0.8 ? Colors.orange : const Color(0xFF5C7A57));
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                height: 22,
-                decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black26), borderRadius: BorderRadius.circular(8),),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: t,
-                  child: Container(
-                      decoration: BoxDecoration(
-                          color: color, borderRadius: BorderRadius.circular(7),),),
-                ),
-              ),
-              Text(satura ? '¡SATURA! Alejá el micrófono' : 'Nivel de entrada',
-                  style: TextStyle(fontSize: 15, color: color, fontWeight: FontWeight.bold),),
-            ],);
-          },
+        const Spacer(),
+        Center(
+          child: Text(_hhmmss(_transcurrido),
+              style: const TextStyle(fontSize: 56, fontWeight: FontWeight.bold),),
         ),
-        const SizedBox(height: 12),
-        // Alternancia de hablante
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'paciente', label: Text('Paciente habla', style: TextStyle(fontSize: 17))),
-            ButtonSegment(value: 'fonoaudiologo', label: Text('Fonoaudiólogo', style: TextStyle(fontSize: 17))),
-          ],
-          selected: {_speaker},
-          onSelectionChanged: _procesando ? null : (s) => _cambiarHablante(s.first),
-        ),
-        const SizedBox(height: 12),
-        const Text('Tareas (tocá para marcar inicio/fin):',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),),
-        const SizedBox(height: 8),
-        Expanded(
-          child: ListView.separated(
-            itemCount: _tareas.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (_, i) {
-              final id = _tareas[i].$1;
-              final label = _tareas[i].$2;
-              final activa = _abierta?.task == id;
-              return ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: activa ? const Color(0xFFC96F4A) : null,
-                  foregroundColor: activa ? Colors.white : null,
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
-                  alignment: Alignment.centerLeft,
-                ),
-                onPressed: _grabando && !_procesando ? () => _toggleTarea(id) : null,
-                child: Text('${activa ? '■ ' : ''}$label',
-                    style: const TextStyle(fontSize: 19),),
-              );
-            },
-          ),
-        ),
-        if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 16)),
-        const SizedBox(height: 8),
-        if (!_grabando && !_procesando)
-          ElevatedButton.icon(
-            onPressed: _iniciar,
-            icon: const Icon(Icons.mic, size: 28),
-            label: const Text('Iniciar sesión'),
-          ),
-        if (_grabando)
-          ElevatedButton.icon(
-            onPressed: _detener,
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
-            icon: const Icon(Icons.stop, size: 28),
-            label: const Text('Detener'),
-          ),
+        const SizedBox(height: 24),
         if (_procesando)
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 12),
-              Text('Midiendo el tono…', style: TextStyle(fontSize: 18)),
-            ],),
+          Column(children: [
+            LinearProgressIndicator(value: _progreso > 0 ? _progreso : null, minHeight: 10),
+            const SizedBox(height: 12),
+            Text(
+              'Separando voces y midiendo el tono del paciente… ${(_progreso * 100).round()} %',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 4),
+            const Text('Puede tardar unos minutos en sesiones largas. No cierres la app.',
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.black54),),
+          ],)
+        else
+          Center(
+            child: SizedBox(
+              width: 180,
+              height: 180,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  shape: const CircleBorder(),
+                  backgroundColor: _grabando ? Colors.red.shade700 : const Color(0xFFC96F4A),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _grabando ? _detener : _iniciar,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(_grabando ? Icons.stop : Icons.mic, size: 64),
+                  Text(_grabando ? 'Detener' : 'Grabar', style: const TextStyle(fontSize: 22)),
+                ],),
+              ),
+            ),
           ),
+        const SizedBox(height: 24),
+        if (_grabando) _indicadorMicrofono(),
+        const Spacer(),
+        if (_error != null)
+          Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 16)),
       ],),
+    );
+  }
+
+  /// Aviso simple: si el sonido llega bien o si satura (sin cifras).
+  Widget _indicadorMicrofono() {
+    return ValueListenableBuilder<DateTime?>(
+      valueListenable: _saturaHasta,
+      builder: (_, hasta, __) => ValueListenableBuilder<double>(
+        valueListenable: _nivel,
+        builder: (_, nivel, __) {
+          final satura = hasta != null && DateTime.now().isBefore(hasta);
+          final color = satura ? Colors.red : const Color(0xFF5C7A57);
+          return Column(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: nivel,
+                minHeight: 14,
+                color: color,
+                backgroundColor: Colors.black12,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              satura
+                  ? 'Muy fuerte: alejá un poco el teléfono'
+                  : 'Micrófono funcionando (la barra se mueve con la voz)',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: color, fontWeight: FontWeight.w600),
+            ),
+          ],);
+        },
+      ),
     );
   }
 }

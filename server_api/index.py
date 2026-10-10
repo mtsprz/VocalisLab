@@ -388,6 +388,10 @@ try:
     app.include_router(companion_google_router)
 except Exception as _e:
     print(f"[index] companion_google no disponible: {_e}")
+try:
+    import companion_ia  # noqa: F401  (envuelve companion._diarizar con IA)
+except Exception as _e:
+    print(f"[index] companion_ia no disponible: {_e}")
 
 
 @app.get("/api/health")
