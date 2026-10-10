@@ -122,5 +122,19 @@ class ApiClient implements CompanionApi {
   Future<Map<String, dynamic>> getReferencias() =>
       _get('/referencias', const Duration(seconds: 75));
 
+  /// Lista mínima de pacientes para la caché offline (requiere vinculación).
+  Future<List<Map<String, dynamic>>> pacientes() async {
+    final r = await _get('/pacientes', const Duration(seconds: 75));
+    return [
+      for (final p in (r['pacientes'] as List? ?? const []))
+        Map<String, dynamic>.from(p as Map),
+    ];
+  }
+
+  /// URL que abre el login de Google de la app; al terminar, el backend
+  /// redirige a [returnTo] con `?code=` (o `?error=`).
+  String googleStartUrl(String returnTo) =>
+      '$_base/google/start?return_to=${Uri.encodeQueryComponent(returnTo)}';
+
   void close() => _http.close();
 }

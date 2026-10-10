@@ -383,6 +383,11 @@ try:
             print(f"[index] worker companion omitido: {_e}")
 except Exception as _e:
     print(f"[index] companion no disponible: {_e}")
+try:
+    from companion_google import router as companion_google_router
+    app.include_router(companion_google_router)
+except Exception as _e:
+    print(f"[index] companion_google no disponible: {_e}")
 
 
 @app.get("/api/health")

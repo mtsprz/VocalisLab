@@ -1,13 +1,15 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 /// Servicio en primer plano durante grabación/sincronización (Android).
 /// Envuelto en try/catch: si el plugin falla, la app sigue con Wake Lock.
-/// iOS/Windows: no-op seguro.
+/// Windows/iOS: no-op (en escritorio no hay suspensión de apps en segundo plano).
 class ForegroundGuard {
   static bool _activo = false;
 
   static Future<void> iniciar({required String titulo}) async {
-    if (_activo) return;
+    if (_activo || !Platform.isAndroid) return;
     try {
       FlutterForegroundTask.init(
         androidNotificationOptions: AndroidNotificationOptions(
@@ -30,6 +32,11 @@ class ForegroundGuard {
       if (await FlutterForegroundTask.checkNotificationPermission() !=
           NotificationPermission.granted) {
         await FlutterForegroundTask.requestNotificationPermission();
+      }
+      // Samsung One UI duerme las apps en segundo plano y corta el micrófono y
+      // la sincronización. Se pide una vez quedar fuera de la optimización.
+      if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+        await FlutterForegroundTask.requestIgnoreBatteryOptimization();
       }
       // 8.x no lanza excepción al fallar: devuelve ServiceRequestFailure.
       final r = await FlutterForegroundTask.startService(

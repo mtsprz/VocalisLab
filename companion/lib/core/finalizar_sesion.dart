@@ -104,32 +104,25 @@ Future<void> finalizarSesion({
   await store.actualizar(dsid, {'audio_duration_sec': duracion});
   await store.guardarSegmentos(dsid, segmentos);
 
-  // DSP por tarea. El closure de Isolate.run solo captura valores simples.
-  List<Map<String, dynamic>> soloTiempos(Iterable<Map<String, dynamic>> ms) => [
-        for (final m in ms)
-          {
-            'speaker': '${m['speaker']}',
-            'start_sec': (m['start_sec'] as num).toDouble(),
-            'end_sec': (m['end_sec'] as num).toDouble(),
-          },
-      ];
-  final porTarea = <String, List<Map<String, dynamic>>>{};
-  for (final m in segmentos) {
-    porTarea.putIfAbsent('${m['task_type']}', () => []).add(m);
+  // DSP en una sola pasada (isolate, lectura por tramos): métricas por tarea
+  // y global (todos los tramos del paciente; métrica principal si no hubo
+  // conversación espontánea, solo local). El closure solo captura valores simples.
+  final segs = [
+    for (final m in segmentos)
+      {
+        'task_type': '${m['task_type']}',
+        'speaker': '${m['speaker']}',
+        'start_sec': (m['start_sec'] as num).toDouble(),
+        'end_sec': (m['end_sec'] as num).toDouble(),
+      },
+  ];
+  final res = await Isolate.run(() => analizarSesion(
+      DspJob(wavPath: plano, segments: segs, sexoReferencia: sexoReferencia),),);
+  final porTarea = (res['por_tarea'] as Map).cast<String, dynamic>();
+  for (final e in porTarea.entries) {
+    await store.guardarAcustica(dsid, e.key, Map<String, dynamic>.from(e.value as Map));
   }
-  for (final entry in porTarea.entries) {
-    final segs = soloTiempos(entry.value);
-    final res = await Isolate.run(() => analizarTarea(
-        DspJob(wavPath: plano, segments: segs, sexoReferencia: sexoReferencia),),);
-    await store.guardarAcustica(
-        dsid, entry.key, Map<String, dynamic>.from(res['metrics'] as Map),);
-  }
-  // Todos los tramos del paciente juntos: métrica principal si no hubo
-  // conversación espontánea. Solo local.
-  final todos = soloTiempos(segmentos);
-  final global = await Isolate.run(() => analizarTarea(
-      DspJob(wavPath: plano, segments: todos, sexoReferencia: sexoReferencia),),);
-  await File(p.join(sesDir, archivoTonoGlobal)).writeAsString(jsonEncode(global['metrics']));
+  await File(p.join(sesDir, archivoTonoGlobal)).writeAsString(jsonEncode(res['global']));
 
   // Clip WAV ~10 s de vocal sostenida (revisión auditiva en la ficha).
   final sost = segmentos

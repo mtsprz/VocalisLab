@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:vocalis_companion/data/db.dart';
@@ -55,12 +57,22 @@ void main() {
       databaseFactory = databaseFactoryFfi;
       final db = await openAppDb(pathOverride: inMemoryDatabasePath);
       final repo = MockPatientRepository(db);
-      expect((await repo.listar()).length, 2); // seed
+      expect(await repo.listar(), isEmpty); // sin seed de demo
+      final n = await repo.sincronizar(() async => [
+            {'id': 'x', 'nombre_abreviado': 'Luis P.', 'sexo_referencia': 'masculino', 'activo': true},
+            {'id': 'y', 'nombre_abreviado': 'Baja B.', 'activo': false},
+          ],);
+      expect(n, 1);
+      expect((await repo.listar()).single.id, 'x');
+      // Sin red: la caché queda intacta.
+      await expectLater(repo.sincronizar(() async => throw const SocketException('sin red')),
+          throwsA(isA<SocketException>()),);
+      expect((await repo.listar()).single.id, 'x');
       await repo.guardarCache(const [
         PacienteMin(id: 'a', nombreAbreviado: 'Ana G.', sexoReferencia: 'femenino'),
       ]);
       final l = await repo.listar();
-      expect(l.length, 1);
+      expect(l.length, 2);
       expect(l.first.nombreAbreviado, 'Ana G.');
       await db.close();
     });

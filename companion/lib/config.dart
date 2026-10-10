@@ -6,10 +6,6 @@ class AppConfig {
   static const String backendBase = 'https://vocalislab.onrender.com';
   static const String apiPrefix = '/api/companion';
 
-  /// true cuando el backend agregue GET /api/companion/pacientes
-  /// (ver docs/pedido-endpoint-pacientes-companion.md). Mientras tanto: mock.
-  static const bool remotePatientsEnabled = false;
-
   // Audio: mono PCM 16-bit 44.1 kHz, bloques de 30 s.
   static const int sampleRate = 44100;
   static const int channels = 1;

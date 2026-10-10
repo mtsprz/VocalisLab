@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Android 13+: además se pide en runtime (ForegroundGuard) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Samsung/One UI: pedir quedar fuera del ahorro de batería (si no, corta la grabación en segundo plano) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Reprogramar sincronización tras reinicio (workmanager) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Biometría -->
@@ -42,6 +44,19 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!-- Vuelta del login de Google (vocaliscompanion://auth?code=...) -->
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
+            android:exported="true"
+            android:taskAffinity="">
+            <intent-filter android:label="flutter_web_auth_2">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vocaliscompanion" />
             </intent-filter>
         </activity>
 

@@ -73,6 +73,11 @@ async def google_callback(code: str = "", state: str = ""):
     """Handle Google OAuth callback, exchange code for tokens, return to frontend."""
     if not code:
         return HTMLResponse(content="<script>alert('Error: No authorization code received'); window.close();</script>")
+    # Login de la app Vocalis Companion: mismo redirect_uri, flujo aparte
+    # (no guarda tokens de la web en usuarios_google).
+    if state.startswith("companion:"):
+        from companion_google import google_callback_companion
+        return await google_callback_companion(code, state)
 
     try:
         async with httpx.AsyncClient() as client:

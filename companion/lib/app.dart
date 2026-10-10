@@ -10,7 +10,6 @@ import 'sync/api_client.dart';
 import 'sync/sync_engine.dart';
 import 'sync/tus_client.dart';
 import 'ui/theme.dart';
-import 'ui/pairing_screen.dart';
 import 'ui/patient_screen.dart';
 import 'ui/consent_screen.dart';
 import 'ui/recording_screen.dart';
@@ -134,39 +133,15 @@ class _PuertaAuthState extends State<PuertaAuth> {
   }
 }
 
-/// Puerta 2: emparejamiento (si no hay token).
-class PuertaPairing extends StatefulWidget {
+/// Puerta 2: la app entra SIEMPRE, con o sin vinculación (offline-first).
+/// Grabar, medir y ver el resumen no necesitan cuenta; vincular solo hace
+/// falta para sincronizar y se hace desde Ajustes.
+class PuertaPairing extends StatelessWidget {
   final Deps deps;
   const PuertaPairing({super.key, required this.deps});
 
   @override
-  State<PuertaPairing> createState() => _PuertaPairingState();
-}
-
-class _PuertaPairingState extends State<PuertaPairing> {
-  bool? _listo;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.deps.secure.readDeviceToken().then((t) {
-      setState(() => _listo = (t != null && t.isNotEmpty));
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_listo == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (!_listo!) {
-      return PairingScreen(
-        deps: widget.deps,
-        onListo: () => setState(() => _listo = true),
-      );
-    }
-    return HomeTabs(deps: widget.deps);
-  }
+  Widget build(BuildContext context) => HomeTabs(deps: deps);
 }
 
 class HomeTabs extends StatefulWidget {

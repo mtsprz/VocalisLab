@@ -18,6 +18,11 @@ campo que no calculamos, se envía `null` y se avisa).
   cifras. En `acoustics[]` esos campos van `null` (`TaskMetrics.toJson`).
 - Sin cambios: transcripción, diarización, audio, ficha, sincronización y emparejamiento.
 
+## Equipos destino
+Galaxy A02 (Android 11, armeabi-v7a, 1,9 GB RAM) y una PC con Windows 10. Nada
+puede cargar un WAV de sesión entero en memoria: usar `leerRango`/streaming
+(`dsp_isolate.dart`) o copia de bytes (`recortarWav`).
+
 ## Reglas que no se negocian
 1. La grabación no se pierde: bloques WAV de 30 s, la fila de la sesión se
    crea al empezar y las marcas se guardan en `marcas.json`. Recuperación desde
@@ -51,13 +56,17 @@ Ver la sección "Estado de verificación" al final; se actualiza en cada pasada.
 ### Verificado ejecutando
 - `flutter pub get`: OK.
 - `flutter analyze`: **No issues found**.
-- `flutter test`: **42 pasan, 5 omitidos** (los 5 casos de Praat esperan WAV
+- `flutter test`: **44 pasan, 5 omitidos** (los 5 casos de Praat esperan WAV
   reales y valores en `test/fixtures/referencias_praat.json`). Cubre YIN con
   tonos sintéticos, métricas de F0 y nulls del payload, nota musical, rango por
   sexo/edad, WAV y recuperación de bloques, store, motor de sync (orden,
   409, backoff, reanudación), TUS (6 MB, `x-signature`, sin device_token) y
   cifrado AES-GCM (ida y vuelta, clave equivocada, manipulación, truncado).
-- `flutter build apk --debug`: ver abajo (APK).
+- `flutter build apk --debug`: OK; instalada y abierta en el Galaxy A02
+  (`flutter run`, llegó a la pantalla de emparejamiento).
+- Backend publicado: `vocalislab.onrender.com/api/companion/health` → ok.
+- Supabase Storage acepta `x-signature` en TUS sin `apikey` (probado con
+  una firma inválida: responde "Invalid Compact JWS", no "falta API key").
 
 ### Revisado leyendo (NO ejecutado)
 - Todo lo que depende de un teléfono: grabación real, pantalla apagada,
@@ -67,8 +76,7 @@ Ver la sección "Estado de verificación" al final; se actualiza en cada pasada.
 - Subida TUS contra Supabase real. Que Storage acepte el token de
   `create_signed_upload_url` en `x-signature` sale de la doc de Supabase,
   igual que el tamaño de bloque de 6 MB (la doc no dice explícitamente "salvo
-  el último"; es lo normal en TUS). No se sabe si el gateway exige `apikey`:
-  el backend no la expone. Si la subida da 400/401, es lo primero a revisar.
+  el último"; es lo normal en TUS). Falta una subida real de punta a punta.
 - Desactivación de AGC/NS/AEC: leído en `record_android 1.5.2`
   (`PCMReader.kt` crea los efectos con `enabled = false`). Fuente
   `VOICE_RECOGNITION` según el CDD de Android.

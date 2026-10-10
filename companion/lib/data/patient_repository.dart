@@ -22,10 +22,10 @@ class PacienteMin {
       );
 }
 
-/// Repositorio mockeable. Hoy: caché local + seed de desarrollo.
-/// Cuando el backend agregue GET /api/companion/pacientes
-/// (docs/pedido-endpoint-pacientes-companion.md), se activa
-/// RemotePatientRepository con AppConfig.remotePatientsEnabled.
+/// Caché local de pacientes (funciona sin internet). Se llena con
+/// GET /api/companion/pacientes al vincular y cada vez que se abre la lista
+/// con conexión ([MockPatientRepository.sincronizar]). Sin seed de demo: un
+/// paciente inventado no existe en el servidor y la sesión no sincronizaría.
 abstract class PatientRepository {
   Future<List<PacienteMin>> listar();
   Future<void> guardarCache(List<PacienteMin> lista);
@@ -39,12 +39,30 @@ class MockPatientRepository implements PatientRepository {
   @override
   Future<List<PacienteMin>> listar() async {
     final rows = await db.query('patients_cache', orderBy: 'nombre_abreviado');
-    if (rows.isNotEmpty) return rows.map(PacienteMin.fromMap).toList();
-    // Seed de desarrollo (se reemplaza con la primera sincronización real).
-    return const [
-      PacienteMin(id: 'demo-1', nombreAbreviado: 'Demo A.', sexoReferencia: 'femenino'),
-      PacienteMin(id: 'demo-2', nombreAbreviado: 'Demo B.', sexoReferencia: 'masculino'),
+    return rows.map(PacienteMin.fromMap).toList();
+  }
+
+  /// Reemplaza la caché por la lista del servidor (solo pacientes activos).
+  /// Si [descargar] falla (sin red), la caché queda como estaba.
+  Future<int> sincronizar(Future<List<Map<String, dynamic>>> Function() descargar) async {
+    final remotos = await descargar();
+    final activos = [
+      for (final m in remotos)
+        if (m['activo'] != false) PacienteMin.fromMap(m),
     ];
+    await db.transaction((tx) async {
+      await tx.delete('patients_cache');
+      for (final p in activos) {
+        await tx.insert('patients_cache', {
+          'id': p.id,
+          'nombre_abreviado': p.nombreAbreviado,
+          'sexo_referencia': p.sexoReferencia,
+          'fecha_nacimiento': p.fechaNacimiento,
+          'updated_at': DateTime.now().toIso8601String(),
+        },);
+      }
+    });
+    return activos.length;
   }
 
   @override

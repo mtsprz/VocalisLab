@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app.dart';
 import '../data/settings_store.dart';
+import 'pairing_screen.dart';
 
 /// Ajustes: red, retención local, PIN y cierre de sesión.
 class SettingsScreen extends StatefulWidget {
@@ -18,6 +19,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _pin = TextEditingController();
   String? _msg;
   bool _tienePin = false;
+  bool _vinculado = false;
+
+  void _leerVinculo() {
+    widget.deps.secure.readDeviceToken().then((t) {
+      if (mounted) setState(() => _vinculado = t != null && t.isNotEmpty);
+    });
+  }
 
   @override
   void initState() {
@@ -29,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _ret.text = '${s.localRetentionDays}';
       });
     });
+    _leerVinculo();
     widget.deps.secure.hasPin().then((h) {
       if (mounted) setState(() => _tienePin = h);
     });
@@ -96,17 +105,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(_msg!, style: const TextStyle(fontSize: 16)),
       ],
       const SizedBox(height: 20),
-      OutlinedButton.icon(
-        onPressed: () async {
-          await widget.deps.secure.clearDeviceToken();
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dispositivo desvinculado. Reiniciá la app para re-emparejar.')),);
-          }
-        },
-        icon: const Icon(Icons.link_off),
-        label: const Text('Desvincular dispositivo', style: TextStyle(fontSize: 17)),
+      const Text('Vinculación con VocalisLab', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+      Text(
+        _vinculado
+            ? 'Vinculado ✓ — las sesiones se suben a la ficha.'
+            : 'Sin vincular: podés grabar igual; para subir a la ficha vinculá una vez.',
+        style: const TextStyle(fontSize: 16),
       ),
+      const SizedBox(height: 8),
+      if (!_vinculado)
+        ElevatedButton.icon(
+          onPressed: () async {
+            await Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (ctx) => PairingScreen(
+                deps: widget.deps,
+                onListo: () => Navigator.of(ctx).pop(),
+              ),
+            ),);
+            _leerVinculo();
+          },
+          icon: const Icon(Icons.link),
+          label: const Text('Vincular', style: TextStyle(fontSize: 17)),
+        )
+      else
+        OutlinedButton.icon(
+          onPressed: () async {
+            await widget.deps.secure.clearDeviceToken();
+            _leerVinculo();
+          },
+          icon: const Icon(Icons.link_off),
+          label: const Text('Desvincular dispositivo', style: TextStyle(fontSize: 17)),
+        ),
     ],);
   }
 }

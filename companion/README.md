@@ -30,6 +30,26 @@ sin cifras, que avisa si la entrada satura.
 Transcripción, diarización, audio, ficha, sincronización y emparejamiento no
 cambian.
 
+## Equipos destino (únicos)
+- **Samsung Galaxy A02 (SM-A022M)**: Android 11 (SDK 30), **32 bits
+  (`armeabi-v7a`)**, 1,9 GB de RAM. Por eso:
+  - El análisis de tono lee el WAV **por tramos de 5 s desde disco** y hace
+    una sola pasada. Cargarlo entero (45 min ≈ 950 MB como doubles) haría que
+    Android cerrara la app.
+  - El clip se recorta copiando bytes, sin cargar el WAV.
+  - Al grabar por primera vez se pide **quedar fuera del ahorro de batería**:
+    One UI duerme las apps en segundo plano y corta el micrófono y la
+    sincronización.
+  - Usar la build **release** (`flutter build apk --release --target-platform
+    android-arm`): en debug el análisis va varias veces más lento.
+  - Las reglas de Android 13/14 (permiso de notificaciones en runtime, tipo de
+    servicio exigido) no aplican en este equipo; el código las respeta igual.
+- **PC Windows 10 Pro 64 bits**: necesita Visual Studio 2022 con la carga
+  "Desarrollo para el escritorio con C++" para compilar (`flutter build
+  windows`) y `ffmpeg.exe` en PATH para comprimir (ya está, instalado con winget).
+  En Windows no hay servicio en primer plano ni WorkManager: la sincronización
+  es manual desde la pestaña Sincronizar.
+
 ## Prioridades (en orden)
 1. La grabación jamás se pierde (bloques WAV de 30 s + recuperación).
 2. Altura tonal en Hz medida en el dispositivo (YIN en isolate).

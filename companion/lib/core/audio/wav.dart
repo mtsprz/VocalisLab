@@ -133,16 +133,21 @@ Future<String> recortarWav({
   required String destino,
   int sampleRate = 44100,
 }) async {
-  final pcm = leerPcmNormalizado(origen, sampleRateEsperado: sampleRate);
-  final a = (((desdeSec * sampleRate).round().clamp(0, pcm.length))).toInt();
-  final b = ((((desdeSec + segundos) * sampleRate).round().clamp(0, pcm.length))).toInt();
-  final w = WavBlockWriter(destino, sampleRate: sampleRate);
-  await w.open();
-  final bd = ByteData((b - a) * 2);
-  for (var i = a; i < b; i++) {
-    bd.setInt16((i - a) * 2, (pcm[i].clamp(-1.0, 1.0) * 32767).round(), Endian.little);
+  // Copia directa de los bytes PCM del rango: no carga el WAV entero en RAM
+  // (equipos de 2 GB) y no recuantiza las muestras.
+  final f = await File(origen).open();
+  try {
+    final total = ((await f.length()) - 44) ~/ 2;
+    final a = (((desdeSec * sampleRate).round().clamp(0, total))).toInt();
+    final b = ((((desdeSec + segundos) * sampleRate).round().clamp(0, total))).toInt();
+    await f.setPosition(44 + a * 2);
+    final pcm = await f.read((b - a) * 2);
+    final w = WavBlockWriter(destino, sampleRate: sampleRate);
+    await w.open();
+    await w.appendBytes(pcm);
+    await w.close();
+  } finally {
+    await f.close();
   }
-  await w.appendBytes(bd.buffer.asUint8List());
-  await w.close();
   return destino;
 }

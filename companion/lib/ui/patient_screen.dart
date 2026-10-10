@@ -20,9 +20,21 @@ class _PatientScreenState extends State<PatientScreen> {
   @override
   void initState() {
     super.initState();
-    widget.deps.pacientes.listar().then((l) {
-      if (mounted) setState(() => _lista = l);
-    });
+    _cargar();
+  }
+
+  /// Muestra la caché al instante; si hay vinculación y red, la actualiza
+  /// en segundo plano (sin internet, sigue la lista guardada).
+  Future<void> _cargar() async {
+    final l = await widget.deps.pacientes.listar();
+    if (mounted) setState(() => _lista = l);
+    final token = await widget.deps.secure.readDeviceToken();
+    if (token == null || token.isEmpty) return;
+    try {
+      await widget.deps.pacientes.sincronizar(widget.deps.api.pacientes);
+      final nueva = await widget.deps.pacientes.listar();
+      if (mounted) setState(() => _lista = nueva);
+    } catch (_) {}
   }
 
   @override
@@ -48,7 +60,15 @@ class _PatientScreenState extends State<PatientScreen> {
         const SizedBox(height: 12),
         Expanded(
           child: vis.isEmpty
-              ? const Center(child: Text('Sin pacientes en caché', style: TextStyle(fontSize: 17)))
+              ? const Center(
+                  child: Text(
+                    'Todavía no hay pacientes guardados en este equipo.\n\n'
+                    'Ajustes → Vincular → Entrar con Google (una vez, con internet) '
+                    'y la lista se descarga para usarla sin conexión.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 17),
+                  ),
+                )
               : ListView.separated(
                   itemCount: vis.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
