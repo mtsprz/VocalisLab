@@ -107,7 +107,7 @@ async def google_callback_companion(code: str, state: str) -> HTMLResponse:
         if not sb:
             return _volver(return_to, error="sin_base")
         _registrar_cuenta(sb, gid, email, str(info.get("name", "") or ""))
-        codigo = _pairing_code()
+        codigo = _codigo_google()
         exp = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
         sb.table("companion_pairing_codes").insert({
             "code": codigo, "profesional_google_id": gid, "expires_at": exp}).execute()
@@ -130,13 +130,32 @@ def _registrar_cuenta(sb, gid: str, email: str, nombre: str) -> None:
         traceback.print_exc()
 
 
-def _cuenta_autorizada(sb, gid: str) -> bool:
-    """La cuenta del dispositivo está en COMPANION_GOOGLE_EMAILS (vía
-    usuarios_google) o es PROFESIONAL_GOOGLE_ID. Evita que un dispositivo
-    vinculado con un user_id inventado (POST /pairing-code) lea pacientes."""
+def _codigo_google() -> str:
+    """Código de vinculación emitido SOLO tras un login de Google autorizado.
+    Formato propio (G + 15 caracteres) que /pairing-code (6) no puede generar."""
+    return "G" + _pairing_code(15)
+
+
+def _es_codigo_google(code: str) -> bool:
+    return len(code or "") == 16 and code.startswith("G")
+
+
+def _cuenta_autorizada(sb, gid: str, device_id: str = "") -> bool:
+    """El dispositivo se vinculó con un código de Google (lista blanca
+    verificada en el login), o su cuenta es PROFESIONAL_GOOGLE_ID, o figura en
+    usuarios_google con un email de COMPANION_GOOGLE_EMAILS. Evita que un
+    dispositivo vinculado con un user_id inventado (POST /pairing-code) lea
+    pacientes."""
     unico = _profesional_env()
     if unico and gid == unico:
         return True
+    if device_id:
+        try:
+            r = sb.table("companion_pairing_codes").select("code")                .eq("used_by_device_id", device_id).execute()
+            if any(_es_codigo_google(str(x.get("code", ""))) for x in (r.data or [])):
+                return True
+        except Exception:
+            traceback.print_exc()
     emails = _emails_habilitados()
     if not emails or not gid:
         return False
@@ -160,7 +179,7 @@ async def pacientes_companion(request: Request, q: str = "", limit: int = 200):
     sb = _sb()
     if not sb:
         raise HTTPException(status_code=503, detail="Supabase no configurado")
-    if not _cuenta_autorizada(sb, str(dev.get("profesional_google_id", ""))):
+    if not _cuenta_autorizada(sb, str(dev.get("profesional_google_id", "")), str(dev.get("id", "") or "")):
         raise HTTPException(status_code=403, detail="Cuenta no habilitada para la lista de pacientes")
     limit = max(1, min(int(limit or 200), 1000))
     try:

@@ -155,6 +155,7 @@ class HomeTabs extends StatefulWidget {
 class _HomeTabsState extends State<HomeTabs> {
   int _i = 0;
   int _visitasSync = 0;
+  int _visitasGrabar = 0;
   String? _pacienteId;
   bool _consent = false;
 
@@ -167,6 +168,7 @@ class _HomeTabsState extends State<HomeTabs> {
         onPaciente: (id) => setState(() => _pacienteId = id),
         consent: _consent,
         onConsent: (v) => setState(() => _consent = v),
+        recarga: _visitasGrabar,
       ),
       // Key nueva en cada visita: recarga la cola como antes.
       SyncScreen(key: ValueKey(_visitasSync), deps: widget.deps),
@@ -179,6 +181,7 @@ class _HomeTabsState extends State<HomeTabs> {
         selectedIndex: _i,
         onDestinationSelected: (v) => setState(() {
           if (v == 1) _visitasSync++;
+          if (v == 0) _visitasGrabar++;
           _i = v;
         }),
         destinations: const [
@@ -198,6 +201,7 @@ class _FlujoGrabacion extends StatefulWidget {
   final ValueChanged<String?> onPaciente;
   final bool consent;
   final ValueChanged<bool> onConsent;
+  final int recarga;
 
   const _FlujoGrabacion({
     required this.deps,
@@ -205,6 +209,7 @@ class _FlujoGrabacion extends StatefulWidget {
     required this.onPaciente,
     required this.consent,
     required this.onConsent,
+    this.recarga = 0,
   });
 
   @override
@@ -230,7 +235,7 @@ class _FlujoGrabacionState extends State<_FlujoGrabacion> {
       );
     }
     if (widget.pacienteId == null) {
-      return PatientScreen(deps: widget.deps, onSelect: widget.onPaciente);
+      return PatientScreen(deps: widget.deps, onSelect: widget.onPaciente, recarga: widget.recarga);
     }
     if (_paso == 0) {
       return ConsentScreen(
