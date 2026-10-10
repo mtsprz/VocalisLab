@@ -5,6 +5,14 @@ import { Mic, Play, Activity, GitBranch, Scale, FileText, CheckCircle2, XCircle,
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
 
+/** Nota musical de la mediana (La4 = 440 Hz, Do4 = Do central). Solo presentación. */
+const NOTAS = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
+function notaMusical(hz?: number | null): string {
+  if (!hz || hz <= 0) return '';
+  const midi = 69 + Math.round(12 * Math.log2(hz / 440));
+  return `(${NOTAS[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1})`;
+}
+
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 interface Props {
@@ -274,7 +282,6 @@ export default function SesionesVozModule({ pacienteId }: Props) {
   const semaColor: any = { green: 'bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300', red: 'bg-red-500/10 border-red-500/40 text-red-700 dark:text-red-300', gray: 'bg-gray-500/10 border-gray-400/40 text-gray-500' };
 
   const serieConv = progreso.filter((p: any) => p.task_type === 'conversacion_espontanea');
-  const serieSost = progreso.filter((p: any) => p.task_type === 'vocal_sostenida_a');
 
   if (!pacienteId) return <p className="text-sm text-gray-500">Seleccioná un paciente.</p>;
 
@@ -338,20 +345,10 @@ export default function SesionesVozModule({ pacienteId }: Props) {
             <LineChart puntos={serieConv.map((p: any) => ({ x: p.session_number, y: p.f0_median_hz }))} refMin={rMin} refMax={rMax} unidad="Hz" color="#0284C7" />
           </div>
           <div>
-            <p className="text-xs font-bold mb-1">SD F0 (semitonos) + dB conversacional</p>
+            <p className="text-xs font-bold mb-1">Variabilidad de F0 (SD en semitonos)</p>
             <LineChart puntos={serieConv.map((p: any) => ({ x: p.session_number, y: p.f0_sd_semitones }))} unidad="st" color="#7C3AED" />
           </div>
         </div>
-        {serieSost.length > 0 && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-            {[['jitter_pct', 'Jitter %', '#DC2626'], ['shimmer_pct', 'Shimmer %', '#EA580C'], ['hnr_db', 'HNR dB', '#059669'], ['mpt_sec', 'MPT s', '#0284C7']].map(([k, label, color]: any) => (
-              <div key={k}>
-                <p className="text-xs font-bold mb-1">{label} (sostenida)</p>
-                <LineChart puntos={serieSost.map((p: any) => ({ x: p.session_number, y: p[k] }))} unidad="" color={color} />
-              </div>
-            ))}
-          </div>
-        )}
         {/* Comparador */}
         <div className="mt-4 pt-3 border-t border-gray-200 dark:border-white/10">
           <p className="text-xs font-bold mb-2 flex items-center gap-1.5"><GitBranch size={13} /> Comparador lado a lado</p>
@@ -370,8 +367,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                   <p className="font-bold mb-1">Sesión {i === 0 ? 'A' : 'B'} · {(d.sesion.recorded_at || '').slice(0, 10)}</p>
                   {(d.acustica || []).map((a: any) => (
                     <p key={a.task_type} className="mt-1">
-                      <span className="font-semibold">{TASK_LABEL[a.task_type] || a.task_type}:</span> F0 {fmtHz(a.f0_median_hz)} Hz · SD {fmtDb(a.f0_sd_semitones)} st · {fmtDb(a.intensity_mean_db)} dB
-                      {a.jitter_pct != null && <> · jit {fmtDb(a.jitter_pct)}% · sh {fmtDb(a.shimmer_pct)}% · HNR {fmtDb(a.hnr_db)}</>}
+                      <span className="font-semibold">{TASK_LABEL[a.task_type] || a.task_type}:</span> F0 {fmtHz(a.f0_median_hz)} Hz {notaMusical(a.f0_median_hz)} · rango {fmtHz(a.f0_p5_hz)}–{fmtHz(a.f0_p95_hz)} Hz · SD {fmtDb(a.f0_sd_semitones)} st
                       {!a.validada && <span className="text-amber-600 font-bold"> (no validada)</span>}
                     </p>
                   ))}
@@ -413,8 +409,8 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                     <div key={a.task_type} className="p-3 rounded-xl border border-gray-200 dark:border-white/10">
                       <p className="font-bold mb-1">{TASK_LABEL[a.task_type] || a.task_type}
                         {!a.validada && <span className="ml-2 text-amber-600">no validada</span>}</p>
-                      <p>F0 med {fmtHz(a.f0_median_hz)} Hz · SD {fmtDb(a.f0_sd_semitones)} st · voz {a.voiced_fraction != null ? `${Math.round(a.voiced_fraction * 100)}%` : '—'} · {fmtDb(a.intensity_mean_db)} dB
-                        {a.task_type === 'vocal_sostenida_a' && <> · jit {fmtDb(a.jitter_pct)}% · shim {fmtDb(a.shimmer_pct)}% · HNR {fmtDb(a.hnr_db)} dB · MPT {fmtDb(a.mpt_sec)} s</>}</p>
+                      <p className="text-base font-black">{fmtHz(a.f0_median_hz)} Hz <span className="text-indigo-600 dark:text-indigo-400">{notaMusical(a.f0_median_hz)}</span> <span className="text-xs font-normal text-gray-500">altura tonal del paciente (mediana)</span></p>
+                      <p>Rango p5–p95 {fmtHz(a.f0_p5_hz)}–{fmtHz(a.f0_p95_hz)} Hz · media {fmtHz(a.f0_mean_hz)} Hz · SD {fmtDb(a.f0_sd_semitones)} st · voz {a.voiced_fraction != null ? `${Math.round(a.voiced_fraction * 100)}%` : '—'}</p>
                       <div className="mt-2">
                         <p className="font-semibold mb-1">Histograma F0 (estilo SpeechPitch)</p>
                         <Histograma hist={a.f0_histogram} refMin={rMin} refMax={rMax} />

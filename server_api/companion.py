@@ -108,6 +108,17 @@ def _require_profesional(user_id: str) -> str:
     return uid
 
 
+def _auth_dual(request: Request, user_id: str = "") -> tuple:
+    """Bearer device_token (Companion) o user_id google (web). Devuelve
+    (profesional_google_id, actor_para_log)."""
+    auth = (request.headers.get("authorization") or "").strip()
+    if auth.lower().startswith("bearer ") and len(auth) > 8:
+        dev = _device_from_bearer(request)
+        return dev["profesional_google_id"], dev.get("device_name") or "device"
+    uid = _require_profesional(user_id)
+    return uid, uid
+
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -663,8 +674,8 @@ def _sesion_de_profesional(sb, session_id: str, prof: str) -> dict:
 
 
 @router.get("/api/companion/sessions")
-async def listar_sesiones(request: Request, patient_id: str = ""):
-    dev = _device_from_bearer(request)
+async def listar_sesiones(request: Request, patient_id: str = "", user_id: str = ""):
+    prof, _actor = _auth_dual(request, user_id)
     if not patient_id:
         raise HTTPException(status_code=400, detail="patient_id requerido")
     sb = _sb()
@@ -672,16 +683,16 @@ async def listar_sesiones(request: Request, patient_id: str = ""):
         "id, device_session_id, recorded_at, synced_at, audio_duration_sec, audio_codec,"
         "audio_bitrate_kbps, status, dsp_version, consent_recorded, error_detail, created_at")\
         .eq("patient_id", patient_id)\
-        .eq("profesional_google_id", dev["profesional_google_id"])\
+        .eq("profesional_google_id", prof)\
         .order("recorded_at", desc=True).execute()
     return JSONResponse(content={"ok": True, "sessions": r.data or []})
 
 
 @router.get("/api/companion/sessions/{session_id}")
-async def detalle_sesion(request: Request, session_id: str):
-    dev = _device_from_bearer(request)
+async def detalle_sesion(request: Request, session_id: str, user_id: str = ""):
+    prof, _actor = _auth_dual(request, user_id)
     sb = _sb()
-    ses = _sesion_de_profesional(sb, session_id, dev["profesional_google_id"])
+    ses = _sesion_de_profesional(sb, session_id, prof)
     segs = sb.table("session_segments").select("*").eq("session_id", session_id)\
         .order("start_sec").execute()
     acs = sb.table("session_acoustics").select("*").eq("session_id", session_id).execute()
@@ -702,10 +713,10 @@ async def detalle_sesion(request: Request, session_id: str):
 
 
 @router.get("/api/companion/sessions/{session_id}/audio-url")
-async def audio_url(request: Request, session_id: str, clip: str = ""):
-    dev = _device_from_bearer(request)
+async def audio_url(request: Request, session_id: str, clip: str = "", user_id: str = ""):
+    prof, actor = _auth_dual(request, user_id)
     sb = _sb()
-    ses = _sesion_de_profesional(sb, session_id, dev["profesional_google_id"])
+    ses = _sesion_de_profesional(sb, session_id, prof)
     if clip:
         c = sb.table("session_clips").select("*").eq("id", clip)\
             .eq("session_id", session_id).execute()
@@ -726,7 +737,7 @@ async def audio_url(request: Request, session_id: str, clip: str = ""):
     try:
         sb.table("audio_access_log").insert({
             "session_id": session_id,
-            "actor": dev.get("device_name") or dev.get("id", ""),
+            "actor": actor,
             "accion": f"url_firmada:{que}"}).execute()
     except Exception:
         pass
@@ -742,15 +753,15 @@ def _rangos(sb) -> list:
 
 
 @router.get("/api/companion/referencias")
-async def referencias(request: Request, sexo: str = "", edad: str = ""):
-    _device_from_bearer(request)
+async def referencias(request: Request, sexo: str = "", edad: str = "", user_id: str = ""):
+    _auth_dual(request, user_id)
     sb = _sb()
     return JSONResponse(content={"ok": True, "rangos": _rangos(sb)})
 
 
 @router.get("/api/companion/progreso")
-async def progreso(request: Request, patient_id: str = ""):
-    dev = _device_from_bearer(request)
+async def progreso(request: Request, patient_id: str = "", user_id: str = ""):
+    prof, _actor = _auth_dual(request, user_id)
     if not patient_id:
         raise HTTPException(status_code=400, detail="patient_id requerido")
     sb = _sb()
@@ -772,7 +783,7 @@ async def progreso(request: Request, patient_id: str = ""):
             ids = {s.get("session_id") for s in serie if s.get("session_id")}
             chk = sb.table("companion_sessions").select("id")\
                 .in_("id", list(ids))\
-                .eq("profesional_google_id", dev["profesional_google_id"]).execute()
+                .eq("profesional_google_id", prof).execute()
             ok_ids = {x.get("id") for x in (chk.data or [])}
             own = [s for s in serie if s.get("session_id") in ok_ids]
         except Exception:
