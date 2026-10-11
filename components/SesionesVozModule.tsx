@@ -4,14 +4,10 @@ import { Mic, Play, Activity, GitBranch, Scale, FileText, CheckCircle2, XCircle,
   ChevronDown, ChevronUp, RefreshCw, KeyRound } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
+import { elegirRangoNormativo, notaEs } from './vozNormas';
 
-/** Nota musical de la mediana (La4 = 440 Hz, Do4 = Do central). Solo presentación. */
-const NOTAS = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
-function notaMusical(hz?: number | null): string {
-  if (!hz || hz <= 0) return '';
-  const midi = 69 + Math.round(12 * Math.log2(hz / 440));
-  return `(${NOTAS[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1})`;
-}
+/** Nota entre paréntesis para la mediana (solo presentación). */
+const notaMusical = (hz?: number | null) => (notaEs(hz) ? `(${notaEs(hz)})` : '');
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -146,12 +142,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
       const rr = await fetch(`${BACKEND_URL}/api/companion/referencias?user_id=${uid}`);
       const dr = await rr.json();
       if (dr.ok) {
-        const sexo = (paciente.sexo_referencia || paciente.sexo || '').toLowerCase();
-        let cand = null;
-        if (edad != null && edad >= 4 && edad <= 10) cand = dr.rangos.find((x: any) => x.sexo_referencia === 'ninex');
-        else if (sexo.startsWith('masc')) cand = dr.rangos.find((x: any) => x.sexo_referencia === 'masculino');
-        else if (sexo.startsWith('fem')) cand = dr.rangos.find((x: any) => x.sexo_referencia === 'femenino');
-        setRango(cand || null);
+        setRango(elegirRangoNormativo(dr.rangos || [], paciente.sexo_referencia || paciente.sexo || '', edad));
       }
     } catch {}
     try {
@@ -312,7 +303,9 @@ export default function SesionesVozModule({ pacienteId }: Props) {
         <h3 className="font-bold text-sm flex items-center gap-2 mb-2"><Scale size={15} className="text-indigo-500" /> Referencia de F0 ({paciente.sexo_referencia || paciente.sexo || '—'}{edad != null ? `, ${edad} años` : ''})</h3>
         <div className={`p-3 rounded-xl border text-xs font-bold ${semaColor[semaforo.c]}`}>
           Semáforo conversacional: {semaforo.t}
-          <span className="block font-normal mt-1">Valores orientativos — requieren criterio clínico. {rMin && rMax ? `Rango: ${rMin}–${rMax} Hz.` : 'Sin rango aplicable.'}</span>
+          <span className="block font-normal mt-1">Valores orientativos — requieren criterio clínico. {rMin && rMax ? `Rango: ${rMin}–${rMax} Hz.` : 'Sin rango aplicable (faltan sexo o fecha de nacimiento).'}
+            {rango?.f0_promedio_min_hz != null && !paciente.f0_ref_min_hz && <> Promedio esperado: {rango.f0_promedio_min_hz === rango.f0_promedio_max_hz ? rango.f0_promedio_min_hz : `${rango.f0_promedio_min_hz}–${rango.f0_promedio_max_hz}`} Hz.</>}
+            {rango?.fuente && !paciente.f0_ref_min_hz && <> Fuente: {rango.fuente}.</>}</span>
         </div>
         <div className="flex items-end gap-2 mt-3 flex-wrap text-xs">
           <div>

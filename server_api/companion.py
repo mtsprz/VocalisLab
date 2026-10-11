@@ -237,21 +237,43 @@ def _elegir_referencia(paciente: dict, rangos: list) -> dict:
         pass
     sexo = ((paciente.get("sexo_referencia") or paciente.get("sexo")) or "").strip().lower()
     edad = _edad(paciente.get("fecha_nacimiento"))
-    cand = None
-    if edad is not None and 4 <= edad <= 10:
-        cand = next((r for r in rangos if r.get("sexo_referencia") == "ninex"), None)
-    elif sexo.startswith("masc"):
-        cand = next((r for r in rangos if r.get("sexo_referencia") == "masculino"), None)
-    elif sexo.startswith("fem"):
-        cand = next((r for r in rangos if r.get("sexo_referencia") == "femenino"), None)
-    else:
-        cand = next((r for r in rangos if r.get("sexo_referencia") == "masculino"), None)
+    cand = elegir_rango_normativo(rangos, sexo, edad)
     if not cand:
         return {"sexo": sexo or "—", "edad": edad, "min_hz": None,
                 "max_hz": None, "origen": "sin referencia"}
     return {"sexo": cand["sexo_referencia"], "edad": edad,
             "min_hz": cand.get("f0_min_hz"), "max_hz": cand.get("f0_max_hz"),
+            "promedio_min_hz": cand.get("f0_promedio_min_hz"),
+            "promedio_max_hz": cand.get("f0_promedio_max_hz"),
             "origen": cand.get("fuente") or "tabla"}
+
+
+def elegir_rango_normativo(rangos: list, sexo: str, edad):
+    """Misma regla que la web y la app (supabase/companion_referencias_normativas.sql):
+    ≤ 18 años → fila 'ninex' de su edad (sin distinción de sexo); ≥ 19 → fila
+    del sexo cuya franja contiene la edad (la más angosta); sin edad → la
+    franja más amplia del sexo (rango general adulto); sin sexo (adulto) o
+    sin sexo ni edad → None (no se compara: no se supone un sexo)."""
+    s = (sexo or "").strip().lower()
+    buscado = "masculino" if s.startswith("masc") or s == "m" else (
+        "femenino" if s.startswith("fem") or s == "f" else "")
+
+    def ancho(r):
+        return int(r.get("edad_max") or 0) - int(r.get("edad_min") or 0)
+
+    def contiene(r):
+        return int(r.get("edad_min") or 0) <= edad <= int(r.get("edad_max") or 0)
+
+    if edad is not None:
+        tipo = "ninex" if edad <= 18 else buscado
+        if not tipo:
+            return None
+        filas = [r for r in rangos if r.get("sexo_referencia") == tipo and contiene(r)]
+        return min(filas, key=ancho) if filas else None
+    if not buscado:
+        return None
+    filas = [r for r in rangos if r.get("sexo_referencia") == buscado]
+    return max(filas, key=ancho) if filas else None
 
 
 # ═══ ENDPOINTS ═══

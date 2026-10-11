@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Mic, Square, Music, Volume2, Save, Activity, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
+import { useAuth } from './AuthContext';
+import { CONVENCION_OCTAVAS, RANGOS_RESPALDO, edadDesde, elegirRangoNormativo, notaDesdeMidi, notaEs, promedioTexto } from './vozNormas';
 
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 // MIDI 36 = C2 (65.41 Hz), MIDI 84 = C6 (1046.50 Hz)
 const MIN_MIDI = 36;
@@ -16,9 +18,8 @@ function freqToMidi(freq: number): { midi: number; noteName: string; octave: num
   const exactMidi = 69 + 12 * Math.log2(freq / 440);
   const roundedMidi = Math.round(exactMidi);
   const cents = Math.round((exactMidi - roundedMidi) * 100);
-  const noteIdx = ((roundedMidi % 12) + 12) % 12;
   const octave = Math.floor(roundedMidi / 12) - 1;
-  const noteName = `${NOTE_NAMES[noteIdx]}${octave}`;
+  const noteName = notaDesdeMidi(roundedMidi);
 
   return { midi: roundedMidi, noteName, octave, cents, exactMidi };
 }
@@ -38,6 +39,42 @@ export default function PitchMeterModule() {
   const [pitchHistory, setHistory] = useState<number[]>([]);
   const [sexo, setSexo] = useState(clinical.data.paciente.sexo || 'Femenino');
   const pacienteRef = useRef(clinical.data.paciente?.id);
+  const { user } = useAuth();
+  const uid = user?.id || '';
+  const [rangos, setRangos] = useState<any[]>(RANGOS_RESPALDO);
+  const [companion, setCompanion] = useState<{ fecha: string; mediana: number | null; p5: number | null; p95: number | null }[]>([]);
+  const edad = edadDesde(clinical.data.paciente?.fecha_nacimiento);
+
+  // Tabla normativa (la misma que Vocalis Companion y "Voz y sesiones").
+  useEffect(() => {
+    if (!uid) return;
+    fetch(`${BACKEND_URL}/api/companion/referencias?user_id=${uid}`)
+      .then(r => r.json()).then(d => { if (d.ok && (d.rangos || []).length) setRangos(d.rangos); })
+      .catch(() => {});
+  }, [uid]);
+
+  // Últimas sesiones medidas por Vocalis Companion para este paciente.
+  useEffect(() => {
+    const pid = clinical.data.paciente?.id;
+    setCompanion([]);
+    if (!pid || !uid) return;
+    (async () => {
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/companion/sessions?patient_id=${pid}&user_id=${uid}`);
+        const d = await r.json();
+        const ses = (d.sessions || []).slice(0, 5);
+        const filas = await Promise.all(ses.map(async (s: any) => {
+          try {
+            const rd = await fetch(`${BACKEND_URL}/api/companion/sessions/${s.id}?user_id=${uid}`);
+            const dd = await rd.json();
+            const a = (dd.acustica || []).find((x: any) => x.task_type === 'conversacion_espontanea') || (dd.acustica || [])[0];
+            return { fecha: (s.recorded_at || '').slice(0, 10), mediana: a?.f0_median_hz ?? null, p5: a?.f0_p5_hz ?? null, p95: a?.f0_p95_hz ?? null };
+          } catch { return { fecha: (s.recorded_at || '').slice(0, 10), mediana: null, p5: null, p95: null }; }
+        }));
+        setCompanion(filas);
+      } catch {}
+    })();
+  }, [clinical.data.paciente?.id, uid]);
 
   // Sincronizar sexo al cambiar de paciente (sin pisar la selección manual)
   useEffect(() => {
@@ -58,13 +95,11 @@ export default function PitchMeterModule() {
   const keys = useMemo<KeyInfo[]>(() => {
     const list: KeyInfo[] = [];
     for (let m = MIN_MIDI; m <= MAX_MIDI; m++) {
-      const noteIdx = ((m % 12) + 12) % 12;
-      const name = NOTE_NAMES[noteIdx];
-      const isBlack = name.includes('#');
-      const octave = Math.floor(m / 12) - 1;
+      const noteName = notaDesdeMidi(m);
+      const isBlack = noteName.includes('#');
       list.push({
         midi: m,
-        noteName: `${name}${octave}`,
+        noteName,
         isBlack,
         freq: midiToFreq(m),
       });
@@ -161,12 +196,20 @@ export default function PitchMeterModule() {
 
   // Stats calculation
   const stats = useMemo(() => {
-    if (pitchHistory.length === 0) return { mean: null, min: null, max: null, count: 0 };
+    if (pitchHistory.length === 0) return { mean: null, median: null, p5: null, p95: null, min: null, max: null, count: 0 };
     const sorted = [...pitchHistory].sort((a, b) => a - b);
     const sum = sorted.reduce((a, b) => a + b, 0);
     const mean = sum / sorted.length;
+    const n = sorted.length;
+    const median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+    const pct = (q: number) => sorted[Math.min(n - 1, Math.max(0, Math.round(q * (n - 1))))];
     return {
       mean: Math.round(mean * 10) / 10,
+      // Mediana: misma métrica principal que Vocalis Companion (robusta a
+      // saltos de octava y a tramos sueltos).
+      median: Math.round(median * 10) / 10,
+      p5: Math.round(pct(0.05) * 10) / 10,
+      p95: Math.round(pct(0.95) * 10) / 10,
       min: Math.round(sorted[0] * 10) / 10,
       max: Math.round(sorted[sorted.length - 1] * 10) / 10,
       count: sorted.length,
@@ -178,6 +221,7 @@ export default function PitchMeterModule() {
       clinical.setAcustica({
         ...clinical.data.acustica,
         f0_mean: stats.mean,
+        f0_median: stats.median,
         f0_min: stats.min || undefined,
         f0_max: stats.max || undefined,
       });
@@ -187,10 +231,17 @@ export default function PitchMeterModule() {
 
   const currentNoteInfo = currentFreq ? freqToMidi(currentFreq) : null;
 
-  // Expected normative range by sex
-  const normRange = sexo === 'Masculino'
-    ? { min: 85, max: 180, typical: 120, label: 'Masculino (85-180 Hz)' }
-    : { min: 165, max: 300, typical: 210, label: 'Femenino (165-300 Hz)' };
+  // Rango normativo por sexo y edad (tabla compartida; respaldo: rango general adulto)
+  const ref = elegirRangoNormativo(rangos, sexo, edad);
+  const normRange = ref
+    ? { min: ref.f0_min_hz, max: ref.f0_max_hz, typical: promedioTexto(ref),
+        label: `${ref.sexo_referencia === 'ninex' ? 'Niñez/adolescencia' : (ref.sexo_referencia === 'masculino' ? 'Masculino' : 'Femenino')}${edad != null ? `, ${edad} años` : ''}: ${ref.f0_min_hz}–${ref.f0_max_hz} Hz`,
+        fuente: ref.fuente || '' }
+    : null;
+  const semaforo = !normRange || stats.median == null ? null
+    : stats.median < normRange.min ? { t: 'Por debajo del rango esperado', c: 'text-red-600' }
+    : stats.median > normRange.max ? { t: 'Por encima del rango esperado', c: 'text-red-600' }
+    : { t: 'Dentro del rango esperado', c: 'text-emerald-600' };
 
   // Calculate piano layout width percentage
   const whiteKeys = keys.filter(k => !k.isBlack);
@@ -206,7 +257,7 @@ export default function PitchMeterModule() {
           </div>
           <div>
             <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              Pitch Meter en Tiempo Real & Teclado Espectral (C2 - C6)
+              Pitch Meter en Tiempo Real & Teclado Espectral (Do2 - Do6)
               {clinical.data.paciente.nombre_completo && (
                 <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800/40">
                   {clinical.data.paciente.nombre_completo}
@@ -271,13 +322,15 @@ export default function PitchMeterModule() {
         {/* F0 Media Conversacional */}
         <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-2xl p-4 shadow-sm text-center">
           <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 block mb-1">
-            F0 Conversacional Media
+            F0 Conversacional (mediana)
           </span>
           <div className="text-3xl font-black text-gray-900 dark:text-white">
-            {stats.mean ? `${stats.mean}` : '—'} <span className="text-sm font-bold text-gray-500">Hz</span>
+            {stats.median ? `${stats.median}` : '—'} <span className="text-sm font-bold text-gray-500">Hz</span>
           </div>
+          {stats.median != null && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 block">{notaEs(stats.median)}</span>}
+          {semaforo && <span className={`text-[11px] font-bold block ${semaforo.c}`}>{semaforo.t}</span>}
           <span className="text-[10px] font-semibold text-gray-400 block mt-1">
-            Muestras capturadas: {stats.count}
+            Media {stats.mean ?? '—'} Hz · p5–p95 {stats.p5 ?? '—'}–{stats.p95 ?? '—'} Hz · {stats.count} muestras
           </span>
         </div>
 
@@ -300,11 +353,12 @@ export default function PitchMeterModule() {
             Normativa Rango Típico
           </span>
           <div className="text-sm font-bold text-indigo-900 dark:text-indigo-200 mt-1">
-            {normRange.label}
+            {normRange ? normRange.label : 'Sin rango (faltan sexo o fecha de nacimiento)'}
           </div>
-          <span className="text-xs font-extrabold text-indigo-700 dark:text-indigo-300 block mt-1">
-            F0 Típica: {normRange.typical} Hz
-          </span>
+          {normRange?.typical && <span className="text-xs font-extrabold text-indigo-700 dark:text-indigo-300 block mt-1">
+            Promedio esperado: {normRange.typical} Hz
+          </span>}
+          {normRange?.fuente && <span className="text-[10px] text-indigo-500 block mt-1">{normRange.fuente} · orientativo</span>}
         </div>
       </div>
 
@@ -313,7 +367,7 @@ export default function PitchMeterModule() {
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
             <Activity size={16} className="text-emerald-500" />
-            Teclado de Piano Espectral en Vivo (C2 = 65 Hz a C6 = 1046 Hz)
+            Teclado de Piano Espectral en Vivo (Do2 = 65 Hz a Do6 = 1046 Hz · {CONVENCION_OCTAVAS})
           </h3>
           {active && (
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 animate-pulse">
@@ -339,7 +393,7 @@ export default function PitchMeterModule() {
                   }`}
                 >
                   <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[9px] font-bold text-slate-700">
-                    {wk.noteName.includes('C') ? wk.noteName : ''}
+                    {wk.noteName.startsWith('Do') && !wk.noteName.includes('#') ? wk.noteName : ''}
                   </span>
                 </div>
               );
@@ -386,12 +440,33 @@ export default function PitchMeterModule() {
 
         {/* Range Indicators Banner */}
         <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 font-mono pt-1">
-          <span>C2 (65.4 Hz)</span>
-          <span>C3 (130.8 Hz)</span>
-          <span>C4 (261.6 Hz)</span>
-          <span>C5 (523.2 Hz)</span>
-          <span>C6 (1046.5 Hz)</span>
+          <span>Do2 (65.4 Hz)</span>
+          <span>Do3 (130.8 Hz)</span>
+          <span>Do4 (261.6 Hz)</span>
+          <span>Do5 (523.2 Hz)</span>
+          <span>Do6 (1046.5 Hz)</span>
         </div>
+      </div>
+
+      {/* Vocalis Companion: altura tonal medida en las sesiones grabadas */}
+      <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm">
+        <h3 className="font-bold text-sm text-gray-900 dark:text-white mb-1">Vocalis Companion — altura tonal en las últimas sesiones</h3>
+        <p className="text-[11px] text-gray-500 mb-3">Mediana del paciente (voces separadas automáticamente) para comparar con la medición en vivo.</p>
+        {companion.length === 0
+          ? <p className="text-xs text-gray-400">Sin sesiones del Companion para este paciente.</p>
+          : <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {companion.map((c, i) => (
+                <div key={i} className="p-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-center">
+                  <p className="text-[10px] text-gray-500">{c.fecha}</p>
+                  <p className="text-lg font-black">{c.mediana != null ? Math.round(c.mediana) : '—'} <span className="text-xs">Hz</span></p>
+                  <p className="text-[11px] font-bold text-indigo-600">{notaEs(c.mediana)}</p>
+                  {c.p5 != null && <p className="text-[10px] text-gray-400">{Math.round(c.p5)}–{Math.round(c.p95 ?? 0)} Hz</p>}
+                  {stats.median != null && c.mediana != null && (
+                    <p className="text-[10px] font-semibold text-gray-500">en vivo {stats.median > c.mediana ? '+' : ''}{(12 * Math.log2(stats.median / c.mediana)).toFixed(1)} st</p>
+                  )}
+                </div>
+              ))}
+            </div>}
       </div>
 
       {/* Button to manually persist to clinical context */}
