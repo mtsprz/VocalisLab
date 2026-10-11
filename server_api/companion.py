@@ -422,6 +422,25 @@ async def firmar_upload(request: Request):
             raise HTTPException(status_code=400, detail="part_index inválido")
         path = f"{base}.part{pi}"
     full = f"vault/{path}"
+    # Registrar en la sesión dónde va a quedar el audio. Sin esto, el confirm
+    # no encontraba el archivo ("Audio incompleto") y la sesión nunca se
+    # transcribía ni tenía audio para reproducir en la web.
+    try:
+        q = sb.table("companion_sessions").select("id, profesional_google_id")\
+            .eq("device_session_id", dsid).execute()
+        filas = q.data or []
+        if not filas:
+            raise HTTPException(status_code=404, detail="Sesión inexistente: creala primero con POST /sessions")
+        if filas[0].get("profesional_google_id") != dev.get("profesional_google_id"):
+            raise HTTPException(status_code=403, detail="Sesión de otro profesional")
+        if kind == "session_audio":
+            sb.table("companion_sessions").update({
+                "audio_storage_path": f"vault/{base}", "audio_mime": mime,
+                "audio_size_bytes": size}).eq("id", filas[0]["id"]).execute()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo registrar la ruta del audio: {e}")
     try:
         signed = sb.storage.from_(BUCKET).create_signed_upload_url(full)
         url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("signed_url") or ""
@@ -434,8 +453,10 @@ async def firmar_upload(request: Request):
 def _storage_exists(sb, path: str) -> bool:
     try:
         parent = path.rsplit("/", 1)[0] if "/" in path else ""
-        items = sb.storage.from_(BUCKET).list(parent) or []
         base = path.rsplit("/", 1)[-1]
+        # search: sin filtro, list() trae solo 100 elementos y con más
+        # sesiones en la carpeta el archivo "no existía".
+        items = sb.storage.from_(BUCKET).list(parent, {"search": base, "limit": 1000}) or []
         return any((it.get("name") == base) for it in items if isinstance(it, dict))
     except Exception:
         return False

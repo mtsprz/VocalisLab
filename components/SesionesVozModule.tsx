@@ -202,7 +202,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
     const r = await fetch(`${BACKEND_URL}/api/companion/sessions/${selId}/audio-url${q}`);
     const d = await r.json();
     if (d.ok) setAudioUrl(d.url);
-    else setMsg(d.error || 'Audio no disponible');
+    else setMsg(`Audio no disponible: ${d.detail || d.error || r.status}`);
   };
 
   const guardarBorrador = async (aprobar: boolean) => {
