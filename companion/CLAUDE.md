@@ -12,8 +12,8 @@ campo que no calculamos, se envía `null` y se avisa).
   f0_contour`.
 - Métrica principal: `f0_median_hz` de `conversacion_espontanea`; si no hubo,
   la de todos los tramos del paciente (`tono_global.json`, solo local).
-- Nota musical solo para presentación (`lib/core/dsp/nota.dart`): La4 = 440 Hz,
-  Do4 = Do central, nombres en español. No se envía al backend.
+- Nota musical solo para presentación (`lib/core/dsp/nota.dart`): La3 = 440 Hz (franco-belga),
+  Do3 = Do central, nombres en español. No se envía al backend.
 - **No implementar**: jitter, shimmer, HNR, MPT, intensidad/dB ni medidor con
   cifras. En `acoustics[]` esos campos van `null` (`TaskMetrics.toJson`).
 - Sin cambios: transcripción, diarización, audio, ficha, sincronización y emparejamiento.

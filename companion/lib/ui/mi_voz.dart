@@ -94,7 +94,7 @@ class _MiVozCardState extends State<MiVozCard> {
         await _s.save();
         setState(() => _msg = _s.vozFonoHuella == null
             ? 'Listo (solo tono: no se pudo calcular la huella vocal)'
-            : 'Listo ✓ (tono + huella vocal)');
+            : 'Listo ✓ (tono + huella vocal)',);
       }
     } catch (e) {
       setState(() => _msg = 'No se pudo analizar: $e');

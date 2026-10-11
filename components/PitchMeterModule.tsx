@@ -6,7 +6,7 @@ import { CONVENCION_OCTAVAS, RANGOS_RESPALDO, edadDesde, elegirRangoNormativo, n
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
-// MIDI 36 = C2 (65.41 Hz), MIDI 84 = C6 (1046.50 Hz)
+// MIDI 36 = Do1 (65.41 Hz), MIDI 84 = Do5 (1046.50 Hz) — convención franco-belga
 const MIN_MIDI = 36;
 const MAX_MIDI = 84;
 
@@ -257,7 +257,7 @@ export default function PitchMeterModule() {
           </div>
           <div>
             <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              Pitch Meter en Tiempo Real & Teclado Espectral (Do2 - Do6)
+              Pitch Meter en Tiempo Real & Teclado Espectral (Do1 - Do5)
               {clinical.data.paciente.nombre_completo && (
                 <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800/40">
                   {clinical.data.paciente.nombre_completo}
@@ -367,7 +367,7 @@ export default function PitchMeterModule() {
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
             <Activity size={16} className="text-emerald-500" />
-            Teclado de Piano Espectral en Vivo (Do2 = 65 Hz a Do6 = 1046 Hz · {CONVENCION_OCTAVAS})
+            Teclado de Piano Espectral en Vivo (Do1 = 65 Hz a Do5 = 1046 Hz · {CONVENCION_OCTAVAS})
           </h3>
           {active && (
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 animate-pulse">
@@ -440,11 +440,11 @@ export default function PitchMeterModule() {
 
         {/* Range Indicators Banner */}
         <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 font-mono pt-1">
-          <span>Do2 (65.4 Hz)</span>
-          <span>Do3 (130.8 Hz)</span>
-          <span>Do4 (261.6 Hz)</span>
-          <span>Do5 (523.2 Hz)</span>
-          <span>Do6 (1046.5 Hz)</span>
+          <span>Do1 (65.4 Hz)</span>
+          <span>Do2 (130.8 Hz)</span>
+          <span>Do3 (261.6 Hz)</span>
+          <span>Do4 (523.2 Hz)</span>
+          <span>Do5 (1046.5 Hz)</span>
         </div>
       </div>
 

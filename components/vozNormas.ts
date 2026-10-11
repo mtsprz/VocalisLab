@@ -58,14 +58,15 @@ export function promedioTexto(r?: RangoNormativo | null): string {
 
 export const NOTAS_ES = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
 
-/** Convención de octavas: La4 = 440 Hz (científica, igual que Vocalis Companion). */
-export const CONVENCION_OCTAVAS = 'La4 = 440 Hz · Do4 = Do central';
+/** Convención franco-belga / laringológica (Jackson Menaldi, Farías, Castelli),
+ *  igual que Vocalis Companion: La3 = 440 Hz, Do3 = Do central, Do0 ≈ 33 Hz. */
+export const CONVENCION_OCTAVAS = 'La3 = 440 Hz · Do3 = Do central';
 
 export function notaDesdeMidi(midi: number): string {
-  return `${NOTAS_ES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+  return `${NOTAS_ES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 2}`;
 }
 
-/** Nota más cercana a una frecuencia (ej. 139 Hz → "Do#3"). */
+/** Nota más cercana a una frecuencia (ej. 139 Hz → "Do#2"). */
 export function notaEs(hz?: number | null): string {
   if (!hz || hz <= 0) return '';
   return notaDesdeMidi(69 + Math.round(12 * Math.log2(hz / 440)));
