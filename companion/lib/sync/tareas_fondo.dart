@@ -59,7 +59,10 @@ void tareaFondoDispatcher() {
           } catch (_) {}
         }
       }
-      await db.close();
+      // NO cerrar la base: en Android sqflite comparte la misma conexión
+      // nativa por ruta entre motores del mismo proceso. Si la app está
+      // abierta, cerrarla aquí la deja sin base (database_closed) en plena
+      // grabación.
       return true;
     } catch (_) {
       return false;
