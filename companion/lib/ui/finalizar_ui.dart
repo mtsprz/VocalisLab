@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../app.dart';
 import '../core/dsp/modelo_huella.dart';
+import '../core/dsp/dsp_isolate.dart' show AutoJob;
 import '../core/finalizar_sesion.dart';
 import '../data/settings_store.dart';
 import 'summary_screen.dart' show edadDesde, rangoPara;
@@ -19,15 +20,10 @@ Future<List<dynamic>> rangosCacheados() async {
   return const [];
 }
 
-/// Finaliza con todo el contexto offline: perfil "Mi voz", sexo/edad del
-/// paciente y su rango esperado (si ya se descargó la tabla de referencias).
-Future<void> finalizarConContexto({
-  required Deps deps,
-  required String dsid,
-  required String sesDir,
-  required String pacienteId,
-  void Function(double)? onProgreso,
-}) async {
+/// Configuración del análisis con todo el contexto offline: perfil "Mi voz",
+/// sexo/edad del paciente y su rango esperado (si ya se descargó la tabla de
+/// referencias). [wavPath] solo se usa en el análisis desde archivo.
+Future<AutoJob> configAnalisis(Deps deps, String pacienteId, {String wavPath = ''}) async {
   final ajustes = await AppSettings.load();
   var sexo = '';
   int? edad;
@@ -39,18 +35,40 @@ Future<void> finalizarConContexto({
   final ref = rangoPara(await rangosCacheados(), sexo, edad);
   final huellaValida = ajustes.vozFonoHuella != null && ajustes.vozFonoModelo == idModeloHuella;
   final modelo = huellaValida ? await rutaModeloHuella() : null;
+  return AutoJob(
+    wavPath: wavPath,
+    sexoReferencia: sexo,
+    fonoMedianaHz: ajustes.vozFonoHz,
+    fonoSdSt: ajustes.vozFonoSdSt,
+    rangoMinHz: (ref?['f0_min_hz'] as num?)?.toDouble(),
+    rangoMaxHz: (ref?['f0_max_hz'] as num?)?.toDouble(),
+    modeloHuella: modelo,
+    huellaFono: modelo != null ? ajustes.vozFonoHuella : null,
+  );
+}
+
+/// Finaliza desde archivo (recuperación tras cierre forzado o si falló el
+/// análisis en vivo).
+Future<void> finalizarConContexto({
+  required Deps deps,
+  required String dsid,
+  required String sesDir,
+  required String pacienteId,
+  void Function(double)? onProgreso,
+}) async {
+  final c = await configAnalisis(deps, pacienteId);
   await finalizarSesion(
     store: deps.store,
     vault: deps.vault,
     dsid: dsid,
     sesDir: sesDir,
-    sexoReferencia: sexo,
-    vozFonoHz: ajustes.vozFonoHz,
-    vozFonoSdSt: ajustes.vozFonoSdSt,
-    rangoMinHz: (ref?['f0_min_hz'] as num?)?.toDouble(),
-    rangoMaxHz: (ref?['f0_max_hz'] as num?)?.toDouble(),
-    modeloHuella: modelo,
-    huellaFono: huellaValida ? ajustes.vozFonoHuella : null,
+    sexoReferencia: c.sexoReferencia,
+    vozFonoHz: c.fonoMedianaHz,
+    vozFonoSdSt: c.fonoSdSt,
+    rangoMinHz: c.rangoMinHz,
+    rangoMaxHz: c.rangoMaxHz,
+    modeloHuella: c.modeloHuella,
+    huellaFono: c.huellaFono,
     onProgreso: onProgreso,
   );
 }

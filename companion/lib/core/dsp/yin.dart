@@ -106,9 +106,12 @@ class YinTracker {
       tau++;
     }
     // 4. Corrección de octava (error "una octava arriba", período mitad):
-    // si el doble del período es igual de periódico, preferirlo.
+    // solo si el doble del período es CLARAMENTE más periódico. En una señal
+    // periódica el doble del período casi siempre es igual de periódico; con
+    // "<" a secas se elegía por una diferencia ínfima y la F0 caía una
+    // octava (ej. 350 Hz medido como 175 Hz).
     var best = tau;
-    if (best * 2 <= tauMax && _diff[best * 2] < _diff[best]) {
+    if (best * 2 <= tauMax && _diff[best * 2] < _diff[best] * 0.5) {
       best = best * 2;
       while (best + 1 <= tauMax + 1 && _diff[best + 1] < _diff[best]) {
         best++;

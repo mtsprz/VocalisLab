@@ -10,6 +10,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../app.dart';
 import '../config.dart';
 import '../core/audio/recorder_service.dart';
+import '../core/dsp/dsp_isolate.dart' show AnalisisEnVivo;
 import '../core/finalizar_sesion.dart';
 import '../data/settings_store.dart';
 import '../sync/foreground_service.dart';
@@ -51,6 +52,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
   bool _tienePerfil = true;
   late String _dsid;
   late String _sesDir;
+  AnalisisEnVivo? _vivo;
 
   @override
   void initState() {
@@ -66,6 +68,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
   @override
   void dispose() {
+    _vivo?.cancelar();
     _timer?.cancel();
     _nivel.dispose();
     _saturaHasta.dispose();
@@ -104,6 +107,16 @@ class _RecordingScreenState extends State<RecordingScreen> {
         'created_at': ahora,
       });
       sesionEnCurso = _dsid;
+      // Análisis EN VIVO: tono y huella se calculan mientras se graba, así
+      // al detener el resumen está listo en 1-2 s. Si no arranca, se usa el
+      // análisis desde archivo al final (más lento, mismo resultado).
+      try {
+        _vivo = await AnalisisEnVivo.iniciar(await configAnalisis(widget.deps, widget.pacienteId));
+        _rec.onPcm = _vivo!.agregar;
+      } catch (_) {
+        _vivo = null;
+        _rec.onPcm = null;
+      }
       await _rec.iniciar(p.join(_sesDir, 'bloques'));
       _rec.onNivel = (nivel, satura) {
         _nivel.value = nivel;
@@ -151,6 +164,25 @@ class _RecordingScreenState extends State<RecordingScreen> {
       _procesando = true;
       _progreso = 0;
     });
+    final vivo = _vivo;
+    _vivo = null;
+    _rec.onPcm = null;
+    if (vivo != null) {
+      try {
+        final res = await vivo.terminar();
+        await guardarResultado(store: widget.deps.store, dsid: _dsid, sesDir: _sesDir, res: res);
+        sesionEnCurso = null;
+        // Unir bloques + cifrar en segundo plano: ya se puede atender al
+        // siguiente paciente. Si falla, la sesión queda para "recuperar".
+        unawaited(completarAudio(
+          store: widget.deps.store, vault: widget.deps.vault, dsid: _dsid, sesDir: _sesDir,
+        ).catchError((_) {}),);
+        widget.onTerminar(_dsid);
+        return;
+      } catch (_) {
+        // Sigue con el análisis desde archivo.
+      }
+    }
     try {
       await finalizarConContexto(
         deps: widget.deps,

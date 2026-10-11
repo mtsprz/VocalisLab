@@ -36,6 +36,10 @@ class RecorderService {
   /// llegó al tope digital.
   void Function(double nivel, bool satura)? onNivel;
 
+  /// Cada fragmento PCM16 tal como se escribe a disco (para el análisis en
+  /// vivo: al detener, la altura tonal ya está casi calculada).
+  void Function(Uint8List pcm16)? onPcm;
+
   Future<bool> tienePermiso() => _rec.hasPermission();
 
   Future<void> iniciar(String blocksDir) async {
@@ -96,6 +100,11 @@ class RecorderService {
     final rms = n == 0 ? 0.0 : math.sqrt(sum / n);
     final log = rms <= 0 ? -60.0 : 20 * (math.log(rms) / math.ln10);
     onNivel?.call((((log + 60) / 60).clamp(0.0, 1.0)).toDouble(), pico >= 0.98);
+    try {
+      onPcm?.call(chunk);
+    } catch (_) {
+      // El análisis en vivo nunca puede frenar la grabación.
+    }
     // Rotación por tamaño (≈30 s).
     var resto = chunk;
     while (resto.isNotEmpty) {

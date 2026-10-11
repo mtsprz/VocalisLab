@@ -34,20 +34,26 @@ class DestinoTus {
 
   bool get esSupabaseFirmado => firma != null;
 
-  static const _marca = '/storage/v1/object/upload/sign/';
+  static const _marca = '/object/upload/sign/';
 
+  /// Acepta la URL aunque traiga barras dobles (supabase-py arma
+  /// ".../storage/v1//object/upload/sign/..."). Si no es una URL firmada de
+  /// Supabase lanza [TusException]: nunca se sube a una URL desconocida ni se
+  /// manda el device_token fuera del backend propio.
   factory DestinoTus.desde(String uploadUrl) {
     final u = Uri.parse(uploadUrl);
-    final i = u.path.indexOf(_marca);
+    final ruta = u.path.replaceAll(RegExp('/{2,}'), '/');
+    final i = ruta.indexOf(_marca);
     final token = u.queryParameters['token'];
     if (i < 0 || token == null || token.isEmpty) {
-      return DestinoTus(u); // URL TUS genérica: se usa tal cual.
+      throw const TusException('URL de subida no reconocida (no es una URL firmada de Supabase)');
     }
-    final resto = Uri.decodeComponent(u.path.substring(i + _marca.length));
+    final resto = Uri.decodeComponent(ruta.substring(i + _marca.length));
     final barra = resto.indexOf('/');
+    if (barra <= 0) throw const TusException('URL de subida sin bucket/objeto');
     return DestinoTus(
       Uri(scheme: u.scheme, host: u.host, port: u.port,
-          path: '${u.path.substring(0, i)}/storage/v1/upload/resumable',),
+          path: '${ruta.substring(0, i)}/upload/resumable',),
       bucket: resto.substring(0, barra),
       objeto: resto.substring(barra + 1),
       firma: token,
@@ -71,8 +77,8 @@ class TusClient implements TusGateway {
 
   Map<String, String> _auth(String url, String bearerToken) {
     final firma = _firmas[url];
-    if (firma != null) return {'x-signature': firma};
-    return {'Authorization': 'Bearer $bearerToken'};
+    if (firma == null) throw const TusException('Subida sin firma: se canceló por seguridad');
+    return {'x-signature': firma};
   }
 
   String _b64(String v) => base64Encode(utf8.encode(v));
@@ -82,17 +88,15 @@ class TusClient implements TusGateway {
   Future<String> create(String uploadUrl, int length, String filename,
       {String mime = 'application/octet-stream',}) async {
     final d = DestinoTus.desde(uploadUrl);
-    final meta = d.esSupabaseFirmado
-        ? 'bucketName ${_b64(d.bucket!)},objectName ${_b64(d.objeto!)},'
-            'contentType ${_b64(mime)},cacheControl ${_b64('3600')}'
-        : 'filename ${_b64(filename)}';
+    final meta = 'bucketName ${_b64(d.bucket!)},objectName ${_b64(d.objeto!)},'
+        'contentType ${_b64(mime)},cacheControl ${_b64('3600')}';
     final r = await _http.post(
       d.endpoint,
       headers: {
         'Tus-Resumable': '1.0.0',
         'Upload-Length': '$length',
         'Upload-Metadata': meta,
-        if (d.esSupabaseFirmado) 'x-signature': d.firma!,
+        'x-signature': d.firma!,
       },
     ).timeout(const Duration(seconds: 75));
     if (r.statusCode == 409 && d.esSupabaseFirmado) {

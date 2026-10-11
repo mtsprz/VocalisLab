@@ -1,23 +1,27 @@
-import 'dart:isolate';
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:sherpa_onnx/sherpa_onnx.dart' as so;
+
+import 'decimador.dart';
 import 'diarizacion.dart';
 import 'diarizacion_huella.dart';
 import 'huella.dart';
 import 'metrics.dart';
 import 'yin.dart';
 
-/// Análisis de tono en isolate (no bloquea la UI).
+/// Análisis de altura tonal (no bloquea la UI).
 ///
-/// Entrada: WAV PCM 16-bit mono 44.1 kHz (cabecera de 44 bytes) + segmentos.
-/// Solo se analizan muestras de segmentos con speaker == 'paciente'.
-///
-/// Pensado para equipos con poca RAM (Galaxy A02: 1,9 GB, 32 bits): el WAV
-/// se lee por tramos de 5 s desde disco, nunca completo (una sesión de
-/// 45 min ocuparía ~950 MB como doubles). Cada tramo se analiza UNA vez y sus
-/// cuadros se reusan para la métrica por tarea y para la global.
+/// Todo pasa por [AnalizadorStream]: audio 44,1 kHz → decimación ×3 a
+/// 14,7 kHz (antialiasing) → YIN cada 10 ms (ventana 40 ms) → huella vocal
+/// cada 1,5 s con voz. El mismo código corre:
+///  - EN VIVO durante la grabación ([AnalisisEnVivo]): al tocar Detener solo
+///    falta agrupar voces y calcular la mediana (1-2 s, dure lo que dure);
+///  - desde archivo (recuperación tras cierre forzado, "Mi voz", fixtures),
+///    leyendo por tramos de 5 s (nunca el WAV entero en RAM: equipo de 2 GB).
 class DspJob {
   final String wavPath;
   final List<Map<String, dynamic>> segments;
@@ -37,7 +41,10 @@ const _tramoLectura = _sr * 5;
 /// Lee [n] muestras desde [desde] (en muestras) normalizadas a -1..1.
 Float64List leerRango(RandomAccessFile f, int desde, int n) {
   f.setPositionSync(_cabecera + desde * 2);
-  final bytes = f.readSync(n * 2);
+  return pcm16AFloat(f.readSync(n * 2));
+}
+
+Float64List pcm16AFloat(Uint8List bytes) {
   final bd = ByteData.sublistView(bytes);
   final m = bytes.length ~/ 2;
   final out = Float64List(m);
@@ -47,39 +54,106 @@ Float64List leerRango(RandomAccessFile f, int desde, int n) {
   return out;
 }
 
-/// Cuadros YIN (10 ms) de las muestras [inicio, fin) leyendo por tramos.
-List<YinFrame> _cuadros(RandomAccessFile f, int inicio, int fin, YinTracker t,
-    {void Function(int muestra)? avance,}) {
-  final win = t.windowSize;
-  final step = (_sr * 0.010).round();
-  final out = <YinFrame>[];
-  var pos = inicio;
-  while (pos + win <= fin) {
-    final nCuadros = math.min((fin - win - pos) ~/ step + 1, _tramoLectura ~/ step);
-    final buf = leerRango(f, pos, (nCuadros - 1) * step + win);
-    for (var k = 0; k < nCuadros; k++) {
-      final a = k * step;
-      if (a + win > buf.length) break;
-      out.add(t.process(Float64List.sublistView(buf, a, a + win)));
+/// Analizador incremental: [agregar] por fragmentos (44,1 kHz), [terminar]
+/// al final. Expone [cuadros] (uno cada 10 ms) y [huellas] por tramo de
+/// 1,5 s (solo tramos con ≥ 30 % de cuadros sonoros).
+class AnalizadorStream {
+  static const sr = Decimador3.sampleRateSalida; // 14,7 kHz
+  static const hop = 147; // 10 ms
+  static const muestrasTramo = 22050; // 1,5 s
+  static const cuadrosPorTramo = 150;
+
+  final YinTracker _yin;
+  final so.SpeakerEmbeddingExtractor? _ex;
+  final _dec = Decimador3();
+  final cuadros = <YinFrame>[];
+  final huellas = <int, Float32List>{};
+
+  Float64List _buf = Float64List(0);
+  int _bufIni = 0; // índice absoluto (a 14,7 kHz) de _buf[0]
+  int _proximo = 0; // inicio absoluto del próximo cuadro
+  final _tramo = <double>[];
+  int _tramoIdx = 0;
+
+  AnalizadorStream(YinConfig config, {so.SpeakerEmbeddingExtractor? extractor})
+      : _yin = YinTracker(sampleRate: sr, config: config),
+        _ex = extractor;
+
+  int get _win => _yin.windowSize;
+
+  void agregar(Float64List x44k) {
+    final d = _dec.procesar(x44k);
+    if (d.isEmpty) return;
+    if (_ex != null) _tramo.addAll(d);
+    final nuevo = Float64List(_buf.length + d.length)
+      ..setRange(0, _buf.length, _buf)
+      ..setRange(_buf.length, _buf.length + d.length, d);
+    _buf = nuevo;
+    while (_proximo + _win <= _bufIni + _buf.length) {
+      final off = _proximo - _bufIni;
+      cuadros.add(_yin.process(Float64List.sublistView(_buf, off, off + _win)));
+      _proximo += hop;
     }
-    pos += nCuadros * step;
-    avance?.call(pos);
+    final descartar = _proximo - _bufIni;
+    if (descartar > 0) {
+      _buf = Float64List.fromList(Float64List.sublistView(_buf, descartar));
+      _bufIni += descartar;
+    }
+    // Huellas por tramo completo (cuando sus 150 cuadros ya están calculados).
+    while (_ex != null &&
+        _tramo.length >= muestrasTramo &&
+        cuadros.length >= (_tramoIdx + 1) * cuadrosPorTramo) {
+      _cerrarTramo(_tramo.sublist(0, muestrasTramo));
+      _tramo.removeRange(0, muestrasTramo);
+    }
   }
-  return out;
+
+  void _cerrarTramo(List<double> muestras) {
+    final a = _tramoIdx * cuadrosPorTramo;
+    final b = math.min(a + cuadrosPorTramo, cuadros.length);
+    var sonoros = 0;
+    for (var i = a; i < b; i++) {
+      if (cuadros[i].f0 > 0) sonoros++;
+    }
+    if (sonoros >= cuadrosPorTramo * 0.3 && muestras.length >= sr ~/ 2) {
+      final h = huellaDe(_ex!, Float32List.fromList(muestras), sr);
+      if (h != null) huellas[_tramoIdx] = h;
+    }
+    _tramoIdx++;
+  }
+
+  /// Cierra el último tramo parcial (si tiene ≥ 0,5 s).
+  void terminar() {
+    if (_ex != null && _tramo.isNotEmpty) {
+      _cerrarTramo(List<double>.from(_tramo));
+      _tramo.clear();
+    }
+  }
 }
 
 Map<String, dynamic> _metricas(List<YinFrame> crudos) {
   final f0 = medianFilter5(crudos.map((f) => f.f0).toList());
   final frames = List<YinFrame>.generate(
       crudos.length, (i) => YinFrame(f0[i], crudos[i].strength, crudos[i].rms),);
-  return computeTaskMetrics(frames: frames).toJson('companion-dsp/1.0');
+  return computeTaskMetrics(frames: frames).toJson('companion-dsp/1.1');
 }
 
-/// Una sola pasada sobre la sesión. Devuelve
-/// `{'por_tarea': {task_type: metrics}, 'global': metrics}`; global = todos los
-/// tramos del paciente en orden cronológico. Debe ser función top-level.
+/// Cuadros de [inicio, fin) (muestras a 44,1 kHz) leyendo el archivo por tramos.
+List<YinFrame> _cuadrosDeArchivo(RandomAccessFile f, int inicio, int fin, YinConfig cfg) {
+  final a = AnalizadorStream(cfg);
+  var pos = inicio;
+  while (pos < fin) {
+    final n = math.min(_tramoLectura, fin - pos);
+    a.agregar(leerRango(f, pos, n));
+    pos += n;
+  }
+  return a.cuadros;
+}
+
+/// Una sola pasada sobre la sesión, por segmentos marcados. Devuelve
+/// `{'por_tarea': {task_type: metrics}, 'global': metrics}`.
 Map<String, dynamic> analizarSesion(DspJob job) {
-  final tracker = YinTracker(sampleRate: _sr, config: configParaSexo(job.sexoReferencia));
+  final cfg = configParaSexo(job.sexoReferencia);
   final f = File(job.wavPath).openSync();
   try {
     final total = math.max(0, (f.lengthSync() - _cabecera) ~/ 2);
@@ -91,7 +165,7 @@ Map<String, dynamic> analizarSesion(DspJob job) {
       if (s['speaker'] != 'paciente') continue;
       final a = (((s['start_sec'] as num).toDouble() * _sr).round().clamp(0, total)).toInt();
       final b = (((s['end_sec'] as num).toDouble() * _sr).round().clamp(0, total)).toInt();
-      final c = _cuadros(f, a, b, tracker);
+      final c = _cuadrosDeArchivo(f, a, b, cfg);
       lista.addAll(c);
       global.addAll(c);
     }
@@ -110,7 +184,7 @@ Map<String, dynamic> analizarTarea(DspJob job) {
   return {'metrics': r['global']};
 }
 
-/// Trabajo de análisis automático (sesión completa, sin marcas manuales).
+/// Configuración del análisis automático (sesión completa, sin marcas).
 class AutoJob {
   final String wavPath;
   final String sexoReferencia;
@@ -134,11 +208,13 @@ class AutoJob {
     this.modeloHuella,
     this.huellaFono,
   });
+
+  bool get conHuella => modeloHuella != null && huellaFono != null;
 }
 
 /// Rango de YIN del paciente, ampliado para no perder la voz del
 /// fonoaudiólogo/a si cae fuera (si no, no se la podría separar).
-YinConfig _configAuto(AutoJob job) {
+YinConfig configAuto(AutoJob job) {
   final c = configParaSexo(job.sexoReferencia);
   final fono = job.fonoMedianaHz;
   if (fono == null) return c;
@@ -150,50 +226,8 @@ YinConfig _configAuto(AutoJob job) {
   );
 }
 
-Float32List _aFloat32(Float64List v) {
-  final out = Float32List(v.length);
-  for (var i = 0; i < v.length; i++) {
-    out[i] = v[i];
-  }
-  return out;
-}
-
-/// Huellas por tramo de 1,5 s con voz (>= 30 % de cuadros sonoros).
-/// Devuelve {índice de tramo: huella}. null si el modelo no carga.
-Map<int, Float32List>? _huellasPorTramo(RandomAccessFile f, int total, List<YinFrame> cuadros,
-    String modelo, void Function(double) avance,) {
-  final ex = abrirExtractor(modelo);
-  if (ex == null) return null;
-  try {
-    final porTramo = (duracionTramoSeg * 100).round(); // cuadros de 10 ms
-    final muestrasTramo = (duracionTramoSeg * _sr).round();
-    final nTramos = (cuadros.length + porTramo - 1) ~/ porTramo;
-    final out = <int, Float32List>{};
-    for (var t = 0; t < nTramos; t++) {
-      final a = t * porTramo;
-      final b = math.min(a + porTramo, cuadros.length);
-      var sonoros = 0;
-      for (var i = a; i < b; i++) {
-        if (cuadros[i].f0 > 0) sonoros++;
-      }
-      if (sonoros >= porTramo * 0.3) {
-        final ini = t * muestrasTramo;
-        final n = math.min(muestrasTramo, total - ini);
-        if (n > _sr ~/ 2) {
-          final h = huellaDe(ex, _aFloat32(leerRango(f, ini, n)), _sr);
-          if (h != null) out[t] = h;
-        }
-      }
-      avance((t + 1) / nTramos);
-    }
-    return out;
-  } finally {
-    ex.free();
-  }
-}
-
 /// Separación por huella: etiqueta tramos de 1,5 s y arma segmentos y
-/// cuadros del paciente.
+/// cuadros del paciente. null si no se puede (y se usa la altura tonal).
 Map<String, dynamic>? _separarPorHuella(List<YinFrame> cuadros, Map<int, Float32List> huellas,
     Float32List huellaFono,) {
   if (huellas.length < 2) return null;
@@ -202,11 +236,11 @@ Map<String, dynamic>? _separarPorHuella(List<YinFrame> cuadros, Map<int, Float32
   // Si la huella no encontró ningún tramo del paciente, no se arriesga una
   // medición vacía: se usa la separación por altura tonal.
   if (!asig.esPaciente.contains(true)) return null;
-  final porTramo = (duracionTramoSeg * 100).round();
+  const porTramo = AnalizadorStream.cuadrosPorTramo;
   final nTramos = (cuadros.length + porTramo - 1) ~/ porTramo;
   final etiqueta = List<bool?>.filled(nTramos, null);
   for (var k = 0; k < indices.length; k++) {
-    etiqueta[indices[k]] = asig.esPaciente[k];
+    if (indices[k] < nTramos) etiqueta[indices[k]] = asig.esPaciente[k];
   }
   // Tramos sin voz heredan el anterior (o el primero con voz).
   var actual = etiqueta.firstWhere((e) => e != null, orElse: () => true)!;
@@ -246,72 +280,82 @@ Map<String, dynamic>? _separarPorHuella(List<YinFrame> cuadros, Map<int, Float32
   };
 }
 
-/// Sesión completa: una pasada YIN → separación de voces (por huella vocal si
-/// hay modelo y "Mi voz"; si no, por altura tonal) → métricas de F0 solo del
-/// paciente. Devuelve {'metrics', 'segmentos', 'fraccion_paciente',
-/// 'confianza', 'metodo', ...}.
+/// Resultado final a partir de lo acumulado (en vivo o desde archivo).
+Map<String, dynamic> resultadoDe(AnalizadorStream a, AutoJob job) {
+  if (job.conHuella && a.huellas.isNotEmpty) {
+    final r = _separarPorHuella(a.cuadros, a.huellas, job.huellaFono!);
+    if (r != null) return r;
+  }
+  final fono = job.fonoMedianaHz == null ? null : PerfilVoz(job.fonoMedianaHz!, job.fonoSdSt ?? 1.0);
+  final d = diarizar(a.cuadros, fono: fono, rangoMinHz: job.rangoMinHz, rangoMaxHz: job.rangoMaxHz);
+  return {
+    'metrics': _metricas(d.cuadrosPaciente),
+    'segmentos': d.segmentos,
+    'fraccion_paciente': d.fraccionPaciente,
+    'confianza': d.confianza,
+    'separacion_st': d.separacionSt,
+    'metodo': job.conHuella ? 'tono_respaldo' : 'tono',
+  };
+}
+
+so.SpeakerEmbeddingExtractor? _extractorPara(AutoJob job) =>
+    job.conHuella ? abrirExtractor(job.modeloHuella!) : null;
+
+/// Sesión completa desde archivo (recuperación / respaldo).
 Map<String, dynamic> analizarSesionAuto(AutoJob job, {void Function(double)? progreso}) {
-  final tracker = YinTracker(sampleRate: _sr, config: _configAuto(job));
+  final ex = _extractorPara(job);
   final f = File(job.wavPath).openSync();
   try {
+    final a = AnalizadorStream(configAuto(job), extractor: ex);
     final total = math.max(0, (f.lengthSync() - _cabecera) ~/ 2);
-    final conHuella = job.modeloHuella != null && job.huellaFono != null;
-    final pesoYin = conHuella ? 0.5 : 1.0;
-    final cuadros = _cuadros(f, 0, total, tracker,
-        avance: (m) => progreso?.call(total == 0 ? pesoYin : pesoYin * m / total),);
-    if (conHuella) {
-      final huellas = _huellasPorTramo(f, total, cuadros, job.modeloHuella!,
-          (v) => progreso?.call(pesoYin + (1 - pesoYin) * v),);
-      if (huellas != null) {
-        final r = _separarPorHuella(cuadros, huellas, job.huellaFono!);
-        if (r != null) return r;
-      }
+    var pos = 0;
+    while (pos < total) {
+      final n = math.min(_tramoLectura, total - pos);
+      a.agregar(leerRango(f, pos, n));
+      pos += n;
+      progreso?.call(total == 0 ? 1 : pos / total);
     }
-    final fono = job.fonoMedianaHz == null
-        ? null
-        : PerfilVoz(job.fonoMedianaHz!, job.fonoSdSt ?? 1.0);
-    final d = diarizar(cuadros,
-        fono: fono, rangoMinHz: job.rangoMinHz, rangoMaxHz: job.rangoMaxHz,);
-    return {
-      'metrics': _metricas(d.cuadrosPaciente),
-      'segmentos': d.segmentos,
-      'fraccion_paciente': d.fraccionPaciente,
-      'confianza': d.confianza,
-      'separacion_st': d.separacionSt,
-      'metodo': conHuella ? 'tono_respaldo' : 'tono',
-    };
+    a.terminar();
+    return resultadoDe(a, job);
   } finally {
     f.closeSync();
+    ex?.free();
   }
 }
 
 /// Perfil de la voz del fonoaudiólogo/a desde una grabación corta: altura
-/// tonal + huella vocal (si se pasa el modelo).
+/// tonal + huella vocal (si se pasa el modelo). Mismo flujo que la sesión,
+/// para que la huella de "Mi voz" sea comparable con la de cada tramo.
 Map<String, dynamic>? analizarPerfilVoz(String wavPath, {String? modeloHuella}) {
-  final tracker = YinTracker(sampleRate: _sr, config: const YinConfig(minHz: 60, maxHz: 600));
+  final ex = modeloHuella == null ? null : abrirExtractor(modeloHuella);
   final f = File(wavPath).openSync();
   try {
+    final a = AnalizadorStream(const YinConfig(minHz: 60, maxHz: 600), extractor: ex);
     final total = math.max(0, (f.lengthSync() - _cabecera) ~/ 2);
-    final cuadros = _cuadros(f, 0, total, tracker);
-    final p = perfilDesdeCuadros(cuadros);
-    if (p == null) return null;
-    Float32List? huella;
-    if (modeloHuella != null) {
-      final hs = _huellasPorTramo(f, total, cuadros, modeloHuella, (_) {});
-      if (hs != null && hs.isNotEmpty) huella = centro(hs.values);
+    var pos = 0;
+    while (pos < total) {
+      final n = math.min(_tramoLectura, total - pos);
+      a.agregar(leerRango(f, pos, n));
+      pos += n;
     }
+    a.terminar();
+    final p = perfilDesdeCuadros(a.cuadros);
+    if (p == null) return null;
     return {
       'mediana_hz': p.medianaHz,
       'sd_st': p.sdSt,
-      if (huella != null) 'huella': huella,
+      if (a.huellas.isNotEmpty) 'huella': centro(a.huellas.values),
     };
   } finally {
     f.closeSync();
+    ex?.free();
   }
 }
 
-/// Entrada del isolate: función de nivel superior para que el mensaje no
-/// arrastre el contexto del llamador (una pantalla no se puede enviar).
+// ─── Isolates ───────────────────────────────────────────────────────────────
+// Entradas de nivel superior: el mensaje no arrastra el contexto del llamador
+// (una pantalla no se puede enviar a otro isolate).
+
 void _entradaAuto((SendPort, AutoJob) m) {
   final (puerto, trabajo) = m;
   try {
@@ -352,3 +396,84 @@ Map<String, dynamic>? _entradaPerfil(String wav, String? modelo) =>
 /// [analizarPerfilVoz] en otro isolate (solo viajan rutas de archivo).
 Future<Map<String, dynamic>?> analizarPerfilVozEnIsolate(String wavPath, {String? modeloHuella}) =>
     Isolate.run(() => _entradaPerfil(wavPath, modeloHuella));
+
+void _entradaEnVivo((SendPort, AutoJob) m) {
+  final (puerto, job) = m;
+  final rp = ReceivePort();
+  puerto.send(rp.sendPort);
+  final ex = _extractorPara(job);
+  final a = AnalizadorStream(configAuto(job), extractor: ex);
+  var resto = Uint8List(0); // byte suelto entre fragmentos
+  rp.listen((msg) {
+    try {
+      if (msg is TransferableTypedData) {
+        var bytes = msg.materialize().asUint8List();
+        if (resto.isNotEmpty) {
+          bytes = Uint8List.fromList([...resto, ...bytes]);
+          resto = Uint8List(0);
+        }
+        if (bytes.length.isOdd) {
+          resto = Uint8List.fromList([bytes.last]);
+          bytes = Uint8List.sublistView(bytes, 0, bytes.length - 1);
+        }
+        a.agregar(pcm16AFloat(bytes));
+      } else if (msg == 'fin') {
+        a.terminar();
+        puerto.send({'ok': resultadoDe(a, job)});
+        ex?.free();
+        rp.close();
+      } else if (msg == 'cancelar') {
+        ex?.free();
+        rp.close();
+      }
+    } catch (e) {
+      puerto.send({'error': '$e'});
+      ex?.free();
+      rp.close();
+    }
+  });
+}
+
+/// Análisis EN VIVO durante la grabación: [agregar] con cada fragmento PCM16
+/// del micrófono; [terminar] devuelve el resultado en 1-2 s.
+class AnalisisEnVivo {
+  final ReceivePort _rp;
+  final Completer<SendPort> _puerto = Completer();
+  final Completer<Map<String, dynamic>> _resultado = Completer();
+
+  AnalisisEnVivo._(this._rp) {
+    _rp.listen((msg) {
+      if (msg is SendPort) {
+        _puerto.complete(msg);
+      } else if (msg is Map && !_resultado.isCompleted) {
+        if (msg['error'] != null) {
+          _resultado.completeError(Exception(msg['error']));
+        } else {
+          _resultado.complete(Map<String, dynamic>.from(msg['ok'] as Map));
+        }
+        _rp.close();
+      }
+    });
+  }
+
+  static Future<AnalisisEnVivo> iniciar(AutoJob job) async {
+    final v = AnalisisEnVivo._(ReceivePort());
+    await Isolate.spawn<(SendPort, AutoJob)>(_entradaEnVivo, (v._rp.sendPort, job));
+    return v;
+  }
+
+  /// Los fragmentos se encolan en orden aunque el isolate todavía no respondió.
+  void agregar(Uint8List pcm16) {
+    final datos = TransferableTypedData.fromList([pcm16]);
+    _puerto.future.then((p) => p.send(datos));
+  }
+
+  Future<Map<String, dynamic>> terminar() async {
+    (await _puerto.future).send('fin');
+    return _resultado.future.timeout(const Duration(minutes: 2));
+  }
+
+  void cancelar() {
+    _puerto.future.then((p) => p.send('cancelar'));
+  }
+}

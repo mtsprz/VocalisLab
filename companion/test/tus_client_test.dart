@@ -18,10 +18,16 @@ void main() {
     expect(d.firma, 'TOKEN123');
   });
 
-  test('URL TUS genérica se usa tal cual', () {
-    final d = DestinoTus.desde('https://tus.example.com/files/');
-    expect(d.esSupabaseFirmado, false);
-    expect(d.endpoint.toString(), 'https://tus.example.com/files/');
+  test('URL con doble barra (como la arma supabase-py) se reconoce', () {
+    final d = DestinoTus.desde('https://abc.supabase.co/storage/v1//object/upload/sign/'
+        'companion-audio-vault/vault/ses-1.m4a?token=TOKEN123');
+    expect(d.endpoint.toString(), 'https://abc.supabase.co/storage/v1/upload/resumable');
+    expect(d.objeto, 'vault/ses-1.m4a');
+    expect(d.firma, 'TOKEN123');
+  });
+
+  test('URL no firmada → error (nunca se manda el device_token)', () {
+    expect(() => DestinoTus.desde('https://tus.example.com/files/'), throwsA(isA<TusException>()));
   });
 
   test('bloques de 6 MB salvo el último, con x-signature y sin device_token', () async {

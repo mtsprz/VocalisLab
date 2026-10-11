@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../app.dart';
 import '../config.dart';
 import '../core/audio/compressor.dart';
-import '../core/finalizar_sesion.dart' show sesionEnCurso;
+import '../core/finalizar_sesion.dart' show sesionEnCurso, sesionesEnSegundoPlano;
 import '../data/audio_vault.dart';
 import '../data/settings_store.dart';
 import 'finalizar_ui.dart';
@@ -49,7 +49,8 @@ class _SyncScreenState extends State<SyncScreen> {
     final l = await widget.deps.store.pendientes();
     // Interrumpidas por cierre forzado (no la que se está grabando ahora).
     final inc = (await widget.deps.store.incompletas())
-        .where((s) => s['device_session_id'] != sesionEnCurso)
+        .where((s) => s['device_session_id'] != sesionEnCurso &&
+            !sesionesEnSegundoPlano.contains(s['device_session_id']),)
         .toList();
     final todas = await _todas();
     if (mounted) {
