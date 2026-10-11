@@ -17,6 +17,12 @@ const _labels = {
   'conversacion_espontanea': 'Conversación espontánea',
 };
 
+String _promedio(Map<String, dynamic> r) {
+  final a = (r['f0_promedio_min_hz'] as num?)?.round();
+  final b = (r['f0_promedio_max_hz'] as num?)?.round();
+  return a == b || b == null ? '$a' : '$a–$b';
+}
+
 String _hz(dynamic v) => v == null ? '—' : '${(v as num).round()}';
 
 /// Edad en años cumplidos desde 'AAAA-MM-DD' (null si no se puede leer).
@@ -29,30 +35,31 @@ int? edadDesde(String fechaNacimiento, {DateTime? hoy}) {
   return e < 0 ? null : e;
 }
 
-/// Rango de referencia para sexo y edad desde la tabla de /referencias.
-/// Si la edad cae en una fila de niñez se usa esa; si no hay edad, solo sexo.
+/// Rango de referencia (misma regla que backend y web; ver
+/// supabase/companion_referencias_normativas.sql): <= 18 años → fila 'ninex'
+/// de su edad (sin distinción de sexo); >= 19 → fila del sexo cuya franja
+/// contiene la edad (la más angosta); sin edad → franja más amplia del sexo
+/// (rango general adulto); adulto sin sexo → null (no se supone un sexo).
 Map<String, dynamic>? rangoPara(List<dynamic> rangos, String sexo, int? edad) {
   final s = sexo.toLowerCase();
   final buscado = s.startsWith('masc') || s == 'm'
       ? 'masculino'
       : (s.startsWith('fem') || s == 'f' ? 'femenino' : '');
-  bool enEdad(Map m) {
-    if (edad == null) return true;
-    final a = (m['edad_min'] as num?)?.toInt() ?? 0;
-    final b = (m['edad_max'] as num?)?.toInt() ?? 200;
-    return edad >= a && edad <= b;
-  }
-
-  final filas = rangos.whereType<Map>().map((m) => m.cast<String, dynamic>());
+  final filas = rangos.whereType<Map>().map((m) => m.cast<String, dynamic>()).toList();
+  int ini(Map m) => (m['edad_min'] as num?)?.toInt() ?? 0;
+  int fin(Map m) => (m['edad_max'] as num?)?.toInt() ?? 200;
+  int ancho(Map m) => fin(m) - ini(m);
   if (edad != null) {
-    for (final m in filas) {
-      if (m['sexo_referencia'] == 'ninex' && enEdad(m)) return m;
-    }
+    final tipo = edad <= 18 ? 'ninex' : buscado;
+    if (tipo.isEmpty) return null;
+    final c = filas.where((m) => m['sexo_referencia'] == tipo && edad >= ini(m) && edad <= fin(m)).toList()
+      ..sort((x, y) => ancho(x).compareTo(ancho(y)));
+    return c.isEmpty ? null : c.first;
   }
-  for (final m in filas) {
-    if (m['sexo_referencia'] == buscado && enEdad(m)) return m;
-  }
-  return null;
+  if (buscado.isEmpty) return null;
+  final c = filas.where((m) => m['sexo_referencia'] == buscado).toList()
+    ..sort((x, y) => ancho(y).compareTo(ancho(x)));
+  return c.isEmpty ? null : c.first;
 }
 
 /// Resumen inmediato: altura tonal principal (mediana en Hz + nota),
@@ -233,6 +240,12 @@ class _Principal extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(comparacion, style: const TextStyle(fontSize: 17)),
+          if (ref?['f0_promedio_min_hz'] != null)
+            Text(
+              'Promedio esperado: ${_promedio(ref!)} Hz'
+              '${ref?['fuente'] != null ? ' · ${ref!['fuente']}' : ''}',
+              style: const TextStyle(fontSize: 15, color: Colors.black54),
+            ),
           if (diar != null) _lineaDiarizacion(diar!),
           const Text('Referencia orientativa: no reemplaza el criterio clínico.',
               style: TextStyle(fontSize: 14, color: Colors.black54),),

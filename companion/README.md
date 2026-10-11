@@ -19,7 +19,7 @@ voz, medidos con YIN en Dart y solo sobre los tramos marcados
   localmente, archivo `tono_global.json`; no viaja al backend).
 - **Nota musical** (solo presentación, no se envía): `n = round(12·log2(f/440))`,
   nombres Do, Do#, Re, Re#, Mi, Fa, Fa#, Sol, Sol#, La, La#, Si, octava en
-  notación científica (convención franco-belga: La3 = 440 Hz, Do3 = Do central, Do0 ≈ 33 Hz). Ej.: `Do#2 · 139 Hz`.
+  convención franco-belga (La3 = 440 Hz, Do3 = Do central, Do0 ≈ 33 Hz). Ej.: `Do#2 · 139 Hz`.
 
 **Fuera de alcance:** jitter, shimmer, HNR, tiempo máximo de fonación (MPT) e
 intensidad en dB. No se calculan ni se muestran; en `acoustics[]` viajan como

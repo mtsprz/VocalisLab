@@ -27,6 +27,20 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Equipo destino: Galaxy A02 (32 bits). Solo librerías nativas armeabi-v7a
+        // (sherpa-onnx/onnxruntime traen todas las ABI: el APK pasaba de 117 MB).
+        ndk {
+            abiFilters += listOf("armeabi-v7a")
+        }
+    }
+
+    // abiFilters no alcanza a las librerías que traen los paquetes
+    // sherpa_onnx_android_* (arm64/x86_64 seguían en el APK): se excluyen al
+    // empaquetar. Si algún día el equipo destino es de 64 bits, quitar esto.
+    packaging {
+        jniLibs {
+            excludes += listOf("lib/arm64-v8a/**", "lib/x86_64/**", "lib/x86/**")
+        }
     }
 
     buildTypes {
