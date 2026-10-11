@@ -466,9 +466,14 @@ async def firmar_upload(request: Request):
     try:
         signed = sb.storage.from_(BUCKET).create_signed_upload_url(full)
         url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("signed_url") or ""
+        # supabase-py arma la URL como base_url + "/object/..." y queda
+        # ".../storage/v1//object/upload/sign/...": la doble barra hacía que el
+        # cliente no la reconociera como firmada (403 "Invalid Compact JWS").
+        url = re.sub(r"(?<!:)//+", "/", url)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"No se pudo firmar: {e}")
     return JSONResponse(content={"ok": True, "upload_url": url, "path": full,
+                                 "token": signed.get("token") or "",
                                  "expires_in": 3600})
 
 
