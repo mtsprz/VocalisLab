@@ -1159,6 +1159,12 @@ async def crear_sesion_web(
     if len(data) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="Audio mayor a 45 MB")
     mime = (audio.content_type or "audio/webm").split(";")[0].strip().lower()
+    # Archivos subidos desde la PC: el navegador a veces no informa el tipo
+    # de un .m4a de la Grabadora de voz; se toma la extensión del nombre.
+    ext_nombre = os.path.splitext(audio.filename or "")[1].lstrip(".").lower()
+    if not _mime_ext(mime) and ext_nombre in ("m4a", "mp3", "wav", "ogg", "webm", "aac"):
+        mime = {"m4a": "audio/mp4", "mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg",
+                "webm": "audio/webm", "aac": "audio/aac"}[ext_nombre]
     ext = _mime_ext(mime) or "webm"
     try:
         p = sb.table("pacientes").select("id").eq("id", paciente_id).execute()
@@ -1187,6 +1193,53 @@ async def crear_sesion_web(
         raise HTTPException(status_code=502, detail=f"No se pudo guardar: {e}")
     return JSONResponse(content={"ok": True, "session_id": sid,
                                  "device_session_id": dsid, "status": "uploaded"})
+
+
+@router.post("/api/companion/importaciones")
+async def crear_importacion(request: Request):
+    """Sesión desde un archivo de audio grabado con otro programa (p. ej. la
+    Grabadora de voz de Windows). Crea la fila; el audio sube por el flujo
+    normal (POST /uploads → TUS → /uploads/confirm) y el servidor transcribe,
+    separa voces y mide la altura tonal del paciente con Praat."""
+    dev = _device_from_bearer(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    dsid = str(body.get("device_session_id", "")).strip()
+    patient_id = str(body.get("patient_id", "")).strip()
+    if not dsid or not patient_id:
+        raise HTTPException(status_code=400, detail="device_session_id y patient_id requeridos")
+    sb = _sb()
+    p = sb.table("pacientes").select("id").eq("id", patient_id).execute()
+    if not (p.data or []):
+        raise HTTPException(status_code=404, detail="Paciente inexistente")
+    info = {"origen": "importado",
+            "archivo": str(body.get("nombre_archivo", "") or "")[:120]}
+    try:
+        if body.get("fono_mediana_hz"):
+            info["fono_mediana_hz"] = float(body["fono_mediana_hz"])
+    except Exception:
+        pass
+    try:
+        dur = float(body.get("audio_duration_sec") or 0) or None
+    except Exception:
+        dur = None
+    try:
+        sb.table("companion_sessions").upsert({
+            "patient_id": patient_id,
+            "profesional_google_id": dev["profesional_google_id"],
+            "device_id": dev["id"], "device_session_id": dsid,
+            "recorded_at": body.get("recorded_at") or _now_iso(),
+            "audio_duration_sec": dur, "audio_codec": "importado",
+            "dsp_version": "servidor-praat/1.0", "device_info": info,
+            "consent_recorded": bool(body.get("consent_recorded", False)),
+        }, on_conflict="device_session_id").execute()
+        q = sb.table("companion_sessions").select("id").eq("device_session_id", dsid).execute()
+        sid = (q.data or [{}])[0].get("id")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo crear la sesión: {e}")
+    return JSONResponse(content={"ok": True, "session_id": sid, "status": "created"})
 
 
 # ─── Telegram inbound (apagado salvo TELEGRAM_INBOUND_ENABLED=true) ───
@@ -1515,15 +1568,46 @@ def _process_job(job: dict):
         segs = sb.table("session_segments").select("*").eq("session_id", sid)\
             .order("start_sec").execute()
         task_segs = segs.data or []
-        # 2. Trocear + transcribir
-        chunks = _chunk_plan(tmp.name, len(raw), task_segs)
-        tmp_files.extend([p for p, _ in chunks if p != tmp.name])
-        trans = _transcribir_trozos(chunks)
-        # 3. Diarizar por ventanas y guardar (idempotente)
-        trs = _diarizar(trans, task_segs)
+        # 2. Preparar audio: WAV para Praat + versión compacta (30 min ≈ 7 MB)
+        #    para transcribir. Sin ffmpeg se sigue con el archivo original.
+        import companion_voz
+        prep = None
+        try:
+            prep = companion_voz.preparar(tmp.name)
+            tmp_files.extend([prep["wav"], prep["compacto"]])
+        except Exception as e:
+            print(f"[companion] sin conversión de audio: {e}")
+        # 3. Transcribir + separar voces. AssemblyAI (diarización neuronal) si
+        #    hay clave; si no o si falla, Whisper (Groq) + tramos del teléfono
+        #    + corrección por contenido (companion_ia).
+        trs = None
+        if prep and companion_voz.disponible() and _external_audio_ok():
+            try:
+                trs = companion_voz.procesar(sb, ses, prep, task_segs)
+            except Exception as e:
+                traceback.print_exc()
+                print(f"[companion] AssemblyAI falló, sigo con Whisper: {e}")
+                trs = None
+        if not trs:
+            src = prep["compacto"] if prep else tmp.name
+            chunks = _chunk_plan(src, os.path.getsize(src), task_segs)
+            tmp_files.extend([p for p, _ in chunks if p != src])
+            trs = _diarizar(_transcribir_trozos(chunks), task_segs)
         sb.table("session_transcripts").delete().eq("session_id", sid).execute()
-        for t in trs:
-            sb.table("session_transcripts").insert(dict(t, session_id=sid)).execute()
+        filas_tr = [{"session_id": sid, "speaker": t["speaker"], "start_sec": t["start_sec"],
+                     "end_sec": t["end_sec"], "text": t["text"],
+                     "source": "manual" if t.get("source") == "manual" else "ai"}
+                    for t in trs]
+        for i in range(0, len(filas_tr), 200):
+            sb.table("session_transcripts").insert(filas_tr[i:i + 200]).execute()
+        # 3b. Altura tonal del paciente en el servidor (Praat) si la sesión no
+        #     la trae: audio importado o grabado en la web.
+        if prep:
+            try:
+                companion_voz.acustica_si_falta(sb, ses, prep, trs)
+            except Exception as e:
+                traceback.print_exc()
+                print(f"[companion] acústica en servidor falló: {e}")
         # 4. Borrador de anamnesis
         acs = sb.table("session_acoustics").select("*").eq("session_id", sid).execute()
         if _external_audio_ok():

@@ -397,11 +397,29 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                     <button onClick={() => descargarPDF('sesion')} className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-white/10 font-bold flex items-center gap-1.5"><Download size={13} /> PDF sesión</button>
                   </div>
                   {audioUrl && <audio src={audioUrl} controls className="w-full" />}
+                  {(() => {
+                    const info = detalle.sesion?.device_info || {};
+                    const dz = info.diarizacion;
+                    const nombres: Record<string, string> = { ia_contenido: 'contenido (IA)', huella_telefono: 'huella vocal del teléfono', tono_perfil: 'tono vs. "Mi voz"' };
+                    return (
+                      <div className="flex flex-wrap gap-1.5">
+                        {info.origen === 'importado' && <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">Audio importado{info.archivo ? `: ${info.archivo}` : ''}</span>}
+                        {info.origen === 'grabador-emergencia-web' && <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">Grabado / subido desde la web</span>}
+                        {dz && (
+                          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${dz.certeza === 'alta' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : dz.certeza === 'media' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30' : 'bg-red-500/10 text-red-600 border-red-500/30'}`}
+                            title={dz.medianas_hz ? `Tono mediano por hablante: ${Object.entries(dz.medianas_hz).map(([k, v]) => `${k} ${v ?? '—'} Hz`).join(' · ')}` : ''}>
+                            Voces separadas por IA · certeza {dz.certeza}{Object.keys(dz.votos || {}).length ? ` (${Object.keys(dz.votos).map((k: string) => nombres[k] || k).join(' + ')}${dz.acuerdo ? ', coinciden' : ', no coinciden: revisar'})` : ''}{dz.hablantes > 2 ? ` · ${dz.hablantes} voces detectadas` : ''}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* Métricas por tarea */}
                   {(detalle.acustica || []).map((a: any) => (
                     <div key={a.task_type} className="p-3 rounded-xl border border-gray-200 dark:border-white/10">
                       <p className="font-bold mb-1">{TASK_LABEL[a.task_type] || a.task_type}
-                        {!a.validada && <span className="ml-2 text-amber-600">no validada</span>}</p>
+                        {!a.validada && <span className="ml-2 text-amber-600">no validada</span>}
+                        {String(a.dsp_version || '').startsWith('servidor-praat') && <span className="ml-2 text-[10px] font-semibold text-gray-500">medido con Praat en el servidor</span>}</p>
                       <p className="text-base font-black">{fmtHz(a.f0_median_hz)} Hz <span className="text-indigo-600 dark:text-indigo-400">{notaMusical(a.f0_median_hz)}</span> <span className="text-xs font-normal text-gray-500">altura tonal del paciente (mediana)</span></p>
                       <p>Rango p5–p95 {fmtHz(a.f0_p5_hz)}–{fmtHz(a.f0_p95_hz)} Hz · media {fmtHz(a.f0_mean_hz)} Hz · SD {fmtDb(a.f0_sd_semitones)} st · voz {a.voiced_fraction != null ? `${Math.round(a.voiced_fraction * 100)}%` : '—'}</p>
                       <div className="mt-2">

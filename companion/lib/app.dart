@@ -7,6 +7,7 @@ import 'data/secure_store.dart';
 import 'data/session_store.dart';
 import 'data/patient_repository.dart';
 import 'sync/api_client.dart';
+import 'sync/sincronizar.dart';
 import 'sync/sync_engine.dart';
 import 'sync/tus_client.dart';
 import 'ui/theme.dart';
@@ -48,11 +49,17 @@ class CompanionApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Vocalis Companion',
-      theme: ClinicaTheme.light,
-      home: PuertaAuth(deps: Deps(db: db)),
-      debugShowCheckedModeBanner: false,
+    final deps = Deps(db: db);
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: temaApp,
+      builder: (_, modo, __) => MaterialApp(
+        title: 'Vocalis Companion',
+        theme: ClinicaTheme.light,
+        darkTheme: ClinicaTheme.dark,
+        themeMode: modo,
+        home: PuertaAuth(deps: deps),
+        debugShowCheckedModeBanner: false,
+      ),
     );
   }
 }
@@ -158,6 +165,13 @@ class _HomeTabsState extends State<HomeTabs> {
   int _visitasGrabar = 0;
   String? _pacienteId;
   bool _consent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Al abrir: subir lo que haya quedado pendiente (sin tocar nada).
+    sincronizarEnFondo(widget.deps);
+  }
 
   @override
   Widget build(BuildContext context) {

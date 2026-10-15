@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, Upload, Trash2, Loader2, AlertCircle, WifiOff } from 'lucide-react';
+import { Mic, Square, Upload, Trash2, Loader2, AlertCircle, WifiOff, FileAudio } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { leerPacientesMinimos, idbGuardar, idbListar, idbBorrar } from '../utils/pwa';
 
@@ -14,6 +14,8 @@ export default function GrabadorEmergencia() {
   const [pendientes, setPendientes] = useState<any[]>([]);
   const [msg, setMsg] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const archivoRef = useRef<HTMLInputElement | null>(null);
   const mrRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const wakeRef = useRef<any>(null);
@@ -121,6 +123,47 @@ export default function GrabadorEmergencia() {
     }
   };
 
+  // Subir un archivo ya grabado (Grabadora de voz de Windows, celular…):
+  // el servidor transcribe, separa las voces y mide la altura tonal (Praat).
+  const subirArchivo = async (archivo: File | undefined) => {
+    if (!archivo) return;
+    if (!pacSel) { setMsg('Elegí un paciente antes de subir el archivo.'); return; }
+    if (!consent) { setMsg('Marcá el consentimiento antes de subir el archivo.'); return; }
+    if (archivo.size > 45 * 1024 * 1024) { setMsg('El archivo supera 45 MB. Exportalo como m4a/mp3 o usá la app Companion (comprime sola).'); return; }
+    setSubiendo(true);
+    setMsg(`Subiendo ${archivo.name}…`);
+    try {
+      const duracion = await new Promise<number>((res) => {
+        try {
+          const a = new Audio();
+          a.preload = 'metadata';
+          a.onloadedmetadata = () => { res(isFinite(a.duration) ? a.duration : 0); URL.revokeObjectURL(a.src); };
+          a.onerror = () => res(0);
+          a.src = URL.createObjectURL(archivo);
+        } catch { res(0); }
+      });
+      const fd = new FormData();
+      fd.append('user_id', uid);
+      fd.append('paciente_id', pacSel);
+      fd.append('recorded_at', new Date(archivo.lastModified || Date.now()).toISOString());
+      fd.append('audio_duration_sec', String(Math.round(duracion)));
+      fd.append('consent_recorded', 'true');
+      fd.append('audio', archivo, archivo.name);
+      const r = await fetch(`${BACKEND_URL}/api/companion/sesiones-web`, { method: 'POST', body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) {
+        setMsg(`✓ ${archivo.name} subido. Se está transcribiendo, separando voces y midiendo la altura tonal: aparece en "Voz y sesiones" del paciente en unos minutos.`);
+      } else {
+        setMsg(`No se pudo subir: ${d.detail || d.error || r.status}`);
+      }
+    } catch (e: any) {
+      setMsg(`No se pudo subir (¿sin conexión?): ${e.message || e}`);
+    } finally {
+      setSubiendo(false);
+      if (archivoRef.current) archivoRef.current.value = '';
+    }
+  };
+
   const grupos: Record<string, any[]> = {};
   for (const p of pendientes) { (grupos[p.grabacion_id] = grupos[p.grabacion_id] || []).push(p); }
   const mins = leerPacientesMinimos();
@@ -149,6 +192,16 @@ export default function GrabadorEmergencia() {
           ? <button onClick={empezar} className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold flex items-center gap-2"><Mic size={15} /> Grabar (bloques 30 s)</button>
           : <button onClick={detener} className="px-5 py-2.5 rounded-xl bg-gray-800 text-white font-bold flex items-center gap-2"><Square size={15} /> Detener</button>}
         <p className="text-gray-400">Sin cancelación de eco/ruido ni ganancia automática. La pantalla se mantiene encendida (Wake Lock).</p>
+        <div className="pt-3 border-t border-gray-100 dark:border-white/5">
+          <label className="font-bold block mb-1">¿Ya grabaste con otro programa?</label>
+          <input ref={archivoRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.ogg,.webm,.aac" className="hidden"
+            onChange={e => subirArchivo(e.target.files?.[0])} />
+          <button onClick={() => archivoRef.current?.click()} disabled={grabando || subiendo || !isOnline}
+            className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold flex items-center gap-2 disabled:opacity-50">
+            {subiendo ? <Loader2 size={15} className="animate-spin" /> : <FileAudio size={15} />} Subir archivo de audio
+          </button>
+          <p className="text-gray-400 mt-1">Grabadora de voz de Windows, celular u otra app (m4a, mp3, wav; máx. 45 MB). La IA transcribe, separa tu voz de la del paciente y mide su altura tonal.</p>
+        </div>
       </div>
       <div className="bg-white/80 dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 p-4 text-xs">
         <div className="flex items-center justify-between mb-2">

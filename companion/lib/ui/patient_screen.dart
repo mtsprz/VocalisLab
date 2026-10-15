@@ -95,8 +95,8 @@ class _PatientScreenState extends State<PatientScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Text('Elegir paciente', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        const Text('Lista local (caché). Sin internet igual funciona.',
-            style: TextStyle(fontSize: 15, color: Colors.black54),),
+        Text('Lista local (caché). Sin internet igual funciona.',
+            style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurfaceVariant),),
         const SizedBox(height: 12),
         TextField(
           style: const TextStyle(fontSize: 18),

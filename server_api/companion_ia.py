@@ -65,8 +65,7 @@ def corregir_hablantes(base: list) -> list:
     for s, h in zip(lineas, hablantes):
         h = str(h).strip().lower()
         if h in ("paciente", "fonoaudiologo") and h != s.get("speaker"):
-            s["speaker"] = h
-            s["source"] = "ai_contenido"
+            s["speaker"] = h   # source sigue "ai": la tabla solo admite ai/manual
     return base
 
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ import '../core/dsp/dsp_isolate.dart' show AnalisisEnVivo;
 import '../core/finalizar_sesion.dart';
 import '../data/settings_store.dart';
 import '../sync/foreground_service.dart';
+import '../sync/sincronizar.dart';
 import 'finalizar_ui.dart';
 
 /// Grabación de la sesión con un solo botón. Al detener, la app separa sola
@@ -99,7 +101,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
         'audio_codec': 'aac',
         'audio_bitrate_kbps': AppConfig.aacBitrate ~/ 1000,
         'dsp_version': AppConfig.dspVersion,
-        'device_info': _deviceInfo(),
+        'device_info': _deviceInfo((await AppSettings.load()).vozFonoHz),
         'consent_recorded': widget.consent ? 1 : 0,
         'status': 'recording',
         'blocks_dir': p.join(_sesDir, 'bloques'),
@@ -174,9 +176,12 @@ class _RecordingScreenState extends State<RecordingScreen> {
         sesionEnCurso = null;
         // Unir bloques + cifrar en segundo plano: ya se puede atender al
         // siguiente paciente. Si falla, la sesión queda para "recuperar".
+        // Al quedar lista, sube sola (si hay Wi-Fi/conexión y está vinculada).
+        final deps = widget.deps;
+        final dsid = _dsid;
         unawaited(completarAudio(
-          store: widget.deps.store, vault: widget.deps.vault, dsid: _dsid, sesDir: _sesDir,
-        ).catchError((_) {}),);
+          store: deps.store, vault: deps.vault, dsid: dsid, sesDir: _sesDir,
+        ).then((_) => sincronizarEnFondo(deps, dsid)).catchError((_) {}),);
         widget.onTerminar(_dsid);
         return;
       } catch (_) {
@@ -194,6 +199,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
         },
       );
       sesionEnCurso = null;
+      sincronizarEnFondo(widget.deps, _dsid);
       widget.onTerminar(_dsid);
     } catch (e) {
       sesionEnCurso = null;
@@ -205,8 +211,14 @@ class _RecordingScreenState extends State<RecordingScreen> {
     }
   }
 
-  String _deviceInfo() =>
-      '{"modelo":"${Platform.operatingSystem}","so":"${Platform.operatingSystemVersion.replaceAll('"', '')}","microfono":"no especificado","distancia_cm":null,"calibracion_db":null}';
+  String _deviceInfo(double? fonoHz) => jsonEncode({
+        'modelo': Platform.operatingSystem,
+        'so': Platform.operatingSystemVersion,
+        'microfono': 'no especificado',
+        'distancia_cm': null,
+        'calibracion_db': null,
+        if (fonoHz != null) 'fono_mediana_hz': double.parse(fonoHz.toStringAsFixed(1)),
+      });
 
   String _hhmmss(Duration d) {
     String dd(int n) => n.toString().padLeft(2, '0');
@@ -228,7 +240,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
             margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF7F3EA),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFC96F4A)),
             ),
@@ -254,8 +266,8 @@ class _RecordingScreenState extends State<RecordingScreen> {
               style: const TextStyle(fontSize: 18),
             ),
             const SizedBox(height: 4),
-            const Text('Puede tardar unos minutos en sesiones largas. No cierres la app.',
-                textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.black54),),
+            Text('Puede tardar unos minutos en sesiones largas. No cierres la app.',
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurfaceVariant),),
           ],)
         else
           Center(
@@ -301,7 +313,7 @@ class _RecordingScreenState extends State<RecordingScreen> {
                 value: nivel,
                 minHeight: 14,
                 color: color,
-                backgroundColor: Colors.black12,
+                backgroundColor: Theme.of(context).dividerColor,
               ),
             ),
             const SizedBox(height: 6),

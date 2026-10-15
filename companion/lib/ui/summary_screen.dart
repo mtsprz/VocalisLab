@@ -223,7 +223,7 @@ class _Principal extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Altura tonal · $origen', style: const TextStyle(fontSize: 16, color: Colors.black54)),
+          Text('Altura tonal · $origen', style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 6),
           Text(med == null ? '— Hz' : '${med.round()} Hz',
               style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),),
@@ -244,13 +244,13 @@ class _Principal extends StatelessWidget {
             Text(
               'Promedio esperado: ${_promedio(ref!)} Hz'
               '${ref?['fuente'] != null ? ' · ${ref!['fuente']}' : ''}',
-              style: const TextStyle(fontSize: 15, color: Colors.black54),
+              style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           if (diar != null) _lineaDiarizacion(diar!),
-          const Text('Referencia orientativa: no reemplaza el criterio clínico.',
-              style: TextStyle(fontSize: 14, color: Colors.black54),),
+          Text('Referencia orientativa: no reemplaza el criterio clínico.',
+              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),),
           const SizedBox(height: 4),
-          const Text(convencionOctavas, style: TextStyle(fontSize: 12, color: Colors.black45)),
+          Text(convencionOctavas, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ],),
       ),
     );
@@ -302,8 +302,8 @@ class _Histograma extends StatelessWidget {
     final max = keys.map((k) => (bins['$k'] as num).toDouble()).reduce(math.max);
     double hz(num st) => refHz * math.pow(2, st / 12);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Histograma de F0 (1 barra = 1 semitono; azul = dentro del rango esperado)',
-          style: TextStyle(fontSize: 13, color: Colors.black54),),
+      Text('Histograma de F0 (1 barra = 1 semitono; azul = dentro del rango esperado)',
+          style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),),
       const SizedBox(height: 4),
       CustomPaint(
         size: const Size(double.infinity, 110),

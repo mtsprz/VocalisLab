@@ -112,6 +112,39 @@ endpoint de subida estándar. El cliente deriva de esa URL el endpoint TUS
 último**, como pide la doc de Supabase (Resumable Uploads). El `device_token`
 no se envía a Supabase.
 
+## Sincronización automática
+Al terminar una grabación (y al abrir la app) las sesiones pendientes suben
+solas apenas hay conexión (respeta "solo Wi-Fi"). La pestaña Sincronizar queda
+para ver el estado, reintentar y recuperar sesiones interrumpidas.
+
+## Importar un audio ya grabado
+Paciente → consentimiento → **Importar audio ya grabado** (m4a, mp3, wav, ogg,
+webm, aac). El archivo se guarda cifrado, se sube por TUS
+(`POST /importaciones` → `/uploads` → `/uploads/confirm`) y el **servidor**
+hace todo el análisis. WAV de más de 45 MB se comprime antes (MediaCodec en
+Android, ffmpeg en Windows). En la web: menú **Grabar / subir audio** → Subir
+archivo de audio.
+
+## Separación de voces y transcripción en el servidor
+`server_api/companion_voz.py`, usado por el worker al procesar cada sesión:
+- **AssemblyAI** (si `ASSEMBLYAI_API_KEY` está en Render): transcripción en
+  español + diarización neuronal (2 hablantes esperados, vocabulario de
+  fonoaudiología). La transcripción se borra del proveedor tras leerla. Sin
+  clave, o si falla: Whisper (Groq) + tramos del teléfono + corrección por IA.
+- **Quién es quién**: voto ponderado de tres evidencias independientes: IA
+  por contenido (consignas vs. respuestas), tramos del teléfono (huella "Mi
+  voz") y tono de cada hablante vs. el perfil "Mi voz" (Praat). Se guarda en
+  `device_info.diarizacion` (votos, si coinciden, certeza) y la web lo muestra.
+- **Altura tonal en el servidor**: si la sesión no trae acústica (audio
+  importado o web), Praat (autocorrelación, 10 ms, rango por sexo/edad como
+  `yin.dart`) solo sobre los tramos del paciente, con el mismo formato de
+  métricas que el teléfono (`dsp_version = servidor-praat/1.0`). Si el
+  teléfono ya mandó acústica, manda la del teléfono.
+
+## Modo noche
+Ajustes → Apariencia: Automático (sigue al sistema), Día o Noche. Se aplica
+al instante en Android y Windows.
+
 ## Compresión
 - **Android**: MediaCodec vía MethodChannel (`MainActivity.kt`, `compressToAac`).
 - **Windows**: `ffmpeg.exe` junto al `.exe` o en PATH

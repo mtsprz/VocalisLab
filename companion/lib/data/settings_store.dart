@@ -18,6 +18,9 @@ class AppSettings {
   Float32List? vozFonoHuella;
   String? vozFonoModelo;
 
+  /// Tema: 'sistema' (sigue al teléfono/PC), 'claro' u 'oscuro' (modo noche).
+  String tema;
+
   AppSettings({
     this.wifiOnly = true,
     this.localRetentionDays = 30,
@@ -25,6 +28,7 @@ class AppSettings {
     this.vozFonoSdSt,
     this.vozFonoHuella,
     this.vozFonoModelo,
+    this.tema = 'sistema',
   });
 
   bool get tienePerfilVoz => vozFonoHz != null && vozFonoHz! > 0;
@@ -48,6 +52,7 @@ class AppSettings {
             ? Float32List.view(base64Decode(m['vozFonoHuella'] as String).buffer)
             : null,
         vozFonoModelo: m['vozFonoModelo'] as String?,
+        tema: (m['tema'] as String?) ?? 'sistema',
       );
     } catch (_) {
       return AppSettings();
@@ -65,6 +70,7 @@ class AppSettings {
         'vozFonoHuella': base64Encode(vozFonoHuella!.buffer.asUint8List(
             vozFonoHuella!.offsetInBytes, vozFonoHuella!.lengthInBytes,),),
       if (vozFonoModelo != null) 'vozFonoModelo': vozFonoModelo,
+      'tema': tema,
     }),);
   }
 }

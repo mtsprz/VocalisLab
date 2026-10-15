@@ -4,6 +4,7 @@ import '../app.dart';
 import '../data/settings_store.dart';
 import 'mi_voz.dart';
 import 'pairing_screen.dart';
+import 'theme.dart';
 
 /// Ajustes: red, retención local, PIN y cierre de sesión.
 class SettingsScreen extends StatefulWidget {
@@ -59,6 +60,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return ListView(padding: const EdgeInsets.all(20), children: [
       const Text('Ajustes', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 12),
+      const Text('Apariencia', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(value: 'sistema', icon: Icon(Icons.brightness_auto), label: Text('Automático')),
+          ButtonSegment(value: 'claro', icon: Icon(Icons.light_mode), label: Text('Día')),
+          ButtonSegment(value: 'oscuro', icon: Icon(Icons.dark_mode), label: Text('Noche')),
+        ],
+        selected: {_s.tema},
+        onSelectionChanged: (v) async {
+          // Se aplica y se guarda al instante (sin tocar "Guardar").
+          final actual = await AppSettings.load();
+          actual.tema = v.first;
+          await actual.save();
+          temaApp.value = temaDesde(v.first);
+          if (mounted) setState(() => _s.tema = v.first);
+        },
+      ),
       const SizedBox(height: 12),
       SwitchListTile(
         value: _s.wifiOnly,

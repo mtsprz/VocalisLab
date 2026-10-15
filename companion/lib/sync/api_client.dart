@@ -122,6 +122,10 @@ class ApiClient implements CompanionApi {
   Future<Map<String, dynamic>> getReferencias() =>
       _get('/referencias', const Duration(seconds: 75));
 
+  /// Crea la sesión de un audio importado (el servidor hace el análisis).
+  Future<Map<String, dynamic>> crearImportacion(Map<String, dynamic> payload) =>
+      _post('/importaciones', payload, const Duration(seconds: 75));
+
   /// Lista mínima de pacientes para la caché offline (requiere vinculación).
   Future<List<Map<String, dynamic>>> pacientes() async {
     final r = await _get('/pacientes', const Duration(seconds: 75));

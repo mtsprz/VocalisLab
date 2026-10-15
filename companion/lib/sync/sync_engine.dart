@@ -122,6 +122,50 @@ class SyncEngine {
     }
   }
 
+  /// Sesión desde un archivo importado (otra grabadora): el servidor crea la
+  /// fila ([crear] → POST /importaciones), recibe el audio por TUS y hace
+  /// todo el análisis (transcripción, voces y altura tonal con Praat).
+  Future<void> sincronizarImportada(
+    String deviceSessionId, {
+    required Future<Map<String, dynamic>> Function() crear,
+    required String audioPath,
+    required String audioMime,
+    bool wifiOnly = AppConfig.wifiOnlyDefault,
+  }) async {
+    if (!await _wifiOk(wifiOnly)) {
+      throw const SyncPendiente('Sin Wi-Fi (configurado solo Wi-Fi)');
+    }
+    final token = await leerToken();
+    if (token == null || token.isEmpty) {
+      throw const SyncPendiente('Sin emparejar');
+    }
+    try {
+      await store.estado(deviceSessionId, 'uploading');
+      await _conBackoff(() => api.health(), paso: 'health');
+      final created = await _conBackoff(crear, paso: 'importaciones');
+      final serverId = '${created['session_id'] ?? ''}';
+      if (serverId.isNotEmpty) await store.guardarServidor(deviceSessionId, serverId);
+      await _subirArchivo(
+        deviceSessionId: deviceSessionId,
+        kind: 'session_audio',
+        path: audioPath,
+        mime: audioMime,
+      );
+      await _conBackoff(
+          () => api.confirmUpload({'device_session_id': deviceSessionId, 'kind': 'session_audio'}),
+          paso: 'confirm',);
+      await store.estado(deviceSessionId, 'watching');
+      await _esperarProcesado(deviceSessionId, serverId);
+    } on ApiException catch (e) {
+      await store.estado(deviceSessionId, 'error',
+          error: e.needsAction ? 'ACCION_REQUERIDA: ${e.message}' : e.message,);
+      rethrow;
+    } catch (e) {
+      await store.estado(deviceSessionId, 'error', error: '$e');
+      rethrow;
+    }
+  }
+
   Future<void> _subirArchivo({
     required String deviceSessionId,
     required String kind,
