@@ -786,7 +786,7 @@ def analisis_clinico(sb, ses: dict, trs: list) -> dict:
     texto = "\n".join(lineas)[:90000]
     items_txt = "\n".join(f"{k}: {v}" for k, v in VHI_ITEMS.items())
     prompt = (
-        "Sos fonoaudiólogo/a especialista en voz. Analizá la transcripción de una sesión "
+        "Sos fonoaudiólogo/a clínico/a del área de voz. Analizá la transcripción de una sesión "
         "(FONO = profesional, PACIENTE = paciente; la atribución automática puede tener "
         "errores: usá el contenido). Respondé SOLO JSON con esta forma:\n"
         "{\"tipo_sesion\": \"evaluacion_inicial|anamnesis|aplicacion_instrumento|terapia|control|otra\",\n"

@@ -807,6 +807,97 @@ async def reprocesar_sesion(request: Request, session_id: str, user_id: str = ""
     return JSONResponse(content={"ok": True, "status": "uploaded"})
 
 
+# ─── Corrección a mano (web) ───
+async def _body(request: Request) -> dict:
+    try:
+        b = await request.json()
+        return b if isinstance(b, dict) else {}
+    except Exception:
+        return {}
+
+
+@router.patch("/api/companion/transcripciones/{tid}")
+async def corregir_frase(tid: str, request: Request):
+    """Cambia el hablante y/o el texto de una frase. Queda como `manual`:
+    un reproceso automático no la pisa sin aviso."""
+    body = await _body(request)
+    uid = _require_profesional(str(body.get("user_id", "")))
+    sb = _sb()
+    r = sb.table("session_transcripts").select("*").eq("id", tid).execute()
+    if not (r.data or []):
+        raise HTTPException(status_code=404, detail="Frase inexistente")
+    _sesion_de_profesional(sb, r.data[0]["session_id"], uid)
+    cambios = {"source": "manual"}
+    if "speaker" in body:
+        if body["speaker"] not in SPEAKERS:
+            raise HTTPException(status_code=400, detail="speaker inválido")
+        cambios["speaker"] = body["speaker"]
+    if "text" in body:
+        cambios["text"] = str(body["text"] or "").strip()[:4000]
+    sb.table("session_transcripts").update(cambios).eq("id", tid).execute()
+    return JSONResponse(content={"ok": True, "transcripcion": dict(r.data[0], **cambios)})
+
+
+@router.post("/api/companion/sessions/{session_id}/transcripciones/intercambiar")
+async def intercambiar_hablantes(session_id: str, request: Request):
+    """Error típico de la separación automática: roles invertidos. Invierte
+    fonoaudiólogo ↔ paciente en todas las frases de la sesión."""
+    body = await _body(request)
+    uid = _require_profesional(str(body.get("user_id", "")))
+    sb = _sb()
+    _sesion_de_profesional(sb, session_id, uid)
+    r = sb.table("session_transcripts").select("id, speaker").eq("session_id", session_id).execute()
+    for t in (r.data or []):
+        otro = "paciente" if t["speaker"] == "fonoaudiologo" else "fonoaudiologo"
+        sb.table("session_transcripts").update({"speaker": otro, "source": "manual"})\
+            .eq("id", t["id"]).execute()
+    return JSONResponse(content={"ok": True, "frases": len(r.data or [])})
+
+
+@router.post("/api/companion/sessions/{session_id}/recalcular")
+async def recalcular_sesion(session_id: str, request: Request):
+    """Recalcula la altura tonal del paciente con Praat usando la atribución
+    ACTUAL (con las correcciones a mano); opcionalmente regenera el análisis
+    IA. No vuelve a transcribir."""
+    body = await _body(request)
+    uid = _require_profesional(str(body.get("user_id", "")))
+    sb = _sb()
+    ses = _sesion_de_profesional(sb, session_id, uid)
+    if not ses.get("audio_storage_path"):
+        raise HTTPException(status_code=422, detail="La sesión no tiene audio subido")
+    info = ses.get("device_info") or {}
+    if not isinstance(info, dict):
+        info = {}
+    info["recalcular"] = {"analisis": bool(body.get("analisis", False)), "pedido": _now_iso()}
+    sb.table("companion_sessions").update({"device_info": info, "status": "uploaded",
+                                           "error_detail": ""}).eq("id", session_id).execute()
+    _encolar_job(sb, session_id)
+    return JSONResponse(content={"ok": True, "status": "uploaded"})
+
+
+@router.put("/api/companion/sessions/{session_id}/vhi")
+async def corregir_vhi(session_id: str, request: Request):
+    """Corrige ítems del VHI: el total y las subescalas se recalculan acá."""
+    import companion_voz
+    body = await _body(request)
+    uid = _require_profesional(str(body.get("user_id", "")))
+    sb = _sb()
+    ses = _sesion_de_profesional(sb, session_id, uid)
+    info = ses.get("device_info") or {}
+    ia = dict(info.get("analisis_ia") or {})
+    vhi = dict(ia.get("vhi") or {})
+    items = [it for it in (body.get("items") or []) if isinstance(it, dict)]
+    version = str(body.get("version") or vhi.get("version") or "VHI-30")
+    vhi.update({"aplicado": bool(items), "version": version, "items": items,
+                "editado_a_mano": _now_iso()})
+    vhi["resultado"] = companion_voz.puntuar_vhi(items, version) if items else None
+    ia["vhi"] = vhi
+    ia["comparacion"] = companion_voz._comparar_previa(sb, ses, ia)
+    info["analisis_ia"] = ia
+    sb.table("companion_sessions").update({"device_info": info}).eq("id", session_id).execute()
+    return JSONResponse(content={"ok": True, "vhi": vhi})
+
+
 def _rangos(sb) -> list:
     try:
         r = sb.table("reference_ranges").select("*").execute()
@@ -1120,27 +1211,48 @@ async def informe_evolucion(request: Request):
         if not (pac.data or []):
             raise HTTPException(status_code=404, detail="Paciente inexistente")
         p = pac.data[0]
-        r = sb.table("voice_progress").select("*").eq("patient_id", pid)\
-            .order("task_type").order("session_number").execute()
+        # Sesiones del paciente (este profesional) con F0 del habla y análisis IA.
+        ses = sb.table("companion_sessions").select("id, recorded_at, device_info, status")\
+            .eq("patient_id", pid).eq("profesional_google_id", uid)\
+            .order("recorded_at").execute().data or []
+        ids = [s["id"] for s in ses]
+        acs = {}
+        if ids:
+            for a in (sb.table("session_acoustics").select("*").in_("session_id", ids)
+                      .eq("task_type", "conversacion_espontanea").execute().data or []):
+                acs[a["session_id"]] = a
         serie = []
-        for s in (r.data or []):
-            try:
-                f = (s.get("recorded_at") or "")[:10]
-            except Exception:
-                f = ""
-            serie.append({"n": s.get("session_number"), "fecha": f,
-                          "f0_median_hz": s.get("f0_median_hz"),
-                          "f0_sd_semitones": s.get("f0_sd_semitones"),
-                          "intensity_mean_db": s.get("intensity_mean_db"),
-                          "jitter_pct": s.get("jitter_pct"),
-                          "shimmer_pct": s.get("shimmer_pct"),
-                          "hnr_db": s.get("hnr_db"), "mpt_sec": s.get("mpt_sec")})
-        ref = _elegir_referencia(p, _rangos(sb))
+        for s in ses:
+            a = acs.get(s["id"]) or {}
+            info = s.get("device_info") if isinstance(s.get("device_info"), dict) else {}
+            ia = info.get("analisis_ia") or {}
+            res = (ia.get("vhi") or {}).get("resultado") or {}
+            if not a.get("f0_median_hz") and res.get("total") is None and not ia.get("resumen"):
+                continue
+            sub = res.get("subescalas") or {}
+            serie.append({
+                "fecha": (s.get("recorded_at") or "")[:10],
+                "tipo": str(ia.get("tipo_sesion") or "").replace("_", " "),
+                "f0_median_hz": a.get("f0_median_hz"), "f0_mean_hz": a.get("f0_mean_hz"),
+                "f0_p5_hz": a.get("f0_p5_hz"), "f0_p95_hz": a.get("f0_p95_hz"),
+                "f0_sd_semitones": a.get("f0_sd_semitones"),
+                "vhi_total": res.get("total") if res.get("respondidos") else None,
+                "vhi_f": sub.get("funcional"), "vhi_p": sub.get("fisica"),
+                "vhi_e": sub.get("emocional"), "vhi_instrumento": res.get("instrumento"),
+                "resumen": ia.get("resumen") or "",
+                "indicaciones": [x for x in (ia.get("indicaciones_para_casa") or []) if x][:4],
+            })
+        sexo = p.get("sexo_referencia") or p.get("sexo") or ""
+        edad = _edad(p.get("fecha_nacimiento") or "")
+        rng = elegir_rango_normativo(_rangos(sb), sexo, edad) or {}
         from reportes_sesion import generar_pdf_evolucion
         path = generar_pdf_evolucion(
-            {"paciente": p.get("nombre_completo", "—"), "serie": serie,
-             "referencia": {"sexo": ref.get("sexo"), "edad": ref.get("edad"),
-                            "min_hz": ref.get("min_hz"), "max_hz": ref.get("max_hz")}},
+            {"paciente": p.get("nombre_completo", "—"), "sexo": sexo, "edad": edad,
+             "serie": serie,
+             "referencia": {"min_hz": rng.get("f0_min_hz"), "max_hz": rng.get("f0_max_hz"),
+                            "promedio_min_hz": rng.get("f0_promedio_min_hz"),
+                            "promedio_max_hz": rng.get("f0_promedio_max_hz"),
+                            "fuente": rng.get("fuente")}},
             body.get("firma", {}) or {})
     except HTTPException:
         raise
@@ -1556,6 +1668,54 @@ def _ia_borrador(contexto: dict) -> dict:
         return base
 
 
+def _recalcular(sb, ses: dict, audio_path: str, tmp_files: list, info: dict):
+    """Tras correcciones a mano: F0 del paciente con Praat sobre las frases
+    marcadas como paciente (reemplaza la acústica de esa tarea; la del
+    teléfono queda respaldada en device_info.acustica_telefono) y, si se
+    pidió, análisis IA nuevo. No vuelve a transcribir."""
+    import companion_voz
+    sid = ses["id"]
+    pedido = info.pop("recalcular", {}) or {}
+    prep = companion_voz.preparar(audio_path)
+    tmp_files.extend([prep["wav"], prep["compacto"]])
+    trs = sb.table("session_transcripts").select("*").eq("session_id", sid)\
+        .order("start_sec").execute().data or []
+    iv = [(float(t["start_sec"]), float(t["end_sec"])) for t in trs if t.get("speaker") == "paciente"]
+    if not iv:
+        raise RuntimeError("Ninguna frase marcada como paciente: no hay voz para medir")
+    ac = sb.table("session_acoustics").select("*").eq("session_id", sid)\
+        .eq("task_type", companion_voz.TAREA).execute().data or []
+    if ac and not str(ac[0].get("dsp_version") or "").startswith("servidor-praat") \
+            and "acustica_telefono" not in info:
+        info["acustica_telefono"] = {k: ac[0].get(k) for k in (
+            "f0_mean_hz", "f0_median_hz", "f0_p5_hz", "f0_p95_hz", "f0_sd_semitones",
+            "voiced_fraction", "dsp_version")}
+    sexo, edad = companion_voz._paciente(sb, ses.get("patient_id"))
+    floor, ceiling = companion_voz.rango_busqueda(sexo, edad)
+    fila = companion_voz.metricas(companion_voz.f0_cuadros(prep["wav"], iv, floor, ceiling))
+    fila["dsp_version"] = companion_voz.DSP_VERSION + "+manual"
+    sb.table("session_acoustics").upsert(dict(fila, session_id=sid),
+                                         on_conflict="session_id,task_type").execute()
+    info["recalculado"] = {"fecha": _now_iso(), "frases_paciente": len(iv)}
+    ses["device_info"] = info
+    sb.table("companion_sessions").update({"device_info": info}).eq("id", sid).execute()
+    if pedido.get("analisis"):
+        try:
+            companion_voz.analisis_clinico(sb, ses, trs)
+        except Exception as e:
+            print(f"[companion] análisis IA (recalcular) falló: {e}")
+    else:
+        try:   # la comparación con la sesión previa usa la F0 nueva
+            ia = dict(info.get("analisis_ia") or {})
+            if ia:
+                ia["comparacion"] = companion_voz._comparar_previa(sb, ses, ia)
+                companion_voz._guardar_info(sb, ses, "analisis_ia", ia)
+        except Exception:
+            pass
+    sb.table("companion_sessions").update({"status": "processed", "error_detail": ""})\
+        .eq("id", sid).execute()
+
+
 def _process_job(job: dict):
     sb = _sb()
     sid = job.get("session_id")
@@ -1588,6 +1748,11 @@ def _process_job(job: dict):
         segs = sb.table("session_segments").select("*").eq("session_id", sid)\
             .order("start_sec").execute()
         task_segs = segs.data or []
+        info = ses.get("device_info") if isinstance(ses.get("device_info"), dict) else {}
+        if info.get("recalcular"):
+            _recalcular(sb, ses, tmp.name, tmp_files, info)
+            _job_done(sb, job, True)
+            return
         # 2. Preparar audio: WAV para Praat + versión compacta (30 min ≈ 7 MB)
         #    para transcribir. Sin ffmpeg se sigue con el archivo original.
         import companion_voz

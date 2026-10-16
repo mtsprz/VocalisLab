@@ -111,6 +111,9 @@ export default function SesionesVozModule({ pacienteId }: Props) {
   const [draftEdit, setDraftEdit] = useState<any>(null);
   const [msg, setMsg] = useState('');
   const [expandTr, setExpandTr] = useState(false);
+  const [editTr, setEditTr] = useState<{ id: string; text: string } | null>(null);
+  const [vhiEdit, setVhiEdit] = useState<any[] | null>(null);
+  const [regenerarIA, setRegenerarIA] = useState(false);
   const [cmpA, setCmpA] = useState<string>('');
   const [cmpB, setCmpB] = useState<string>('');
   const [cmpDatos, setCmpDatos] = useState<any[]>([]);
@@ -282,6 +285,42 @@ export default function SesionesVozModule({ pacienteId }: Props) {
       setMsg(r.ok && d.ok ? 'En cola ✓ Tocá "Actualizar" en unos minutos para ver el resultado.' : `No se pudo reprocesar: ${d.detail || r.status}`);
       cargarSesiones();
     } catch (e: any) { setMsg(`No se pudo reprocesar: ${e.message || e}`); }
+  };
+
+  const recargarDetalle = async () => {
+    if (!selId) return;
+    const r = await fetch(`${BACKEND_URL}/api/companion/sessions/${selId}?user_id=${uid}`);
+    const d = await r.json().catch(() => ({}));
+    if (d.ok) setDetalle(d);
+  };
+  const jsonPost = (url: string, method: string, body: any) =>
+    fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, ...body }) })
+      .then(async r => ({ ok: r.ok, d: await r.json().catch(() => ({})) }));
+  const corregirFrase = async (t: any, cambios: any) => {
+    const { ok, d } = await jsonPost(`${BACKEND_URL}/api/companion/transcripciones/${t.id}`, 'PATCH', cambios);
+    if (!ok) { setMsg(`No se pudo corregir: ${d.detail || ''}`); return; }
+    setDetalle((prev: any) => ({ ...prev, transcripciones: prev.transcripciones.map((x: any) => x.id === t.id ? { ...x, ...cambios, source: 'manual' } : x) }));
+    setMsg('Frase corregida ✓ Cuando termines, tocá "Recalcular F0 con mis correcciones".');
+  };
+  const intercambiarTodos = async () => {
+    if (!selId || !confirm('¿Invertir fonoaudiólogo/a ↔ paciente en TODAS las frases?')) return;
+    const { ok, d } = await jsonPost(`${BACKEND_URL}/api/companion/sessions/${selId}/transcripciones/intercambiar`, 'POST', {});
+    setMsg(ok ? `Roles invertidos en ${d.frases} frases ✓ Recalculá la F0 para actualizarla.` : `No se pudo: ${d.detail || ''}`);
+    recargarDetalle();
+  };
+  const recalcular = async () => {
+    if (!selId) return;
+    const { ok, d } = await jsonPost(`${BACKEND_URL}/api/companion/sessions/${selId}/recalcular`, 'POST', { analisis: regenerarIA });
+    setMsg(ok ? `Recalculando la F0 del paciente con tus correcciones${regenerarIA ? ' y regenerando el análisis IA' : ''}… tocá "Actualizar" en 1-3 minutos.`
+      : `No se pudo recalcular: ${d.detail || ''}`);
+    cargarSesiones();
+  };
+  const guardarVhi = async () => {
+    if (!selId || !vhiEdit) return;
+    const version = detalle?.sesion?.device_info?.analisis_ia?.vhi?.version || 'VHI-30';
+    const { ok, d } = await jsonPost(`${BACKEND_URL}/api/companion/sessions/${selId}/vhi`, 'PUT', { items: vhiEdit, version });
+    if (ok) { setVhiEdit(null); setMsg(`VHI guardado ✓ Total ${d.vhi?.resultado?.total ?? '—'}`); recargarDetalle(); }
+    else setMsg(`No se pudo guardar el VHI: ${d.detail || ''}`);
   };
 
   const serieConv = progreso.filter((p: any) => p.task_type === 'conversacion_espontanea');
@@ -478,6 +517,30 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                           <div className="p-2 rounded-lg border border-gray-200 dark:border-white/10">
                             <p className="font-bold">{res.instrumento}: {res.total} puntos{res.instrumento === 'VHI-30' ? ' / 120' : ' / 40'} · {res.interpretacion}</p>
                             <p>Funcional {res.subescalas?.funcional} · Física {res.subescalas?.fisica} · Emocional {res.subescalas?.emocional} · ítems respondidos {res.respondidos}{res.completo ? ' (completo)' : ''}</p>
+                            <div className="mt-1 flex gap-2">
+                              {!vhiEdit
+                                ? <button onClick={() => setVhiEdit((vhi.items || []).map((x: any) => ({ ...x })))} className="px-2 py-1 rounded border border-gray-300 dark:border-white/10 font-bold">✎ Corregir ítems</button>
+                                : <><button onClick={guardarVhi} className="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Guardar VHI</button>
+                                    <button onClick={() => setVhiEdit(null)} className="px-2 py-1 rounded border border-gray-300 dark:border-white/10">Cancelar</button>
+                                    <button onClick={() => setVhiEdit([...vhiEdit, { codigo: 'F1', pregunta_detectada: '', respuesta_textual: '', puntaje: 0, confianza: 'manual' }])} className="px-2 py-1 rounded border border-gray-300 dark:border-white/10">+ ítem</button></>}
+                              {vhi.editado_a_mano && <span className="text-[10px] text-amber-600 self-center">corregido a mano</span>}
+                            </div>
+                            {vhiEdit && (
+                              <table className="w-full mt-1 text-[11px]">
+                                <thead><tr className="text-left text-gray-500"><th>Ítem</th><th>Pregunta</th><th>Puntaje</th><th></th></tr></thead>
+                                <tbody>{vhiEdit.map((it: any, i: number) => (
+                                  <tr key={i} className="border-t border-gray-100 dark:border-white/5">
+                                    <td><select value={it.codigo} onChange={e => setVhiEdit(vhiEdit.map((x, k) => k === i ? { ...x, codigo: e.target.value } : x))} className="bg-transparent border rounded px-1">
+                                      {['F', 'P', 'E'].flatMap(l => Array.from({ length: 10 }, (_, n) => `${l}${n + 1}`)).map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select></td>
+                                    <td className="pr-1">{it.pregunta_detectada || it.respuesta_textual}</td>
+                                    <td><select value={it.puntaje} onChange={e => setVhiEdit(vhiEdit.map((x, k) => k === i ? { ...x, puntaje: Number(e.target.value), confianza: 'manual' } : x))} className="bg-transparent border rounded px-1">
+                                      {[0, 1, 2, 3, 4].map(n => <option key={n} value={n}>{n} · {['nunca', 'casi nunca', 'a veces', 'casi siempre', 'siempre'][n]}</option>)}
+                                    </select></td>
+                                    <td><button onClick={() => setVhiEdit(vhiEdit.filter((_, k) => k !== i))} className="text-red-500">✕</button></td>
+                                  </tr>))}</tbody>
+                              </table>
+                            )}
                             <details className="mt-1">
                               <summary className="cursor-pointer font-semibold">Ver ítems detectados (revisá los de confianza baja)</summary>
                               <table className="w-full mt-1 text-[11px]">
@@ -507,15 +570,36 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                       <FileText size={13} /> Transcripción ({(detalle.transcripciones || []).length}) {expandTr ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                     </button>
                     {expandTr && (
-                      <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
+                          <span className="text-gray-500">Corrección: tocá el nombre para cambiar quién habla, o ✎ para editar el texto.</span>
+                          <button onClick={intercambiarTodos} className="px-2.5 py-1 rounded-lg border border-gray-300 dark:border-white/10 font-bold">⇄ Invertir roles en toda la sesión</button>
+                          <label className="flex items-center gap-1"><input type="checkbox" checked={regenerarIA} onChange={e => setRegenerarIA(e.target.checked)} /> regenerar análisis IA</label>
+                          <button onClick={recalcular} className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold">Recalcular F0 con mis correcciones</button>
+                        </div>
+                        <div className="space-y-1.5 max-h-[32rem] overflow-y-auto">
                         {(detalle.transcripciones || []).map((t: any, i: number) => (
-                          <p key={i} className="p-2 rounded-lg bg-gray-50 dark:bg-white/5">
-                            <span className={`font-black ${t.speaker === 'fonoaudiologo' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          <div key={t.id || i} className={`p-2 rounded-lg ${t.speaker === 'fonoaudiologo' ? 'bg-indigo-500/5' : 'bg-emerald-500/5'} ${t.source === 'manual' ? 'ring-1 ring-amber-400/50' : ''}`}>
+                            <button title="Cambiar hablante" onClick={() => corregirFrase(t, { speaker: t.speaker === 'fonoaudiologo' ? 'paciente' : 'fonoaudiologo' })}
+                              className={`font-black underline decoration-dotted ${t.speaker === 'fonoaudiologo' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                               {t.speaker === 'fonoaudiologo' ? 'Fonoaudiólogo/a' : `Paciente${nombrePac ? ` (${nombrePac})` : ''}`}
-                            </span>
-                            <span className="text-gray-400"> [{Math.round(t.start_sec)}s]</span> {t.text}
-                          </p>
+                            </button>
+                            <span className="text-gray-400"> [{Math.floor(t.start_sec / 60)}:{String(Math.round(t.start_sec % 60)).padStart(2, '0')}]</span>
+                            {t.source === 'manual' && <span className="ml-1 text-[10px] text-amber-600">corregida</span>}
+                            {editTr?.id === t.id ? (
+                              <div className="mt-1 flex gap-1.5">
+                                <textarea value={editTr.text} onChange={e => setEditTr({ id: t.id, text: e.target.value })} rows={2} className="flex-1 px-2 py-1 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5" />
+                                <div className="flex flex-col gap-1">
+                                  <button onClick={() => { corregirFrase(t, { text: editTr.text }); setEditTr(null); }} className="px-2 py-1 rounded bg-emerald-600 text-white font-bold">Guardar</button>
+                                  <button onClick={() => setEditTr(null)} className="px-2 py-1 rounded border border-gray-300 dark:border-white/10">Cancelar</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <> {t.text} <button title="Editar texto" onClick={() => setEditTr({ id: t.id, text: t.text })} className="ml-1 text-gray-400 hover:text-indigo-500">✎</button></>
+                            )}
+                          </div>
                         ))}
+                        </div>
                       </div>
                     )}
                   </div>
