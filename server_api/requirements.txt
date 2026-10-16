@@ -12,3 +12,4 @@ supabase==2.11.0
 pypdf==3.17.4
 pymupdf==1.24.9
 weasyprint>=62,<70
+sherpa-onnx==1.13.8

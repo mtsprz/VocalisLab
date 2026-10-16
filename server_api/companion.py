@@ -792,6 +792,21 @@ async def audio_url(request: Request, session_id: str, clip: str = "", user_id: 
     return JSONResponse(content={"ok": True, "url": url, "expires_in": 900})
 
 
+@router.post("/api/companion/sessions/{session_id}/reprocesar")
+async def reprocesar_sesion(request: Request, session_id: str, user_id: str = ""):
+    """Vuelve a analizar una sesión ya subida (transcripción, voces, F0 del
+    servidor y análisis IA). La acústica del teléfono no se toca."""
+    prof, _actor = _auth_dual(request, user_id)
+    sb = _sb()
+    ses = _sesion_de_profesional(sb, session_id, prof)
+    if not ses.get("audio_storage_path"):
+        raise HTTPException(status_code=422, detail="La sesión no tiene audio subido")
+    sb.table("companion_sessions").update({"status": "uploaded", "error_detail": ""})\
+        .eq("id", session_id).execute()
+    _encolar_job(sb, session_id)
+    return JSONResponse(content={"ok": True, "status": "uploaded"})
+
+
 def _rangos(sb) -> list:
     try:
         r = sb.table("reference_ranges").select("*").execute()
@@ -1504,13 +1519,18 @@ def _ia_borrador(contexto: dict) -> dict:
               json.dumps(contexto, ensure_ascii=False)[:6000])
     txt = ""
     try:
-        if _ai_provider() == "groq":
+        try:   # cliente con respaldo Gemini ↔ Groq
+            import companion_voz
+            txt = json.dumps(companion_voz.llm_json(prompt, max_tokens=2000), ensure_ascii=False)
+        except Exception as e:
+            print(f"[companion] llm_json falló en borrador: {e}")
+        if txt:
+            pass
+        elif _ai_provider() == "groq":
             from llm_client import groq_chat
-            txt = groq_chat([{"role": "user", "content": prompt}],
-                            temperature=0.2, max_tokens=1500,
-                            model=_ai_model()) or ""
-            if isinstance(txt, dict):
-                txt = json.dumps(txt, ensure_ascii=False)
+            res = groq_chat([{"role": "user", "content": prompt}],
+                            temperature=0.2, max_tokens=1500)
+            txt = res[0] if isinstance(res, tuple) else str(res or "")
         else:
             import httpx
             key = _env("GEMINI_API_KEY", "")
@@ -1581,12 +1601,12 @@ def _process_job(job: dict):
         #    hay clave; si no o si falla, Whisper (Groq) + tramos del teléfono
         #    + corrección por contenido (companion_ia).
         trs = None
-        if prep and companion_voz.disponible() and _external_audio_ok():
+        if prep and _external_audio_ok():
             try:
                 trs = companion_voz.procesar(sb, ses, prep, task_segs)
             except Exception as e:
                 traceback.print_exc()
-                print(f"[companion] AssemblyAI falló, sigo con Whisper: {e}")
+                print(f"[companion] separación de voces falló, sigo con el método simple: {e}")
                 trs = None
         if not trs:
             src = prep["compacto"] if prep else tmp.name
@@ -1608,6 +1628,13 @@ def _process_job(job: dict):
             except Exception as e:
                 traceback.print_exc()
                 print(f"[companion] acústica en servidor falló: {e}")
+        # 3c. Análisis clínico con IA: resumen, VHI (ítems → puntaje calculado
+        #     acá) y comparación con la sesión anterior.
+        try:
+            companion_voz.analisis_clinico(sb, ses, trs)
+        except Exception as e:
+            traceback.print_exc()
+            print(f"[companion] análisis clínico IA falló: {e}")
         # 4. Borrador de anamnesis
         acs = sb.table("session_acoustics").select("*").eq("session_id", sid).execute()
         if _external_audio_ok():

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mic, Play, Activity, GitBranch, Scale, FileText, CheckCircle2, XCircle,
   Download, Smartphone, Trash2, Loader2, AlertCircle, HardDrive,
-  ChevronDown, ChevronUp, RefreshCw, KeyRound } from 'lucide-react';
+  ChevronDown, ChevronUp, RefreshCw, KeyRound, Sparkles } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
 import { elegirRangoNormativo, notaEs } from './vozNormas';
@@ -272,6 +272,18 @@ export default function SesionesVozModule({ pacienteId }: Props) {
     : { c: 'green', t: `Dentro de rango (${fmtHz(f0c)} Hz)` };
   const semaColor: any = { green: 'bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300', red: 'bg-red-500/10 border-red-500/40 text-red-700 dark:text-red-300', gray: 'bg-gray-500/10 border-gray-400/40 text-gray-500' };
 
+  const nombrePac = String(paciente.nombre_completo || paciente.nombre || '').trim().split(/\s+/)[0] || '';
+  const reprocesar = async () => {
+    if (!selId) return;
+    setMsg('Reprocesando: transcripción, separación de voces, altura tonal y análisis IA (puede tardar varios minutos)…');
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/companion/sessions/${selId}/reprocesar?user_id=${uid}`, { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      setMsg(r.ok && d.ok ? 'En cola ✓ Tocá "Actualizar" en unos minutos para ver el resultado.' : `No se pudo reprocesar: ${d.detail || r.status}`);
+      cargarSesiones();
+    } catch (e: any) { setMsg(`No se pudo reprocesar: ${e.message || e}`); }
+  };
+
   const serieConv = progreso.filter((p: any) => p.task_type === 'conversacion_espontanea');
 
   if (!pacienteId) return <p className="text-sm text-gray-500">Seleccioná un paciente.</p>;
@@ -395,6 +407,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <button onClick={() => pedirAudio()} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold flex items-center gap-1.5"><Play size={13} /> Reproducir audio</button>
                     <button onClick={() => descargarPDF('sesion')} className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-white/10 font-bold flex items-center gap-1.5"><Download size={13} /> PDF sesión</button>
+                    <button onClick={reprocesar} className="px-3 py-1.5 rounded-lg border border-indigo-400/50 text-indigo-700 dark:text-indigo-300 font-bold flex items-center gap-1.5"><RefreshCw size={13} /> Reprocesar con IA</button>
                   </div>
                   {audioUrl && <audio src={audioUrl} controls className="w-full" />}
                   {(() => {
@@ -422,12 +435,72 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                         {String(a.dsp_version || '').startsWith('servidor-praat') && <span className="ml-2 text-[10px] font-semibold text-gray-500">medido con Praat en el servidor</span>}</p>
                       <p className="text-base font-black">{fmtHz(a.f0_median_hz)} Hz <span className="text-indigo-600 dark:text-indigo-400">{notaMusical(a.f0_median_hz)}</span> <span className="text-xs font-normal text-gray-500">altura tonal del paciente (mediana)</span></p>
                       <p>Rango p5–p95 {fmtHz(a.f0_p5_hz)}–{fmtHz(a.f0_p95_hz)} Hz · media {fmtHz(a.f0_mean_hz)} Hz · SD {fmtDb(a.f0_sd_semitones)} st · voz {a.voiced_fraction != null ? `${Math.round(a.voiced_fraction * 100)}%` : '—'}</p>
+                      {a.f0_mean_hz != null && (
+                        <p className={`mt-1 p-2 rounded-lg border font-semibold ${rMin == null || rMax == null ? semaColor.gray : (a.f0_mean_hz < rMin || a.f0_mean_hz > rMax ? semaColor.red : semaColor.green)}`}>
+                          F0 promedio en el habla: {fmtHz(a.f0_mean_hz)} Hz ({notaMusical(a.f0_mean_hz)})
+                          {rMin != null && rMax != null
+                            ? <> · referencia {paciente.sexo_referencia || paciente.sexo || ''}{edad != null ? `, ${edad} años` : ''}: {rMin}–{rMax} Hz
+                                {rango?.f0_promedio_min_hz != null && !paciente.f0_ref_min_hz && <> (promedio esperado {rango.f0_promedio_min_hz === rango.f0_promedio_max_hz ? rango.f0_promedio_min_hz : `${rango.f0_promedio_min_hz}–${rango.f0_promedio_max_hz}`} Hz)</>}
+                                {' → '}{a.f0_mean_hz < rMin ? `por debajo (${(12 * Math.log2(a.f0_mean_hz / rMin)).toFixed(1)} st)` : a.f0_mean_hz > rMax ? `por encima (+${(12 * Math.log2(a.f0_mean_hz / rMax)).toFixed(1)} st)` : 'dentro del rango'}</>
+                            : <> · sin referencia: cargá sexo y fecha de nacimiento del paciente</>}
+                        </p>
+                      )}
                       <div className="mt-2">
                         <p className="font-semibold mb-1">Histograma F0 (estilo SpeechPitch)</p>
                         <Histograma hist={a.f0_histogram} refMin={rMin} refMax={rMax} />
                       </div>
                     </div>
                   ))}
+                  {/* Análisis clínico IA */}
+                  {(() => {
+                    const ia = detalle.sesion?.device_info?.analisis_ia;
+                    if (!ia) return null;
+                    const vhi = ia.vhi || {};
+                    const res = vhi.resultado;
+                    const lista = (t: string, v: any) => Array.isArray(v) && v.filter(Boolean).length > 0 && (
+                      <div><p className="font-semibold">{t}</p><ul className="list-disc ml-5">{v.filter(Boolean).map((x: string, i: number) => <li key={i}>{x}</li>)}</ul></div>
+                    );
+                    const cmp = ia.comparacion || {};
+                    return (
+                      <div className="p-3 rounded-xl border border-violet-500/30 bg-violet-500/5 space-y-2">
+                        <p className="font-bold flex items-center gap-1.5"><Sparkles size={13} className="text-violet-500" /> Análisis de la sesión (IA) <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10">{String(ia.tipo_sesion || '').replace(/_/g, ' ')}</span></p>
+                        {ia.resumen && <p>{ia.resumen}</p>}
+                        {ia.motivo_o_objetivo && <p><span className="font-semibold">Motivo / objetivo:</span> {ia.motivo_o_objetivo}</p>}
+                        {lista('Síntomas referidos', ia.sintomas_referidos)}
+                        {lista('Hábitos y factores', ia.habitos_y_factores)}
+                        {lista('Ejercicios realizados', ia.ejercicios_realizados)}
+                        {lista('Indicaciones para casa', ia.indicaciones_para_casa)}
+                        {ia.observaciones_voz && <p><span className="font-semibold">Observaciones de la voz:</span> {ia.observaciones_voz}</p>}
+                        {Array.isArray(ia.alertas) && ia.alertas.filter(Boolean).length > 0 && (
+                          <p className="p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 font-semibold">⚠ {ia.alertas.filter(Boolean).join(' · ')}</p>
+                        )}
+                        {vhi.aplicado && res && (
+                          <div className="p-2 rounded-lg border border-gray-200 dark:border-white/10">
+                            <p className="font-bold">{res.instrumento}: {res.total} puntos{res.instrumento === 'VHI-30' ? ' / 120' : ' / 40'} · {res.interpretacion}</p>
+                            <p>Funcional {res.subescalas?.funcional} · Física {res.subescalas?.fisica} · Emocional {res.subescalas?.emocional} · ítems respondidos {res.respondidos}{res.completo ? ' (completo)' : ''}</p>
+                            <details className="mt-1">
+                              <summary className="cursor-pointer font-semibold">Ver ítems detectados (revisá los de confianza baja)</summary>
+                              <table className="w-full mt-1 text-[11px]">
+                                <thead><tr className="text-left text-gray-500"><th>Ítem</th><th>Pregunta</th><th>Respuesta</th><th>Pts</th><th>Conf.</th></tr></thead>
+                                <tbody>{(vhi.items || []).map((it: any, i: number) => (
+                                  <tr key={i} className={`border-t border-gray-100 dark:border-white/5 ${it.confianza === 'baja' ? 'text-amber-700 dark:text-amber-300' : ''}`}>
+                                    <td className="font-mono pr-1">{it.codigo}</td><td className="pr-1">{it.pregunta_detectada}</td><td className="pr-1">{it.respuesta_textual}</td><td className="font-bold">{it.puntaje}</td><td>{it.confianza}{it.minuto ? ` · ${it.minuto}` : ''}</td>
+                                  </tr>))}</tbody>
+                              </table>
+                            </details>
+                          </div>
+                        )}
+                        {cmp.hay_previa && (cmp.f0_mediana_hz || cmp.vhi_total) && (
+                          <p><span className="font-semibold">Vs. sesión anterior ({cmp.fecha_previa}):</span>
+                            {cmp.f0_mediana_hz && <> F0 mediana {fmtHz(cmp.f0_mediana_hz.previa)} → {fmtHz(cmp.f0_mediana_hz.actual)} Hz ({cmp.f0_mediana_hz.cambio_st > 0 ? '+' : ''}{cmp.f0_mediana_hz.cambio_st} st).</>}
+                            {cmp.vhi_total && <> VHI {cmp.vhi_total.previa} → {cmp.vhi_total.actual}.</>}
+                          </p>
+                        )}
+                        {lista('Próximos pasos sugeridos', ia.proximos_pasos)}
+                        <p className="text-[10px] text-gray-500">Generado por IA a partir de la transcripción: borrador para revisión profesional, no reemplaza el criterio clínico.</p>
+                      </div>
+                    );
+                  })()}
                   {/* Transcripción */}
                   <div>
                     <button onClick={() => setExpandTr(v => !v)} className="font-bold flex items-center gap-1.5">
@@ -438,7 +511,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                         {(detalle.transcripciones || []).map((t: any, i: number) => (
                           <p key={i} className="p-2 rounded-lg bg-gray-50 dark:bg-white/5">
                             <span className={`font-black ${t.speaker === 'fonoaudiologo' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                              {t.speaker === 'fonoaudiologo' ? 'Fonoaudiólogo' : 'Paciente'}
+                              {t.speaker === 'fonoaudiologo' ? 'Fonoaudiólogo/a' : `Paciente${nombrePac ? ` (${nombrePac})` : ''}`}
                             </span>
                             <span className="text-gray-400"> [{Math.round(t.start_sec)}s]</span> {t.text}
                           </p>

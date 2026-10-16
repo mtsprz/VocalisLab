@@ -23,6 +23,8 @@ COPY server_api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server_api/ .
+# Huella vocal (CAM++), el mismo modelo que la app: separación de voces en audios importados.
+COPY companion/assets/models/campplus_sv_16k.onnx models/campplus_sv_16k.onnx
 
 EXPOSE 8000
 

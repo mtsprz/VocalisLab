@@ -2,10 +2,12 @@
 
 Tres piezas, usadas por `companion._process_job`:
 
-1. `procesar()`: transcribe y separa hablantes con AssemblyAI (diarización
-   neuronal, español, 2 hablantes esperados). Requiere ASSEMBLYAI_API_KEY; sin
-   ella el servidor sigue con Whisper (Groq) + la separación del teléfono.
-   Tras leer el resultado se BORRA la transcripción en AssemblyAI (privacidad).
+1. `procesar()`: transcribe y separa hablantes. Dos caminos:
+   - AssemblyAI (si ASSEMBLYAI_API_KEY): diarización neuronal del proveedor.
+     Tras leer el resultado se BORRA la transcripción allá (privacidad).
+   - Sin clave: Whisper (Groq) con tiempos por palabra → turnos cortados en
+     las pausas → huella vocal de cada turno (CAM++, el mismo modelo que el
+     teléfono, sherpa-onnx) → agrupamiento en 2 voces (k-medias coseno).
 2. `asignar_roles()`: decide qué hablante (A/B…) es el fonoaudiólogo/a por
    voto ponderado de tres evidencias independientes:
      - IA por contenido (consignas/preguntas vs. respuestas/síntomas),
@@ -149,6 +151,238 @@ def transcribir_assemblyai(path: str, timeout_s: int = 1800) -> list:
     return out
 
 
+# ─── Whisper con tiempos por palabra (Groq) ───
+def transcribir_whisper(path: str) -> list:
+    """Turnos [{start, end, text}]: cada segmento de Whisper se corta donde
+    hay una pausa ≥ 0,6 s entre palabras (allí suele cambiar el hablante)."""
+    import httpx
+    key = os.environ.get("GROQ_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("GROQ_API_KEY ausente")
+    with open(path, "rb") as f:
+        datos = f.read()
+    ultimo = None
+    for intento in range(3):
+        try:
+            r = httpx.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {key}"},
+                data={"model": "whisper-large-v3", "language": "es",
+                      "response_format": "verbose_json", "temperature": "0",
+                      "prompt": "Sesión de fonoaudiología: " + ", ".join(TERMINOS[:25]),
+                      "timestamp_granularities[]": ["segment", "word"]},
+                files={"file": ("audio.m4a", datos, "audio/mp4")},
+                timeout=600)
+            r.raise_for_status()
+            d = r.json()
+            break
+        except Exception as e:
+            ultimo = e
+            time.sleep(3 * (intento + 1))
+    else:
+        raise RuntimeError(f"Whisper falló: {ultimo}")
+    palabras = [w for w in (d.get("words") or []) if w.get("end") is not None]
+    turnos = []
+    for s in (d.get("segments") or []):
+        a, b = float(s.get("start", 0)), float(s.get("end", 0))
+        ws = [w for w in palabras if a - 0.05 <= float(w["start"]) < b]
+        cortes, actual = [], []
+        for w in ws:
+            if actual and float(w["start"]) - float(actual[-1]["end"]) >= 0.6:
+                cortes.append(actual)
+                actual = []
+            actual.append(w)
+        if actual:
+            cortes.append(actual)
+        if len(cortes) <= 1:
+            txt = (s.get("text") or "").strip()
+            if txt:
+                turnos.append({"start": a, "end": b, "text": txt})
+        else:
+            for c in cortes:
+                txt = " ".join(str(w.get("word", "")).strip() for w in c).strip()
+                if txt:
+                    turnos.append({"start": float(c[0]["start"]), "end": float(c[-1]["end"]),
+                                   "text": txt})
+    if not turnos and (d.get("text") or "").strip():
+        turnos.append({"start": 0.0, "end": float(d.get("duration") or 0), "text": d["text"].strip()})
+    return turnos
+
+
+# ─── Huella vocal (CAM++) y agrupamiento en 2 voces ───
+_EXTRACTOR = None
+
+
+def _ruta_modelo() -> str:
+    for c in (os.environ.get("CAMPP_MODEL", ""),
+              os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "campplus_sv_16k.onnx"),
+              os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "companion", "assets",
+                           "models", "campplus_sv_16k.onnx")):
+        if c and os.path.exists(c):
+            return c
+    raise RuntimeError("Modelo de huella vocal (campplus_sv_16k.onnx) no encontrado")
+
+
+def _extractor():
+    global _EXTRACTOR
+    if _EXTRACTOR is None:
+        import sherpa_onnx
+        cfg = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+            model=_ruta_modelo(), num_threads=1, debug=False, provider="cpu")
+        if not cfg.validate():
+            raise RuntimeError("Configuración de huella vocal inválida")
+        _EXTRACTOR = sherpa_onnx.SpeakerEmbeddingExtractor(cfg)
+    return _EXTRACTOR
+
+
+def huellas(wav_path: str, turnos: list, min_seg: float = 0.7, max_seg: float = 8.0) -> list:
+    """Vector unitario por turno (None si el turno es muy corto)."""
+    import numpy as np
+    ext = _extractor()
+    out = []
+    with wave.open(wav_path, "rb") as w:
+        sr, total = w.getframerate(), w.getnframes()
+        for t in turnos:
+            a, b = float(t["start"]), float(t["end"])
+            if b - a < min_seg:
+                out.append(None)
+                continue
+            if b - a > max_seg:   # el centro del turno: menos riesgo de solape
+                m = (a + b) / 2
+                a, b = m - max_seg / 2, m + max_seg / 2
+            i0, i1 = max(0, int(a * sr)), min(total, int(b * sr))
+            w.setpos(i0)
+            x = np.frombuffer(w.readframes(i1 - i0), dtype="<i2").astype(np.float32) / 32768.0
+            st = ext.create_stream()
+            st.accept_waveform(sr, x)
+            st.input_finished()
+            if not ext.is_ready(st):
+                out.append(None)
+                continue
+            v = np.array(ext.compute(st), dtype=np.float32)
+            n = float(np.linalg.norm(v))
+            out.append(v / n if n > 0 else None)
+    return out
+
+
+def agrupar_dos(vecs: list, pesos: list) -> tuple:
+    """k-medias coseno (k=2), iniciado con el par más distante. Devuelve
+    (etiquetas 'A'/'B'/None, similitud entre centros)."""
+    import numpy as np
+    idx = [i for i, v in enumerate(vecs) if v is not None]
+    if len(idx) < 4:
+        return [("A" if v is not None else None) for v in vecs], 1.0
+    X = np.stack([vecs[i] for i in idx])
+    W = np.array([max(0.3, pesos[i]) for i in idx])
+    # Par más distante sobre una muestra (rápido aun con 1000 turnos).
+    muestra = X[:: max(1, len(X) // 300)]
+    s = muestra @ muestra.T
+    i, j = np.unravel_index(np.argmin(s), s.shape)
+    c = np.stack([muestra[i], muestra[j]])
+    for _ in range(20):
+        lab = np.argmax(X @ c.T, axis=1)
+        nuevo = []
+        for k in (0, 1):
+            m = (X[lab == k] * W[lab == k, None]).sum(axis=0) if (lab == k).any() else c[k]
+            nuevo.append(m / (np.linalg.norm(m) or 1.0))
+        nuevo = np.stack(nuevo)
+        if np.allclose(nuevo, c, atol=1e-5):
+            break
+        c = nuevo
+    etiquetas = [None] * len(vecs)
+    for pos, k in zip(idx, lab):
+        etiquetas[pos] = "AB"[int(k)]
+    return etiquetas, float(c[0] @ c[1])
+
+
+def _rellenar(etiquetas: list, turnos: list) -> list:
+    """Turnos muy cortos ("sí", "ajá"): toman la voz del turno más cercano."""
+    out = list(etiquetas)
+    con = [i for i, e in enumerate(etiquetas) if e]
+    for i, e in enumerate(etiquetas):
+        if e or not con:
+            continue
+        cerca = min(con, key=lambda k: abs(float(turnos[k]["start"]) - float(turnos[i]["start"])))
+        out[i] = etiquetas[cerca]
+    return [e or "A" for e in out]
+
+
+def diarizar_whisper(prep: dict) -> tuple:
+    """(utterances [{speaker, start, end, text}], info del agrupamiento)."""
+    turnos = transcribir_whisper(prep["compacto"])
+    if not turnos:
+        return [], {}
+    vecs = huellas(prep["wav"], turnos)
+    pesos = [float(t["end"]) - float(t["start"]) for t in turnos]
+    etiquetas, sim = agrupar_dos(vecs, pesos)
+    etiquetas = _rellenar(etiquetas, turnos)
+    utts = [dict(t, speaker=e) for t, e in zip(turnos, etiquetas)]
+    # Fusionar turnos contiguos de la misma voz (lectura más clara).
+    fusion = []
+    for u in utts:
+        if fusion and fusion[-1]["speaker"] == u["speaker"] and u["start"] - fusion[-1]["end"] < 1.0 \
+                and fusion[-1]["end"] - fusion[-1]["start"] < 25:
+            fusion[-1]["end"] = u["end"]
+            fusion[-1]["text"] = (fusion[-1]["text"] + " " + u["text"]).strip()
+        else:
+            fusion.append(dict(u))
+    return fusion, {"proveedor": "whisper+huella_campp", "similitud_centros": round(sim, 3),
+                    "turnos": len(turnos)}
+
+
+# ─── LLM con respaldo (Gemini ↔ Groq) ───
+def llm_json(prompt: str, max_tokens: int = 4000) -> dict:
+    """JSON del primer proveedor que responda. Gemini primero para textos
+    largos (cuota por minuto mayor); Groq (varios modelos) de respaldo."""
+    errores = []
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if key:
+        import httpx
+        modelos = [m for m in (os.environ.get("AI_MODEL", ""), "gemini-2.5-flash", "gemini-2.0-flash")
+                   if m and m.startswith("gemini")]
+        for m in dict.fromkeys(modelos):
+            try:
+                r = httpx.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}",
+                    json={"contents": [{"parts": [{"text": prompt}]}],
+                          "generationConfig": {"temperature": 0, "responseMimeType": "application/json",
+                                               "maxOutputTokens": max_tokens}},
+                    timeout=180)
+                cands = r.json().get("candidates") or []
+                parts = ((cands[0].get("content") or {}).get("parts") or []) if cands else []
+                txt = "".join(p.get("text", "") for p in parts)
+                d = _json_de(txt)
+                if d:
+                    return d
+                errores.append(f"{m}: sin JSON ({r.status_code})")
+            except Exception as e:
+                errores.append(f"{m}: {e}")
+    if os.environ.get("GROQ_API_KEY", "").strip():
+        try:
+            from llm_client import groq_chat
+            txt, _modelo = groq_chat([{"role": "user", "content": prompt}], temperature=0.0,
+                                     max_tokens=max_tokens, response_format={"type": "json_object"},
+                                     timeout=180)
+            d = _json_de(txt)
+            if d:
+                return d
+            errores.append("groq: sin JSON")
+        except Exception as e:
+            errores.append(f"groq: {e}")
+    raise RuntimeError("Ningún LLM respondió: " + " | ".join(errores)[:500])
+
+
+def _json_de(txt: str) -> dict:
+    m = re.search(r"\{.*\}", txt or "", re.DOTALL)
+    if not m:
+        return {}
+    try:
+        d = json.loads(m.group(0))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
 # ─── Altura tonal (Praat) ───
 def rango_busqueda(sexo: str, edad) -> tuple:
     """Mismo rango que el teléfono (yin.dart: configParaSexo)."""
@@ -168,10 +402,17 @@ def f0_cuadros(wav_path: str, intervalos: list, floor: float, ceiling: float) ->
     import numpy as np
     import parselmouth
     out = []
+    # Tramos largos en piezas de ≤30 s: memoria acotada (Render 512 MB).
+    piezas = []
+    for a, b in intervalos:
+        while b - a > 30.0:
+            piezas.append((a, a + 30.0))
+            a += 30.0
+        piezas.append((a, b))
     with wave.open(wav_path, "rb") as w:
         sr = w.getframerate()
         total = w.getnframes()
-        for a, b in intervalos:
+        for a, b in piezas:
             i0, i1 = max(0, int(a * sr)), min(total, int(b * sr))
             if (i1 - i0) < int(sr * 3.0 / floor) + 1:
                 continue
@@ -275,10 +516,6 @@ def _voto_tono(medianas: dict, fono_hz):
 
 def _voto_ia(utts: list):
     """La IA lee la conversación y dice qué letra es el fonoaudiólogo/a."""
-    try:
-        import companion_ia
-    except Exception:
-        return None
     letras = sorted({u["speaker"] for u in utts})
     # Muestra repartida a lo largo de toda la sesión (máx ~160 frases).
     paso = max(1, len(utts) // 160)
@@ -291,9 +528,7 @@ def _voto_ia(utts: list):
         "Respondé SOLO JSON: {\"fonoaudiologo\": \"<letra>\", \"paciente\": \"<letra>\", "
         "\"confianza\": <0..1>}\n\n" + muestra)
     try:
-        txt = companion_ia._llm(prompt)
-        m = re.search(r"\{.*\}", txt or "", re.DOTALL)
-        d = json.loads(m.group(0)) if m else {}
+        d = llm_json(prompt, max_tokens=300)
         f = str(d.get("fonoaudiologo") or "").strip().upper()
         if f not in letras:
             return None
@@ -394,8 +629,14 @@ def preparar(audio_path: str) -> dict:
 
 
 def procesar(sb, ses: dict, prep: dict, task_segs: list) -> list:
-    """Transcripción + hablantes con AssemblyAI → filas de session_transcripts."""
-    utts = transcribir_assemblyai(prep["compacto"])
+    """Transcripción + hablantes → filas de session_transcripts.
+    AssemblyAI si hay clave; si no, Whisper + huella vocal CAM++."""
+    extra = {}
+    if disponible():
+        utts = transcribir_assemblyai(prep["compacto"])
+        extra = {"proveedor": "assemblyai"}
+    else:
+        utts, extra = diarizar_whisper(prep)
     if not utts:
         return []
     # Tono mediano de cada hablante (rango amplio) para el voto por tono.
@@ -405,7 +646,13 @@ def procesar(sb, ses: dict, prep: dict, task_segs: list) -> list:
         f = [x for x in f0_cuadros(prep["wav"], iv[:200], 75.0, 600.0) if x > 0]
         medianas[letra] = _mediana(f) if len(f) > 50 else None
     mapa, pac, info = asignar_roles(utts, task_segs, medianas, _fono_hz(sb, ses))
+    info.update(extra)
     info["medianas_hz"] = {k: (round(v, 1) if v else None) for k, v in medianas.items()}
+    # Dos "voces" casi iguales para la huella: probablemente una sola persona
+    # o un audio muy reverberante; se avisa en vez de afirmar.
+    if extra.get("similitud_centros", 0) > 0.85:
+        info["certeza"] = "baja"
+        info["aviso"] = "Las dos voces detectadas son muy parecidas: revisar la atribución."
     _guardar_info(sb, ses, "diarizacion", info)
     ses["_letra_paciente"] = pac
     ses["_utts"] = utts
@@ -420,9 +667,9 @@ def procesar(sb, ses: dict, prep: dict, task_segs: list) -> list:
 def acustica_si_falta(sb, ses: dict, prep: dict, trs: list):
     """Altura tonal del paciente con Praat si la sesión no la trae."""
     sid = ses["id"]
-    ya = sb.table("session_acoustics").select("task_type").eq("session_id", sid).execute()
-    if ya.data:
-        return None   # la del teléfono manda (contrato)
+    ya = sb.table("session_acoustics").select("task_type, dsp_version").eq("session_id", sid).execute()
+    if any(not str(a.get("dsp_version") or "").startswith("servidor-praat") for a in (ya.data or [])):
+        return None   # la del teléfono manda (contrato); la del servidor se recalcula
     if ses.get("_utts") and ses.get("_letra_paciente"):
         iv = [(u["start"], u["end"]) for u in ses["_utts"] if u["speaker"] == ses["_letra_paciente"]]
     else:
@@ -446,3 +693,152 @@ def acustica_si_falta(sb, ses: dict, prep: dict, trs: list):
             except Exception:
                 break
     return fila
+
+
+# ─── Análisis clínico con IA (resumen de sesión + VHI) ───
+# Ítems del VHI-30 (Jacobson et al., 1997; versión española Núñez-Batalla
+# et al., 2007), descriptos en forma breve para que la IA los reconozca en la
+# conversación. Escala 0 nunca · 1 casi nunca · 2 a veces · 3 casi siempre ·
+# 4 siempre. El puntaje lo suma el servidor, no la IA.
+VHI_ITEMS = {
+    "F1": "la gente lo/la oye con dificultad por su voz",
+    "F2": "le entienden con dificultad en lugares ruidosos",
+    "F3": "su familia no lo/la oye cuando llama desde otra parte de la casa",
+    "F4": "usa el teléfono menos de lo que quisiera",
+    "F5": "evita grupos de personas por su voz",
+    "F6": "habla menos con amigos, vecinos o familiares",
+    "F7": "le piden que repita lo que dice cara a cara",
+    "F8": "la voz limita su vida personal y social",
+    "F9": "se siente desplazado/a de las conversaciones",
+    "F10": "el problema de voz le hace perder ingresos o afecta su trabajo",
+    "P1": "se queda sin aire al hablar",
+    "P2": "su voz varía a lo largo del día",
+    "P3": "la gente le pregunta qué le pasa en la voz",
+    "P4": "la voz suena áspera, ronca o seca",
+    "P5": "siente que tiene que esforzarse para que salga la voz",
+    "P6": "la claridad de la voz es impredecible",
+    "P7": "trata de cambiar la voz para que suene diferente",
+    "P8": "se esfuerza mucho para hablar",
+    "P9": "la voz empeora por la tarde o la noche",
+    "P10": "la voz se corta o falla en medio de una frase",
+    "E1": "se pone tenso/a al hablar con otros por su voz",
+    "E2": "la gente parece irritarse con su voz",
+    "E3": "siente que los demás no comprenden su problema de voz",
+    "E4": "su problema de voz le molesta o preocupa",
+    "E5": "sale menos por su problema de voz",
+    "E6": "la voz le hace sentir discapacitado/a",
+    "E7": "le molesta cuando le piden que repita",
+    "E8": "le da vergüenza cuando le piden que repita",
+    "E9": "la voz le hace sentir incompetente",
+    "E10": "se avergüenza de su problema de voz",
+}
+VHI10 = ("F1", "F2", "F8", "F9", "F10", "P5", "P6", "P10", "E3", "E9")  # Rosen et al., 2004
+ESCALA = {0: "nunca", 1: "casi nunca", 2: "a veces", 3: "casi siempre", 4: "siempre"}
+
+
+def puntuar_vhi(items: list, version: str = "") -> dict:
+    """Totales y subescalas calculados acá (la IA solo propone cada ítem)."""
+    vals = {}
+    for it in items or []:
+        cod = str(it.get("codigo") or "").upper().strip()
+        try:
+            v = int(it.get("puntaje"))
+        except Exception:
+            continue
+        if cod in VHI_ITEMS and 0 <= v <= 4:
+            vals[cod] = v
+    sub = {n: sum(v for k, v in vals.items() if k.startswith(p))
+           for n, p in (("funcional", "F"), ("fisica", "P"), ("emocional", "E"))}
+    n = len(vals)
+    total = sum(vals.values())
+    es10 = version.upper() == "VHI-10" or (version.upper() != "VHI-30" and n and n <= 10 and all(k in VHI10 for k in vals))
+    res = {"respondidos": n, "total": total, "subescalas": sub, "puntajes": vals}
+    if es10:
+        res["instrumento"] = "VHI-10"
+        res["completo"] = n == 10
+        res["interpretacion"] = ("por encima del corte de normalidad (>11)" if total > 11
+                                 else "dentro del rango normal (≤11)") + " · Rosen et al., 2004"
+    else:
+        res["instrumento"] = "VHI-30"
+        res["completo"] = n == 30
+        if n == 30:
+            res["interpretacion"] = ("leve" if total <= 30 else "moderado" if total <= 60
+                                     else "severo" if total <= 90 else "grave") + \
+                " (0–30 leve · 31–60 moderado · 61–90 severo · 91–120 grave; orientativo)"
+        else:
+            res["interpretacion"] = f"incompleto ({n}/30 ítems): el total no es comparable con normas"
+    return res
+
+
+def analisis_clinico(sb, ses: dict, trs: list) -> dict:
+    """Resumen clínico de la sesión + instrumentos detectados (VHI) +
+    comparación con la sesión anterior del mismo paciente."""
+    if not trs:
+        return {}
+    lineas = []
+    for t in trs:
+        if t.get("_otro"):
+            quien = "OTRO"
+        else:
+            quien = "FONO" if t["speaker"] == "fonoaudiologo" else "PACIENTE"
+        m, s = divmod(int(float(t["start_sec"])), 60)
+        lineas.append(f"[{m:02d}:{s:02d}] {quien}: {t['text']}")
+    texto = "\n".join(lineas)[:90000]
+    items_txt = "\n".join(f"{k}: {v}" for k, v in VHI_ITEMS.items())
+    prompt = (
+        "Sos fonoaudiólogo/a especialista en voz. Analizá la transcripción de una sesión "
+        "(FONO = profesional, PACIENTE = paciente; la atribución automática puede tener "
+        "errores: usá el contenido). Respondé SOLO JSON con esta forma:\n"
+        "{\"tipo_sesion\": \"evaluacion_inicial|anamnesis|aplicacion_instrumento|terapia|control|otra\",\n"
+        " \"resumen\": \"4-6 oraciones clínicas\",\n"
+        " \"motivo_o_objetivo\": \"\", \"sintomas_referidos\": [\"\"], \"habitos_y_factores\": [\"\"],\n"
+        " \"ejercicios_realizados\": [\"\"], \"indicaciones_para_casa\": [\"\"],\n"
+        " \"observaciones_voz\": \"lo que el/la profesional comenta de la voz\",\n"
+        " \"alertas\": [\"signos que justifiquen derivación ORL u otra consulta\"],\n"
+        " \"proximos_pasos\": [\"\"],\n"
+        " \"vhi\": {\"aplicado\": true|false, \"version\": \"VHI-30|VHI-10|otra\",\n"
+        "   \"items\": [{\"codigo\": \"F1\", \"pregunta_detectada\": \"\", \"respuesta_textual\": \"\",\n"
+        "              \"puntaje\": 0, \"confianza\": \"alta|media|baja\", \"minuto\": \"mm:ss\"}]}}\n"
+        "Reglas VHI: solo incluí ítems que efectivamente se preguntaron y respondieron. "
+        "Mapeá cada pregunta al código cuyo contenido coincide (lista abajo). Escala: "
+        "0 nunca, 1 casi nunca, 2 a veces, 3 casi siempre, 4 siempre. Si la respuesta es "
+        "ambigua, poné tu mejor estimación con confianza baja. No inventes ítems.\n"
+        "Sin diagnósticos médicos definitivos. Español rioplatense.\n\n"
+        "ÍTEMS VHI:\n" + items_txt + "\n\nTRANSCRIPCIÓN:\n" + texto)
+    d = llm_json(prompt, max_tokens=6000)
+    vhi = d.get("vhi") or {}
+    if vhi.get("aplicado") and vhi.get("items"):
+        vhi["resultado"] = puntuar_vhi(vhi["items"], str(vhi.get("version") or ""))
+    d["vhi"] = vhi
+    d["generado"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    d["comparacion"] = _comparar_previa(sb, ses, d)
+    _guardar_info(sb, ses, "analisis_ia", d)
+    return d
+
+
+def _comparar_previa(sb, ses: dict, actual: dict) -> dict:
+    """Diferencias con la sesión anterior (calculadas, no por IA)."""
+    try:
+        r = sb.table("companion_sessions").select("id, recorded_at, device_info")\
+            .eq("patient_id", ses["patient_id"]).lt("recorded_at", ses.get("recorded_at") or "9999")\
+            .order("recorded_at", desc=True).limit(1).execute()
+        if not r.data:
+            return {"hay_previa": False}
+        prev = r.data[0]
+        out = {"hay_previa": True, "fecha_previa": (prev.get("recorded_at") or "")[:10]}
+
+        def f0(sid):
+            a = sb.table("session_acoustics").select("f0_median_hz")\
+                .eq("session_id", sid).eq("task_type", TAREA).execute()
+            return (a.data or [{}])[0].get("f0_median_hz")
+        f_act, f_prev = f0(ses["id"]), f0(prev["id"])
+        if f_act and f_prev:
+            out["f0_mediana_hz"] = {"previa": f_prev, "actual": f_act,
+                                    "cambio_st": round(12 * math.log2(float(f_act) / float(f_prev)), 2)}
+        pv = ((prev.get("device_info") or {}).get("analisis_ia") or {}).get("vhi") or {}
+        av = (actual.get("vhi") or {})
+        if (pv.get("resultado") or {}).get("total") is not None and (av.get("resultado") or {}).get("total") is not None:
+            out["vhi_total"] = {"previa": pv["resultado"]["total"], "actual": av["resultado"]["total"]}
+        return out
+    except Exception as e:
+        return {"error": str(e)[:200]}

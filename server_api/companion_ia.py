@@ -22,11 +22,16 @@ _original = comp._diarizar
 
 
 def _llm(prompt: str) -> str:
+    try:   # cliente con respaldo Gemini ↔ Groq (groq_chat devuelve (texto, modelo))
+        import companion_voz
+        return json.dumps(companion_voz.llm_json(prompt), ensure_ascii=False)
+    except Exception:
+        traceback.print_exc()
     if comp._ai_provider() == "groq":
         from llm_client import groq_chat
-        txt = groq_chat([{"role": "user", "content": prompt}],
-                        temperature=0.0, max_tokens=4000, model=comp._ai_model()) or ""
-        return txt if isinstance(txt, str) else json.dumps(txt, ensure_ascii=False)
+        res = groq_chat([{"role": "user", "content": prompt}],
+                        temperature=0.0, max_tokens=4000)
+        return res[0] if isinstance(res, tuple) else str(res or "")
     import httpx
     key = comp._env("GEMINI_API_KEY", "")
     if not key:
