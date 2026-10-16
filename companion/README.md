@@ -107,7 +107,7 @@ flutter run            # Android conectado, o -d windows
 `POST /uploads` devuelve la URL de `create_signed_upload_url` de Supabase
 (`/storage/v1/object/upload/sign/<bucket>/<objeto>?token=…`), que es un
 endpoint de subida estándar. El cliente deriva de esa URL el endpoint TUS
-`/storage/v1/upload/resumable`, manda el token en `x-signature` y
+`/storage/v1/upload/resumable/sign`, manda el token en `x-signature` y
 `bucketName`/`objectName` en `Upload-Metadata`, en **bloques de 6 MB salvo el
 último**, como pide la doc de Supabase (Resumable Uploads). El `device_token`
 no se envía a Supabase.

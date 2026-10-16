@@ -22,7 +22,7 @@ abstract class TusGateway {
 /// El backend (`POST /uploads`) devuelve la URL de `create_signed_upload_url`
 /// de Supabase: `https://<ref>.supabase.co/storage/v1/object/upload/sign/<bucket>/<objeto>?token=<t>`.
 /// Ese endpoint es de subida estándar (PUT), no TUS. Para TUS, Supabase usa
-/// `/storage/v1/upload/resumable` con el mismo token en `x-signature` y
+/// `/storage/v1/upload/resumable/sign` con el mismo token en `x-signature` y
 /// bucket/objeto en `Upload-Metadata` (docs Supabase: Resumable Uploads).
 class DestinoTus {
   final Uri endpoint;
@@ -53,7 +53,9 @@ class DestinoTus {
     if (barra <= 0) throw const TusException('URL de subida sin bucket/objeto');
     return DestinoTus(
       Uri(scheme: u.scheme, host: u.host, port: u.port,
-          path: '${ruta.substring(0, i)}/upload/resumable',),
+          // "/sign": variante TUS que valida x-signature. Sin "/sign" Supabase
+          // exige un JWT de usuario y responde 403 "Invalid Compact JWS".
+          path: '${ruta.substring(0, i)}/upload/resumable/sign',),
       bucket: resto.substring(0, barra),
       objeto: resto.substring(barra + 1),
       firma: token,

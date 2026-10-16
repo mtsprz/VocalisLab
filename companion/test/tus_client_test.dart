@@ -12,7 +12,7 @@ const _firmada = 'https://abc.supabase.co/storage/v1/object/upload/sign/'
 void main() {
   test('deriva endpoint resumable, bucket, objeto y firma de la URL firmada', () {
     final d = DestinoTus.desde(_firmada);
-    expect(d.endpoint.toString(), 'https://abc.supabase.co/storage/v1/upload/resumable');
+    expect(d.endpoint.toString(), 'https://abc.supabase.co/storage/v1/upload/resumable/sign');
     expect(d.bucket, 'companion-audio-vault');
     expect(d.objeto, 'vault/ses-1.m4a');
     expect(d.firma, 'TOKEN123');
@@ -21,7 +21,7 @@ void main() {
   test('URL con doble barra (como la arma supabase-py) se reconoce', () {
     final d = DestinoTus.desde('https://abc.supabase.co/storage/v1//object/upload/sign/'
         'companion-audio-vault/vault/ses-1.m4a?token=TOKEN123');
-    expect(d.endpoint.toString(), 'https://abc.supabase.co/storage/v1/upload/resumable');
+    expect(d.endpoint.toString(), 'https://abc.supabase.co/storage/v1/upload/resumable/sign');
     expect(d.objeto, 'vault/ses-1.m4a');
     expect(d.firma, 'TOKEN123');
   });
@@ -35,7 +35,7 @@ void main() {
     final client = MockClient((r) async {
       reqs.add(r);
       if (r.method == 'POST') {
-        return http.Response('', 201, headers: {'location': '/storage/v1/upload/resumable/ID1'});
+        return http.Response('', 201, headers: {'location': '/storage/v1/upload/resumable/sign/ID1'});
       }
       final off = int.parse(r.headers['Upload-Offset']!);
       return http.Response('', 204,
@@ -47,7 +47,7 @@ void main() {
     await f.writeAsBytes(List<int>.filled(total, 7));
     final tus = TusClient(httpClient: client);
     final loc = await tus.create(_firmada, total, 'a.m4a', mime: 'audio/mp4');
-    expect(loc, 'https://abc.supabase.co/storage/v1/upload/resumable/ID1');
+    expect(loc, 'https://abc.supabase.co/storage/v1/upload/resumable/sign/ID1');
     final fin = await tus.uploadFile(loc, f, bearerToken: 'DEVICE-TOKEN');
     expect(fin, total);
 

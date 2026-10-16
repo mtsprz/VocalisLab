@@ -35,7 +35,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
 
   Future<void> _importar() async {
     setState(() => _msg = null);
-    final res = await FilePicker.pickFiles(
+    final res = await FilePicker.platform.pickFiles(
       dialogTitle: 'Elegí la grabación de la sesión',
       type: FileType.custom,
       allowedExtensions: extensionesImportables,
