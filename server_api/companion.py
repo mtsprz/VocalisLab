@@ -292,6 +292,45 @@ async def companion_health():
     return JSONResponse(content={"ok": True, "queue": q})
 
 
+@router.get("/api/companion/health/capacidades")
+async def companion_capacidades():
+    """Diagnóstico sin datos de pacientes: qué piezas del análisis están
+    operativas en este servidor (solo booleanos y conteos)."""
+    cap = {}
+    try:
+        import shutil as _sh
+        cap["ffmpeg"] = bool(_sh.which("ffmpeg"))
+    except Exception:
+        cap["ffmpeg"] = False
+    try:
+        import parselmouth  # noqa: F401
+        cap["praat"] = True
+    except Exception:
+        cap["praat"] = False
+    try:
+        import companion_voz
+        cap["modelo_huella"] = bool(companion_voz._ruta_modelo())
+        companion_voz._extractor()
+        cap["huella_vocal"] = True
+    except Exception as e:
+        cap["huella_vocal"] = False
+        cap["huella_error"] = str(e)[:160]
+    cap["groq_key"] = bool(_env("GROQ_API_KEY", "").strip())
+    cap["gemini_key"] = bool(_env("GEMINI_API_KEY", "").strip())
+    cap["audio_externo"] = _external_audio_ok()
+    sb = _sb()
+    if sb:
+        try:   # estado de los últimos trabajos (sin contenido)
+            r = sb.table("processing_jobs").select("status, attempts, last_error, updated_at")\
+                .order("updated_at", desc=True).limit(5).execute()
+            cap["ultimos_trabajos"] = [{"status": j.get("status"), "intentos": j.get("attempts"),
+                                        "error": (j.get("last_error") or "")[:160]}
+                                       for j in (r.data or [])]
+        except Exception as e:
+            cap["ultimos_trabajos"] = f"no disponible: {str(e)[:80]}"
+    return JSONResponse(content={"ok": True, "capacidades": cap})
+
+
 @router.post("/api/companion/pairing-code")
 async def crear_pairing_code(user_id: str = ""):
     _require_profesional(user_id)
