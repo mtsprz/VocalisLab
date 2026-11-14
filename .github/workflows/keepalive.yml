@@ -1,0 +1,42 @@
+# Ping diario: evita que Supabase pause el proyecto por inactividad (plan gratis,
+# ~7 días sin uso) y despierta el backend de Render.
+#
+# Usa /api/dashboard porque consulta la base y devuelve solo conteos (sin datos
+# de pacientes). Ese endpoint responde 200 con ceros si la base falla, así que
+# el job falla cuando total_pacientes es 0: GitHub avisa por mail.
+#
+# Ojo: GitHub desactiva los workflows programados tras 60 días sin commits en el
+# repo; si pasa, se reactiva desde la pestaña Actions.
+name: Keepalive (Supabase + Render)
+
+on:
+  schedule:
+    - cron: "17 11 * * *" # todos los días 11:17 UTC (08:17 Argentina)
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BACKEND: https://vocalislab.onrender.com
+    steps:
+      - name: Despertar el backend
+        run: |
+          curl --fail --silent --show-error --output /dev/null \
+            --retry 5 --retry-delay 20 --retry-all-errors --max-time 120 \
+            "$BACKEND/api/health"
+
+      - name: Consultar la base
+        run: |
+          body=$(curl --fail --silent --show-error \
+            --retry 3 --retry-delay 15 --retry-all-errors --max-time 120 \
+            "$BACKEND/api/dashboard")
+          echo "$body"
+          total=$(echo "$body" | jq -r '.total_pacientes // 0')
+          if [ "$total" -le 0 ]; then
+            echo "::error::total_pacientes=$total: la base no responde (¿Supabase pausado?)"
+            exit 1
+          fi
