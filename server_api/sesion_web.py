@@ -53,9 +53,14 @@ def _secreto() -> bytes:
     s = os.environ.get("SESSION_SECRET", "").strip()
     if s:
         return s.encode()
-    base = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
-    if base:
-        return hashlib.sha256(b"vocalislab-sesion-web:" + base.encode()).digest()
+    # Primera clave estable disponible. GOOGLE_CLIENT_SECRET está siempre que
+    # el login con Google funciona; sin una clave estable, si el servidor
+    # corre varios procesos cada uno firmaría distinto y rechazaría las
+    # sesiones emitidas por otro ("Tu sesión venció" justo al entrar).
+    for var in ("SUPABASE_SERVICE_KEY", "GOOGLE_CLIENT_SECRET", "SUPABASE_ANON_KEY"):
+        base = os.environ.get(var, "").strip()
+        if base:
+            return hashlib.sha256(b"vocalislab-sesion-web:" + base.encode()).digest()
     return _SECRETO_EFIMERO
 
 

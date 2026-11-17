@@ -108,13 +108,14 @@ async def google_callback(code: str = "", state: str = ""):
 
         # Solo cuentas autorizadas (EMAILS_PERMITIDOS / PROFESIONAL_GOOGLE_ID):
         # la plataforma tiene datos de salud. Cerrado por defecto.
+        from urllib.parse import quote
         from sesion_web import acceso_configurado, cuenta_autorizada, emitir_token
         if not cuenta_autorizada(user_info.get("id", ""), user_info.get("email", "")):
             motivo = "no_autorizado" if acceso_configurado() else "sin_configurar"
             print(f"[google_auth] acceso denegado ({motivo}) para {user_info.get('email', '?')}")
             return HTMLResponse(content=f"""
                 <html><body><script>
-                    window.location.href = '{FRONTEND_URL}?auth_error={motivo}';
+                    window.location.href = '{FRONTEND_URL}?auth_error={motivo}&cuenta={quote(user_info.get("email", ""))}';
                 </script></body></html>
             """)
 

@@ -422,7 +422,10 @@ def health_check():
         commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=os.path.dirname(__file__), text=True).strip()
     except Exception:
         commit = "unknown"
-    return {"status": "ok", "engine": "Praat/Parselmouth + VoiceLab", "version": "1.0.0", "commit": commit}
+    from sesion_web import acceso_configurado
+    return {"status": "ok", "engine": "Praat/Parselmouth + VoiceLab", "version": "1.0.0", "commit": commit,
+            # Solo sí/no (sin emails): si es false, falta EMAILS_PERMITIDOS en Render.
+            "login_configurado": acceso_configurado()}
 
 
 def _build_tools_list(metrics: dict, avqi: dict, audio_info: dict) -> list:

@@ -52,7 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const params = new URLSearchParams(window.location.search);
     const error = params.get('auth_error');
     if (error) {
-      setAuthError(MENSAJES_ERROR[error] || 'No se pudo iniciar sesión.');
+      // Muestra con qué cuenta se intentó, para comparar con EMAILS_PERMITIDOS.
+      const cuenta = params.get('cuenta');
+      setAuthError((MENSAJES_ERROR[error] || 'No se pudo iniciar sesión.')
+        + (cuenta ? ` (cuenta usada: ${cuenta})` : ''));
       window.history.replaceState({}, '', window.location.pathname);
     }
     // Vuelta del login de Google con los datos del usuario y su sesión.
