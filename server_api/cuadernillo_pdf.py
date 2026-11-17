@@ -16,11 +16,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, HRFlowable, CondPageBreak
+    PageBreak, HRFlowable, KeepTogether
 )
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.graphics.shapes import Drawing, Line, String, PolyLine, Circle, Rect, Polygon
 
 
@@ -87,21 +88,45 @@ _JERGA = [
     ("costillas flotantes", "costillas bajas"),
     ("capacidad vital", "cantidad de aire"),
     ("apnea", "pausa sin respirar"),
+    ("fricativas", "sonidos con aire (como la s)"),
     ("fricativa", "sonido con aire (como la s)"),
     ("báscula", "escala"),
     ("bascula", "escala"),
     ("ATM", "mandíbula"),
 ]
 
+# Siglas: se reemplazan solo escritas en mayúsculas ("ATM"), nunca dentro
+# de otras palabras.
+_JERGA_SIGLAS = {"ATM"}
+
 
 def _simplificar(texto: str) -> str:
-    """Reemplaza jerga técnica por lenguaje cotidiano (insensible a mayúsculas)."""
+    """Reemplaza jerga técnica por lenguaje cotidiano.
+
+    Solo palabras completas (antes "glóticos" quedaba "de las cuerdass" y
+    "fricativas" → "...(como la s)s"); acepta el plural del término técnico y
+    respeta la mayúscula inicial ("Apnea suave" → "Pausa sin respirar suave").
+    """
     if not texto:
         return ""
     out = str(texto)
     for src, dst in _JERGA:
-        out = re.sub(re.escape(src), dst, out, flags=re.IGNORECASE)
+        sigla = src in _JERGA_SIGLAS
+        patron = r"(?<!\w)" + re.escape(src) + (r"(?!\w)" if sigla else r"(?:e?s)?(?!\w)")
+
+        def _rep(m, _dst=dst, _sigla=sigla):
+            # Una sigla va siempre en mayúsculas: no indica inicio de frase.
+            if not _sigla and m.group(0)[0].isupper():
+                return _dst[0].upper() + _dst[1:]
+            return _dst
+        out = re.sub(patron, _rep, out, flags=0 if sigla else re.IGNORECASE)
     return out
+
+
+def _sin_numeracion(texto: str) -> str:
+    """Quita la numeración propia del banco ("3. ", "3) ") antes de sanear,
+    para que la mayúscula inicial quede en la primera palabra real."""
+    return re.sub(r"^\s*\d+\s*[\.\)]\s*", "", str(texto or ""))
 
 
 def _checkbox() -> Drawing:
@@ -1119,8 +1144,10 @@ def _get_styles():
          spaceBefore=8 * mm, spaceAfter=4 * mm, leading=22)
     _add('ExerciseTitle', parent=styles['Heading2'], fontSize=18, textColor=SECONDARY,
          spaceBefore=2 * mm, spaceAfter=1 * mm, leading=22)
-    _add('CuadBody', parent=styles['Normal'], fontSize=13, textColor=DARK_TEXT,
-         alignment=TA_JUSTIFY, leading=17, spaceAfter=2 * mm)
+    # Alineado a la izquierda: el justificado abría huecos grandes entre
+    # palabras en las columnas angostas de las tarjetas.
+    _add('CuadBody', parent=styles['Normal'], fontSize=12, textColor=DARK_TEXT,
+         alignment=TA_LEFT, leading=16, spaceAfter=1.5 * mm)
     _add('PropositoText', parent=styles['Normal'], fontSize=13, textColor=PRIMARY,
          alignment=TA_LEFT, leading=17, spaceAfter=2 * mm)
     _add('StepText', parent=styles['Normal'], fontSize=12, textColor=DARK_TEXT,
@@ -1141,17 +1168,17 @@ def _get_styles():
          leading=13, spaceAfter=2 * mm)
     _add('CuadSubTitle', parent=styles['Heading3'], fontSize=11, textColor=PRIMARY,
          spaceBefore=3 * mm, spaceAfter=1 * mm, leading=14)
-    # Seguridad clínica: banda roja STOP (precauciones por ejercicio y
-    # advertencias del preset). Debe verse sí o sí en el PDF impreso.
+    # Seguridad clínica: STOP y tono van dentro de una caja (Table, ver
+    # _caja). Antes el borde lo dibujaba el párrafo con borderPadding y se
+    # salía de la columna, pisando el borde de la tarjeta.
     _add('StopText', parent=styles['Normal'], fontSize=11, leading=14,
-          textColor=STOP_TEXT, backColor=STOP_BG,
-          borderWidth=0.7, borderColor=STOP_BORDER,
-          borderPadding=(5, 5, 5), spaceBefore=2 * mm, spaceAfter=2 * mm)
-    _add('TonalBadge', parent=styles['Normal'], fontSize=10, leading=13,
-          textColor=PRIMARY, backColor=HexColor("#F0F9FF"),
-          borderWidth=0.6, borderColor=SECONDARY,
-          borderPadding=(5, 5, 5), spaceBefore=2 * mm, spaceAfter=1 * mm,
-          alignment=TA_CENTER)
+          textColor=STOP_TEXT)
+    _add('TonalBadge', parent=styles['Normal'], fontSize=11, leading=14,
+          textColor=PRIMARY)
+    _add('CardTitle', parent=styles['Normal'], fontName='Helvetica-Bold',
+          fontSize=16, leading=19, textColor=PRIMARY)
+    _add('CardNum', parent=styles['Normal'], fontName='Helvetica-Bold',
+          fontSize=15, leading=18, textColor=white, alignment=TA_CENTER)
     _add('FichaText', parent=styles['Normal'], fontSize=10, leading=13,
           textColor=DARK_TEXT, spaceAfter=1 * mm)
     _add('BadgeText', parent=styles['Normal'], fontSize=11, leading=14,
@@ -1166,10 +1193,34 @@ def _build_stop_banner(styles, textos):
     if not limpios:
         return elements
     for t in limpios:
-        elements.append(Paragraph(
-            f"<b>STOP — {escape(_sanear(_simplificar(t)))}</b>",
-            styles['StopText']))
+        elements.append(_caja_stop(styles, t, ANCHO_UTIL))
+        elements.append(Spacer(1, 2 * mm))
     return elements
+
+
+# Ancho útil de la página (A4 menos márgenes de 16 mm).
+ANCHO_UTIL = A4[0] - 32 * mm
+
+
+def _caja(contenido, ancho, fondo, borde, pad=5):
+    """Caja con fondo y borde que respeta el ancho dado (no se desborda)."""
+    t = Table([[contenido]], colWidths=[ancho])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), fondo),
+        ('BOX', (0, 0), (-1, -1), 0.7, borde),
+        ('LEFTPADDING', (0, 0), (-1, -1), pad),
+        ('RIGHTPADDING', (0, 0), (-1, -1), pad),
+        ('TOPPADDING', (0, 0), (-1, -1), pad - 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), pad),
+    ]))
+    t.hAlign = 'LEFT'
+    return t
+
+
+def _caja_stop(styles, texto, ancho):
+    return _caja(Paragraph(
+        f"<b>STOP — {escape(_sanear(_simplificar(texto)))}</b>",
+        styles['StopText']), ancho, STOP_BG, STOP_BORDER)
 
 
 def _prof(profesional: dict, key: str, default: str = "") -> str:
@@ -1242,7 +1293,8 @@ def _fondo_portada(canvas, doc):
     canvas.rect(14.5 * mm, 14.5 * mm, A4[0] - 29 * mm, A4[1] - 29 * mm,
                 stroke=1, fill=0)
     canvas.restoreState()
-    _add_page_number(canvas, doc)
+    # Sin pie en la portada: el pie con "Página X de Y" lo dibuja
+    # _canvas_numerado en las páginas siguientes.
 
 
 def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha, profesional=None):
@@ -1355,12 +1407,21 @@ def _build_contract(styles, contrato):
         styles['ContractText']
     ))
 
-    elements.append(Spacer(1, 8 * mm))
-    elements.append(HRFlowable(width="40%", color=LIGHT_GRAY, thickness=0.5))
-    elements.append(Spacer(1, 2 * mm))
-    elements.append(Paragraph("Firma del profesional: ___________________________", styles['ContractText']))
-    elements.append(Paragraph("Firma del paciente:    ___________________________", styles['ContractText']))
-    elements.append(Spacer(1, 4 * mm))
+    # Firmas lado a lado: espacio para firmar arriba, línea y aclaración abajo.
+    firmas = Table(
+        [["", "", ""],
+         [Paragraph("Firma del profesional", styles['CaptionText']), "",
+          Paragraph("Firma y aclaración del paciente", styles['CaptionText'])]],
+        colWidths=[75 * mm, ANCHO_UTIL - 150 * mm, 75 * mm],
+        rowHeights=[18 * mm, None])
+    firmas.setStyle(TableStyle([
+        ('LINEABOVE', (0, 1), (0, 1), 0.8, DARK_TEXT),
+        ('LINEABOVE', (2, 1), (2, 1), 0.8, DARK_TEXT),
+        ('TOPPADDING', (0, 1), (-1, 1), 3),
+    ]))
+    elements.append(Spacer(1, 6 * mm))
+    elements.append(KeepTogether([firmas]))
+    elements.append(Spacer(1, 6 * mm))
 
     return elements
 
@@ -1403,201 +1464,228 @@ def _preguntar_ilustraciones(ejercicios, timeout_por_img: int = 170):
     return out
 
 
-def _build_exercise_card(styles, exercise, idx, seccion_id=""):
-    """Tarjeta pedagógica: encabezado + propósito + curva + pictograma + pasos con casillas."""
-    elements = []
+def _ficha_nivel(styles, nivel, duracion):
+    """Recuadro de la derecha del encabezado: nivel (barra) y dosis diaria."""
+    nombre = _NIVEL_NOMBRE.get(nivel, "").split(": ", 1)[-1]
+    filas = [[Paragraph(f"<b>Nivel {nivel} de 4</b> · {escape(nombre)}",
+                        styles['FichaText'])],
+             [_barra_complejidad(nivel)]]
+    if duracion:
+        filas.append([Paragraph(f"<b>{escape(str(duracion))} min por día</b>",
+                                styles['FichaText'])])
+    t = Table(filas, colWidths=[50 * mm])
+    t.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    return t
 
+
+def _tabla_pasos(styles, pasos, ancho):
+    """Pasos con casilla para tildar. Una fila por paso: si la tarjeta es más
+    alta que una página, la tabla se corta entre pasos (nunca falla)."""
+    if not pasos:
+        return Paragraph("Siga los pasos con su profesional.", styles['CuadBody'])
+    rows = []
+    for i, step in enumerate(pasos, 1):
+        txt = _sanear(_simplificar(_sin_numeracion(step)))
+        rows.append([_checkbox(),
+                     Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText'])])
+    t = Table(rows, colWidths=[9 * mm, ancho - 9 * mm])
+    t.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LINEBELOW', (0, 0), (-1, -2), 0.4, LIGHT_GRAY),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    t.hAlign = 'LEFT'
+    return t
+
+
+def _imagenes_ejercicio(exercise, name, desc):
+    """Galería del ejercicio: [{path, epigrafe}] válidas (banco del
+    profesional > IA opt-in). Vacía si no hay ninguna."""
+    ex_id = str(exercise.get("id", "")).strip().lower()
+    pre = exercise.get("_ai_pre")
+    if isinstance(pre, str) and pre:
+        pre = [{"path": pre, "epigrafe": ""}]
+    elif isinstance(pre, dict):
+        pre = [pre]
+    imgs = [dict(x) for x in (pre or []) if isinstance(x, dict) and x.get("path")]
+    if not imgs and ex_id:
+        try:
+            from imagen_terapeutica import galeria_guardada as _db_gal
+            imgs = [dict(x) for x in (_db_gal(ex_id) or [])]
+        except Exception:
+            imgs = []
+    if not imgs and _modo_imagen() == "ai":
+        try:
+            from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
+            if imagen_ia_habilitada():
+                gen = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
+                if gen:
+                    imgs = [{"path": gen, "epigrafe": ""}]
+        except Exception:
+            imgs = []
+    try:
+        from imagen_terapeutica import _es_imagen_valida as _img_ok
+        imgs = [x for x in imgs if _img_ok(x.get("path"))]
+    except Exception:
+        pass
+    return imgs
+
+
+def _bloques_imagen(styles, imgs, box_mm):
+    """Cada imagen con su epígrafe; omite las que no se pueden leer."""
+    bloques = []
+    for i, item in enumerate(imgs, 1):
+        try:
+            im = _imagen_contain(item["path"], box_mm=box_mm)
+        except Exception:
+            continue
+        cap = (item.get("epigrafe") or "").strip()
+        if not cap:
+            cap = f"Imagen {i} de {len(imgs)}" if len(imgs) > 1 else "Imagen de referencia"
+        bloques.append([im, Spacer(1, 1 * mm), Paragraph(escape(cap), styles['CaptionText'])])
+    return bloques
+
+
+def _grilla_imagenes(bloques, ancho, por_fila=3):
+    """Imágenes en filas (debajo de los pasos); se corta entre filas."""
+    filas = [bloques[i:i + por_fila] for i in range(0, len(bloques), por_fila)]
+    filas = [f + [""] * (por_fila - len(f)) for f in filas]
+    t = Table(filas, colWidths=[ancho / por_fila] * por_fila)
+    t.setStyle(TableStyle([
+        # Abajo: los epígrafes quedan en la misma línea aunque las imágenes
+        # tengan distinta altura.
+        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BACKGROUND', (0, 0), (-1, -1), IMG_BG),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return t
+
+
+# Una tarjeta en dos columnas no puede cortarse entre páginas; si supera
+# esta altura se apila (pasos a todo el ancho y luego las imágenes).
+_ALTO_MAX_DOS_COLUMNAS = 170 * mm
+
+
+def _build_exercise_card(styles, exercise, idx, seccion_id=""):
+    """Tarjeta del ejercicio, de arriba hacia abajo:
+
+    1. Encabezado: número, nombre y recuadro con nivel + minutos por día.
+    2. Categoría y efecto, "¿Para qué sirve?", descripción e indicación tonal.
+    3. Pasos con casilla para tildar; a la derecha la imagen (hasta 2).
+       Con 3 o más imágenes, o si la tarjeta quedaría más alta que una
+       página, los pasos van a todo el ancho y las imágenes debajo en grilla.
+    4. STOP (si hay precaución) y frases para practicar.
+
+    Va dentro de KeepTogether: pasa entera a la página siguiente si no entra,
+    y si es más alta que una página se corta entre pasos en vez de fallar.
+    """
+    W = ANCHO_UTIL
     name = _sanear(_simplificar(exercise.get("name", "Ejercicio sin nombre")))
-    # El banco trae prefijo de manual ("7.1 ...") y la tarjeta ya numera
-    # ("1. ..."): quitar el prefijo para no imprimir "1. 7.1 ...".
+    # El banco trae prefijo de manual ("7.1 ...") y la tarjeta ya numera.
     name = re.sub(r"^\s*\d+\.\d+\s*", "", name)
     desc = _sanear(_simplificar(exercise.get("description", "")))
     proposito = _PROPOSITO_SECCION.get(
         seccion_id, "Para entrenar y cuidar su voz todos los días.")
-
-    # Tarjeta indivisible en la práctica: si quedan < 120 mm, arranca en la
-    # página siguiente (equivale a page-break-inside: avoid para tarjetas
-    # normales; sin KeepTogether rígido para no romper el PDF con galerías
-    # largas, que fluyen a la página siguiente).
-    elements.append(CondPageBreak(120 * mm))
 
     ex_id = str(exercise.get("id", "")).strip().lower()
     nivel = _NIVEL_POR_EJERCICIO.get(ex_id, 2)
     efecto = _EFECTO_POR_EJERCICIO.get(ex_id, "Entrena y cuida su voz")
     categoria = _BADGE_CATEGORIA.get(seccion_id, "Ejercicio vocal")
 
-    # ── Columna izquierda (65 %): título + badge + propósito + pasos + STOP ──
-    left_flow = [
-        Paragraph(f"<b>{idx}. {escape(name)}</b>", styles['ExerciseTitle']),
-        Paragraph(f"<b>[{escape(categoria)}]</b> &nbsp;"
-                  f"<font color='#64748B'>{escape(efecto)}</font>",
-                  styles['BadgeText']),
-        Paragraph(f"<i>¿Para qué sirve? {escape(proposito)}</i>",
-                  styles['PropositoText']),
-    ]
+    # 1. Encabezado
+    ancho_num, ancho_ficha = 11 * mm, 54 * mm
+    head = Table([[Paragraph(str(idx), styles['CardNum']),
+                   Paragraph(escape(name), styles['CardTitle']),
+                   _ficha_nivel(styles, nivel, exercise.get("duration_min", ""))]],
+                 colWidths=[ancho_num, W - ancho_num - ancho_ficha, ancho_ficha])
+    head.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, 0), (0, 0), SECONDARY),
+        ('BACKGROUND', (1, 0), (-1, 0), LIGHT_BG),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, SECONDARY),
+        ('LEFTPADDING', (1, 0), (-1, 0), 7),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    flow = [head, Spacer(1, 2.5 * mm)]
+
+    # 2. Para qué sirve
+    flow.append(Paragraph(f"<b>{escape(categoria)}</b> &nbsp;·&nbsp; "
+                          f"<font color='#64748B'>{escape(efecto)}</font>",
+                          styles['BadgeText']))
+    flow.append(Paragraph(f"<b>¿Para qué sirve?</b> {escape(proposito)}",
+                          styles['CuadBody']))
     if desc:
-        left_flow.append(Paragraph(escape(desc), styles['CuadBody']))
-
-    # ── Columna derecha: UNA ilustración + UNA curva, tamaño columna ──
-    # En modo 'svg' (default) siempre el diagrama vectorial pre-aprobado
-    # (~53 mm de ancho natural: entra justo en la columna de 56 mm).
-    # En modo 'ai' opt-in: IA encajada a 50 mm con fallback SVG.
-    # Sin bloques full-width duplicados ni desbordes de columna.
-    ex_id_vis = str(exercise.get("id", "")).strip().lower()
-    # Galería: lista [{path, epigrafe}] (generar() la pre-carga vía _ai_pre).
-    _pre = exercise.get("_ai_pre")
-    if isinstance(_pre, dict):
-        _pre = [_pre]
-    ai_imgs = [dict(x) for x in (_pre or []) if isinstance(x, dict) and x.get("path")]
-    if not ai_imgs and isinstance(exercise.get("_ai_pre"), str) and exercise.get("_ai_pre"):
-        ai_imgs = [{"path": exercise["_ai_pre"], "epigrafe": ""}]
-    # Banco del profesional: si hay galería asignada en la tabla, gana siempre
-    # (cubre llamadas directas a la tarjeta fuera de generar_cuadernillo_pdf).
-    if not ai_imgs and ex_id_vis:
-        try:
-            from imagen_terapeutica import galeria_guardada as _db_gal
-            ai_imgs = [dict(x) for x in (_db_gal(ex_id_vis) or [])]
-        except Exception:
-            ai_imgs = []
-    if not ai_imgs and _modo_imagen() == "ai":
-        try:
-            from imagen_terapeutica import generar_imagen_ejercicio, imagen_ia_habilitada
-            if imagen_ia_habilitada():
-                _gen = generar_imagen_ejercicio(name, desc, exercise.get("id", ""))
-                if _gen:
-                    ai_imgs = [{"path": _gen, "epigrafe": ""}]
-        except Exception:
-            ai_imgs = []
-    try:
-        from imagen_terapeutica import _es_imagen_valida as _img_ok
-        ai_imgs = [x for x in ai_imgs if _img_ok(x.get("path"))]
-    except Exception:
-        pass
-
-    # ── Columna derecha (35 %): ficha técnica + indicación tonal + imagen ──
-    # Regla clínica: NUNCA se generan SVGs dinámicos de tono/curvas ni
-    # dibujos sintéticos. Solo imágenes del banco + texto estructurado.
-    duration = exercise.get("duration_min", "")
-    nivel_txt = f"Nivel {nivel} de 4"
-    dosis_txt = f"Dosis: {duration} min/día" if duration else ""
-    ficha_lines = [Paragraph(f"<b>{escape(nivel_txt)}</b>", styles['FichaText'])]
-    ficha_lines.append(_barra_complejidad(nivel))
-    if dosis_txt:
-        ficha_lines.append(Paragraph(f"<b>{escape(dosis_txt)}</b>", styles['FichaText']))
-    right_flow = ficha_lines
-
+        flow.append(Paragraph(escape(desc), styles['CuadBody']))
     tipo = _tipo_curva(exercise)
     if tipo:
         tonal_txt = _CURVA_TITULO.get(tipo, "Mantenga el sonido parejo y estable")
-        right_flow.append(Paragraph(
-            f"<b>[Indicación tonal]</b><br/>{escape(tonal_txt)}",
-            styles['TonalBadge']))
+        flow.append(_caja(Paragraph(f"<b>Cómo usar el tono:</b> {escape(tonal_txt)}",
+                                    styles['TonalBadge']),
+                          W * 0.62, HexColor("#F0F9FF"), SECONDARY))
+    flow.append(Spacer(1, 2 * mm))
 
-    ilust_flow = []
-    if ai_imgs:
-        # Sin límite: apiladas; más chicas si hay varias para cuidar la página.
-        # Contenedor neutro #F8FAFC, proporción contenida (object-fit: contain).
-        box = 50 if len(ai_imgs) == 1 else 40
-        validas = []
-        for i, item in enumerate(ai_imgs, 1):
-            try:
-                ilust_flow.append(_imagen_contain(item["path"], box_mm=box))
-                cap = (item.get("epigrafe") or "").strip()
-                ilust_flow.append(Paragraph(
-                    escape(cap) if cap else f"Ilustración {i} de {len(ai_imgs)}"
-                    if len(ai_imgs) > 1 else "Ilustración de apoyo",
-                    styles['CaptionText']))
-                validas.append(item)
-            except Exception:
-                continue
-        ai_imgs = validas
-    if not ai_imgs:
-        # Caja neutra de referencia (sin dibujo sintético ni curvas).
-        caja_neutra = Table(
-            [[Paragraph("Imagen de referencia<br/>pendiente de carga",
-                        styles['CaptionText'])]],
-            colWidths=[55 * mm])
-        caja_neutra.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), IMG_BG),
-            ('BOX', (0, 0), (-1, -1), 0.6, LIGHT_GRAY),
-            ('TOPPADDING', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        ilust_flow.append(caja_neutra)
-    right_flow.extend(ilust_flow)
+    # 3. Pasos + imágenes
+    pasos = exercise.get("steps", []) or []
+    imgs = _imagenes_ejercicio(exercise, name, desc)
+    cuerpo = None
+    if imgs and len(imgs) <= 2:
+        col_img = 58 * mm
+        bloques = _bloques_imagen(styles, imgs, 52 if len(imgs) == 1 else 44)
+        if bloques:
+            der = [x for b in bloques for x in b + [Spacer(1, 2 * mm)]]
+            dos_col = Table([[_tabla_pasos(styles, pasos, W - col_img - 4 * mm), der]],
+                            colWidths=[W - col_img, col_img])
+            dos_col.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+                ('BACKGROUND', (1, 0), (1, 0), IMG_BG),
+                ('LEFTPADDING', (0, 0), (0, 0), 0),
+                ('TOPPADDING', (1, 0), (1, 0), 5),
+            ]))
+            _, alto = dos_col.wrap(W, 10000)
+            if alto <= _ALTO_MAX_DOS_COLUMNAS:
+                cuerpo = [dos_col]
+    if cuerpo is None:
+        cuerpo = [_tabla_pasos(styles, pasos, W)]
+        bloques = _bloques_imagen(styles, imgs, 52) if imgs else []
+        if bloques:
+            cuerpo += [Spacer(1, 3 * mm), _grilla_imagenes(bloques, W)]
+    flow.extend(cuerpo)
 
-    # Pasos numerados con casillas grandes para tildar (columna izquierda).
-    # Se elimina la numeración propia del banco ("1. ...") porque la tarjeta
-    # ya enumera (evita el duplicado "1. 1. ...").
-    steps = exercise.get("steps", []) or []
-    if steps:
-        rows = []
-        for i, step in enumerate(steps, 1):
-            txt = _sanear(_simplificar(step))
-            txt = re.sub(r"^\s*\d+\.\s+", "", txt)
-            rows.append([
-                _checkbox(),
-                Paragraph(f"<b>{i}.</b> &nbsp;{escape(txt)}", styles['StepText']),
-            ])
-        pasos_tabla = Table(rows, colWidths=[10 * mm, 97 * mm])
-        pasos_tabla.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LINEBELOW', (0, 0), (-1, -2), 0.4, LIGHT_GRAY),
-            ('LEFTPADDING', (0, 0), (-1, -1), 1),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 1),
-        ]))
-    else:
-        pasos_tabla = Paragraph("Siga los pasos con su profesional.",
-                                styles['CuadBody'])
-    left_flow.extend([Spacer(1, 1 * mm), pasos_tabla])
-
+    # 4. STOP y frases
     precaucion = str(exercise.get("precaucion") or "").strip()
     if precaucion:
-        left_flow.append(Paragraph(
-            f"<b>STOP — {escape(_sanear(_simplificar(precaucion)))}</b>",
-            styles['StopText']))
+        flow += [Spacer(1, 2 * mm), _caja_stop(styles, precaucion, W)]
 
-    # Tarjeta 2 columnas (izq 65 % = 115 mm | der 35 % = 63 mm),
-    # borde sobrio + acento acero a la izquierda.
-    card = Table([[left_flow, right_flow]], colWidths=[115 * mm, 63 * mm])
-    card.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('BOX', (0, 0), (-1, -1), 0.6, LIGHT_GRAY),
-        ('LINEBEFORE', (0, 0), (0, 0), 4, SECONDARY),
-        ('BACKGROUND', (1, 0), (1, 0), IMG_BG),
-    ]))
-    elements.append(card)
-    elements.append(Spacer(1, 3 * mm))
-
-    phrases = exercise.get("phrases", []) or []
+    phrases = [p for p in (exercise.get("phrases", []) or []) if str(p).strip()]
     if phrases:
-        elements.append(Spacer(1, 2 * mm))
-        elements.append(Paragraph("<b>Frases para practicar (lea en voz alta y clara):</b>",
-                                  styles['CuadBody']))
-        for phrase in phrases:
-            elements.append(Table(
-                [[_checkbox(),
-                  Paragraph(escape(_sanear(_simplificar(str(phrase)))),
-                            styles['StepText'])]],
-                colWidths=[12 * mm, 148 * mm],
-                style=TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('TOPPADDING', (0, 0), (-1, -1), 2),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ])))
+        flow.append(Spacer(1, 2 * mm))
+        flow.append(Paragraph("<b>Frases para practicar</b> (léalas en voz alta y clara):",
+                              styles['CuadBody']))
+        frases = Table([[_checkbox(), Paragraph(escape(_sanear(_simplificar(str(p)))),
+                                                styles['StepText'])] for p in phrases],
+                       colWidths=[9 * mm, W - 9 * mm])
+        frases.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('LEFTPADDING', (0, 0), (-1, -1), 1),
+        ]))
+        flow.append(frases)
 
-    elements.append(Spacer(1, 2 * mm))
-    elements.append(HRFlowable(width="100%", color=LIGHT_GRAY, thickness=0.5))
-    elements.append(Spacer(1, 3 * mm))
-    return elements
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(HRFlowable(width="100%", color=LIGHT_GRAY, thickness=0.6))
+    flow.append(Spacer(1, 5 * mm))
+    return [KeepTogether(flow)]
 
 
 def _build_weekly_grid(styles):
@@ -1616,18 +1704,18 @@ def _build_weekly_grid(styles):
     for h in range(7, 23):
         data.append([f"{h:02d}:00", "", "", "", "", ""])
 
-    col_w = [16 * mm, 28 * mm, 28 * mm, 28 * mm, 28 * mm, 28 * mm]
-    table = Table(data, colWidths=col_w, repeatRows=1)
+    col_w = [18 * mm] + [(ANCHO_UTIL - 18 * mm) / 5] * 5
+    # Filas de 8 mm: espacio real para marcar con lapicera.
+    table = Table(data, colWidths=col_w, repeatRows=1,
+                  rowHeights=[8 * mm] + [8 * mm] * (len(data) - 1))
     style_cmds = [
         ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
     ]
@@ -1652,21 +1740,22 @@ def _build_tme_log(styles):
     elements.append(Spacer(1, 2 * mm))
 
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    data = [["Día", "1ª medición (s)", "2ª medición (s)", "3ª medición (s)", "Mejor valor", "Observaciones"]]
+    enc = ["Día", "1ª", "2ª", "3ª", "Mejor", "Observaciones"]
+    sub = ["", "(segundos)", "(segundos)", "(segundos)", "valor", ""]
+    data = [[f"{a}\n{b}" if b else a for a, b in zip(enc, sub)]]
     for d in dias:
-        data.append([d, "____ s", "____ s", "____ s", "____ s", "____________________"])
-    table = Table(data, colWidths=[24 * mm, 26 * mm, 26 * mm, 26 * mm, 24 * mm, 44 * mm],
-                  repeatRows=1)
+        data.append([d, "", "", "", "", ""])
+    table = Table(data, colWidths=[24 * mm, 24 * mm, 24 * mm, 24 * mm, 22 * mm,
+                                   ANCHO_UTIL - 118 * mm],
+                  repeatRows=1, rowHeights=[11 * mm] + [10 * mm] * len(dias))
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('GRID', (0, 0), (-1, -1), 0.5, LIGHT_GRAY),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
     ]))
@@ -1675,7 +1764,9 @@ def _build_tme_log(styles):
     elements.append(Paragraph(
         "<i>Referencia orientativa: Hombres sanos 20–35 s · Mujeres sanas 15–25 s · La tendencia ascendente semanal es indicador positivo.</i>",
         styles['CuadHelp']))
-    return elements
+    # Título, protocolo y tabla juntos (antes el título podía quedar solo
+    # al pie de una página y la tabla en la siguiente).
+    return [KeepTogether(elements)]
 
 
 def _build_self_assessment(styles):
@@ -1684,15 +1775,42 @@ def _build_self_assessment(styles):
     return []
 
 
-def _add_page_number(canvas, doc):
-    canvas.saveState()
-    canvas.setFont('Helvetica', 9)
-    canvas.setFillColor(GRAY_TEXT)
-    canvas.drawCentredString(A4[0] / 2, 15 * mm, f"Página {doc.page}")
-    canvas.setFont('Helvetica', 8)
-    canvas.drawString(15 * mm, 15 * mm, getattr(doc, '_prof_pie_izq', ''))
-    canvas.drawRightString(A4[0] - 15 * mm, 15 * mm, getattr(doc, '_prof_pie_der', ''))
-    canvas.restoreState()
+def _canvas_numerado(pie_izq: str, pie_der: str):
+    """Canvas que dibuja el pie "Página X de Y" (con el total real) en
+    todas las páginas menos la portada. Guarda cada página y dibuja los
+    pies al final, cuando ya se conoce la cantidad total."""
+    class _CanvasNumerado(Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._paginas = []
+
+        def showPage(self):
+            self._paginas.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            total = len(self._paginas)
+            for estado in self._paginas:
+                self.__dict__.update(estado)
+                if self._pageNumber > 1:
+                    self._pie(total)
+                super().showPage()
+            super().save()
+
+        def _pie(self, total):
+            self.saveState()
+            self.setStrokeColor(LIGHT_GRAY)
+            self.setLineWidth(0.5)
+            self.line(16 * mm, 19 * mm, A4[0] - 16 * mm, 19 * mm)
+            self.setFillColor(GRAY_TEXT)
+            self.setFont('Helvetica', 9)
+            self.drawCentredString(A4[0] / 2, 14 * mm,
+                                   f"Página {self._pageNumber} de {total}")
+            self.setFont('Helvetica', 8)
+            self.drawString(16 * mm, 14 * mm, pie_izq)
+            self.drawRightString(A4[0] - 16 * mm, 14 * mm, pie_der)
+            self.restoreState()
+    return _CanvasNumerado
 
 
 def _normalizar_fecha_inicio(fecha_inicio: str = "") -> str:
@@ -1749,8 +1867,6 @@ def generar_cuadernillo_pdf(
     if "Matías Pérez" in pie_izq and "7276" not in pie_izq:
         pie_izq = "Matías Pérez · Fonoaudiólogo · M.P. 7276"
     pie_der = _prof(profesional, "profesional_telefono") or _prof(profesional, "profesional_email") or "Uso clínico supervisado"
-    doc._prof_pie_izq = pie_izq
-    doc._prof_pie_der = pie_der
 
     story.extend(_build_cover(styles, titulo, paciente_nombre, sesiones, fecha,
                               profesional=profesional))
@@ -1762,9 +1878,11 @@ def generar_cuadernillo_pdf(
     story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph(
-        "Cada ejercicio trae su imagen de referencia y su indicación tonal. "
-        "Siga los pasos en orden y tilde cada casilla cuando lo complete.",
+        "Haga los ejercicios en este orden. Siga los pasos de cada uno y "
+        "marque la casilla cuando lo complete. El recuadro de la derecha "
+        "indica el nivel y cuántos minutos por día practicarlo.",
         styles['CuadBody']))
+    story.append(Spacer(1, 3 * mm))
 
     # Imágenes asignadas por el profesional (banco Supabase): ganan SIEMPRE,
     # en cualquier modo. Luego IA (solo modo 'ai') y dibujo vectorial.
@@ -1802,12 +1920,16 @@ def generar_cuadernillo_pdf(
     story.append(Spacer(1, 4 * mm))
     story.extend(_build_tme_log(styles))
 
-    if notas:
+    if notas and notas.strip():
         story.append(Spacer(1, 8 * mm))
-        story.append(Paragraph("Notas de su Profesional", styles['SectionTitle']))
-        story.append(HRFlowable(width="100%", color=SECONDARY, thickness=1))
-        story.append(Spacer(1, 4 * mm))
-        story.append(Paragraph(escape(_simplificar(notas)), styles['CuadBody']))
+        bloque = [Paragraph("Notas de su Profesional", styles['SectionTitle']),
+                  HRFlowable(width="100%", color=SECONDARY, thickness=1),
+                  Spacer(1, 4 * mm)]
+        # Respeta los saltos de línea que escribió el profesional.
+        for linea in [l.strip() for l in notas.splitlines() if l.strip()]:
+            bloque.append(Paragraph(escape(_sanear(_simplificar(linea))),
+                                    styles['CuadBody']))
+        story.append(KeepTogether(bloque))
 
     story.append(Spacer(1, 15 * mm))
     firma_txt = _prof(profesional, "profesional_nombre", "Su profesional tratante")
@@ -1817,5 +1939,6 @@ def generar_cuadernillo_pdf(
         styles['FooterText']
     ))
 
-    doc.build(story, onFirstPage=_fondo_portada, onLaterPages=_add_page_number)
+    doc.build(story, onFirstPage=_fondo_portada,
+              canvasmaker=_canvas_numerado(pie_izq, pie_der))
     return pdf_path

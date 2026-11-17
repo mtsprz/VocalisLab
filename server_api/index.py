@@ -1224,17 +1224,32 @@ async def generar_cuadernillo_endpoint(
     except Exception as e:
         print(f"[cuadernillo] enriquecimiento precauciones falló: {e}")
 
-    pdf_path = generar_cuadernillo_pdf(
-        paciente_nombre=paciente_nombre.strip(),
-        titulo=titulo,
-        sesiones=sesiones,
-        ejercicios=ejercicios,
-        contrato=contrato,
-        notas=notas,
-        profesional=profesional,
-        advertencias=[a for a in advertencias if str(a).strip()],
-        fecha_inicio=fecha_inicio,
-    )
+    if not ejercicios:
+        return JSONResponse(content={
+            "ok": False,
+            "error": ("No quedó ningún ejercicio para el cuadernillo"
+                      + (" (todos fueron excluidos por seguridad clínica)." if excluidos else ".")),
+            "excluidos_seguridad": excluidos,
+        })
+
+    try:
+        pdf_path = generar_cuadernillo_pdf(
+            paciente_nombre=paciente_nombre.strip(),
+            titulo=titulo,
+            sesiones=sesiones,
+            ejercicios=ejercicios,
+            contrato=contrato,
+            notas=notas,
+            profesional=profesional,
+            advertencias=[a for a in advertencias if str(a).strip()],
+            fecha_inicio=fecha_inicio,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={
+            "ok": False,
+            "error": f"No se pudo armar el PDF del cuadernillo: {str(e)[:200]}",
+        })
 
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
