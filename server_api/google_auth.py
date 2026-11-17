@@ -106,6 +106,18 @@ async def google_callback(code: str = "", state: str = ""):
         if user_response.status_code == 200:
             user_info = user_response.json()
 
+        # Solo cuentas autorizadas (EMAILS_PERMITIDOS / PROFESIONAL_GOOGLE_ID):
+        # la plataforma tiene datos de salud. Cerrado por defecto.
+        from sesion_web import acceso_configurado, cuenta_autorizada, emitir_token
+        if not cuenta_autorizada(user_info.get("id", ""), user_info.get("email", "")):
+            motivo = "no_autorizado" if acceso_configurado() else "sin_configurar"
+            print(f"[google_auth] acceso denegado ({motivo}) para {user_info.get('email', '?')}")
+            return HTMLResponse(content=f"""
+                <html><body><script>
+                    window.location.href = '{FRONTEND_URL}?auth_error={motivo}';
+                </script></body></html>
+            """)
+
         user_data = {
             "id": user_info.get("id", ""),
             "email": user_info.get("email", ""),
@@ -139,6 +151,8 @@ async def google_callback(code: str = "", state: str = ""):
             "name": user_data["name"],
             "picture": user_data["picture"],
             "access_token": access_token,
+            # Token de sesión: la web lo manda en cada pedido al servidor.
+            "session_token": emitir_token(user_data["id"], user_data["email"]),
         })
         import base64
         encoded = base64.b64encode(frontend_data.encode()).decode()

@@ -114,6 +114,12 @@ def _require_profesional(user_id: str) -> str:
 def _auth_dual(request: Request, user_id: str = "") -> tuple:
     """Bearer device_token (Companion) o user_id google (web). Devuelve
     (profesional_google_id, actor_para_log)."""
+    # Web: la identidad sale de la sesión firmada (sesion_web), no del
+    # user_id que manda el navegador.
+    sesion = getattr(request.state, "usuario", None)
+    if sesion:
+        uid = _require_profesional(sesion.get("sub", ""))
+        return uid, uid
     auth = (request.headers.get("authorization") or "").strip()
     if auth.lower().startswith("bearer ") and len(auth) > 8:
         dev = _device_from_bearer(request)

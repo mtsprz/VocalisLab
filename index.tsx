@@ -2,6 +2,10 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./src/index.css";
 import App from "./components/App";
+import { instalarAuthFetch } from "./utils/authFetch";
+
+// Antes de montar la app: todo pedido al servidor lleva el token de sesión.
+instalarAuthFetch();
 
 const container = document.getElementById("root");
 if (container) {

@@ -3,7 +3,7 @@ import { Stethoscope, Shield, Activity, Sparkles } from 'lucide-react';
 import { useAuth } from './AuthContext';
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, authError } = useAuth();
 
   return (
     <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center p-4">
@@ -25,6 +25,12 @@ export default function LoginScreen() {
               Iniciá sesión con tu cuenta de Google para acceder a la plataforma clínica
             </p>
           </div>
+
+          {authError && (
+            <p className="mb-4 text-sm text-amber-200 bg-amber-500/10 border border-amber-400/30 rounded-xl px-4 py-3">
+              {authError}
+            </p>
+          )}
 
           <button
             onClick={login}

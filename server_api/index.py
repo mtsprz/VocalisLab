@@ -341,6 +341,12 @@ ALLOWED_ORIGINS = [
     "http://localhost:4173",
 ]
 
+# Sesión obligatoria en /api/* (ver sesion_web.py). Se agrega ANTES que CORS
+# para que CORS quede por fuera y el 401 llegue al navegador con sus headers.
+from starlette.middleware.base import BaseHTTPMiddleware
+from sesion_web import middleware_sesion
+app.add_middleware(BaseHTTPMiddleware, dispatch=middleware_sesion)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -392,6 +398,21 @@ try:
     import companion_ia  # noqa: F401  (envuelve companion._diarizar con IA)
 except Exception as _e:
     print(f"[index] companion_ia no disponible: {_e}")
+
+
+@app.get("/api/keepalive")
+def keepalive():
+    """Ping público para el aviso diario (GitHub Actions): hace una consulta
+    mínima a la base para que Supabase no pause el proyecto. No devuelve
+    datos de pacientes, solo si la base respondió."""
+    try:
+        from api_clinica import supabase as _sb
+        if not _sb:
+            return JSONResponse(status_code=503, content={"ok": False, "db": False})
+        _sb.table("pacientes").select("id").limit(1).execute()
+        return {"ok": True, "db": True}
+    except Exception:
+        return JSONResponse(status_code=503, content={"ok": False, "db": False})
 
 
 @app.get("/api/health")
