@@ -153,7 +153,7 @@ export default function ExternalAnalysisUpload({ pacienteId }: Props) {
               Análisis acústico externo (otro profesional)
             </h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400">
-              Subí foto, captura o PDF del informe — la IA extrae los valores y los vuelca al paciente. Sin repetir Praat.
+              Subí foto, captura o PDF del informe — se extraen los valores y los vuelca al paciente. Sin repetir Praat.
             </p>
           </div>
         </div>

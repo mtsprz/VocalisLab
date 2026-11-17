@@ -8,6 +8,8 @@ import os
 import tempfile
 from xml.sax.saxutils import escape
 
+from firma_profesional import sin_mencion_ia
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, white
@@ -333,11 +335,11 @@ def generar_pdf_evolucion(datos: dict, firma: dict = None, out_path: str = "") -
         for i, p in enumerate(serie, 1):
             if not p.get("resumen"):
                 continue
-            txt = f"<b>Sesión {i} · {escape(str(p.get('fecha') or ''))}</b> — {escape(str(p['resumen']))}"
+            txt = f"<b>Sesión {i} · {escape(str(p.get('fecha') or ''))}</b> — {escape(sin_mencion_ia(p['resumen']))}"
             if p.get("indicaciones"):
                 txt += "<br/><i>Indicaciones:</i> " + escape("; ".join(p["indicaciones"]))
             story.append(Paragraph(txt, st["RsBody"]))
-        story.append(Paragraph("Síntesis redactadas por IA desde la transcripción y revisadas por el profesional.",
+        story.append(Paragraph("Síntesis de cada sesión revisadas por el profesional.",
                                st["RsSmall"]))
     story.append(Spacer(1, 3 * mm))
     story.append(Paragraph(f"<i>{escape(ACLARACION)}</i>", st["RsSmall"]))

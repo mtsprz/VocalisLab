@@ -183,7 +183,7 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
               Informe ORL (análisis del otorrino)
             </h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400">
-              Subí foto o PDF del informe — la IA extrae el texto y lo vuelca a la historia. Queda como banco de datos del paciente.
+              Subí foto o PDF del informe — se extrae el texto y lo vuelca a la historia. Queda como banco de datos del paciente.
             </p>
           </div>
         </div>

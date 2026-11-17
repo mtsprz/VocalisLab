@@ -70,7 +70,7 @@ export default function VocalisLabModule() {
   const [rasati, setRasati] = useState({ R: 0, A: 0, S: 0, A2: 0, T: 0, I: 0 });
 
   const [profNombre, setProfNombre] = useState('');
-  const [profTitulo, setProfTitulo] = useState('Lic. en Fonoaudiología');
+  const [profTitulo, setProfTitulo] = useState('Fonoaudiólogo');
   const [profMatricula, setProfMatricula] = useState('');
   const [profCentro, setProfCentro] = useState('');
   const [profEmail, setProfEmail] = useState('');
@@ -336,7 +336,7 @@ export default function VocalisLabModule() {
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-sky-400 bg-clip-text text-transparent">
               Consultorio de Voz
             </h1>
-            <p className="text-sm text-slate-400">Bioacústica Fonoaudiológica — Lic. Matías Pérez</p>
+            <p className="text-sm text-slate-400">Bioacústica Fonoaudiológica — Matías Pérez</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -462,7 +462,7 @@ export default function VocalisLabModule() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   <div>
                     <label className="text-xs text-slate-400 font-medium">Nombre del Profesional</label>
-                    <input type="text" value={profNombre} onChange={(e) => setProfNombre(e.target.value)} placeholder="Lic. María López" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors" />
+                    <input type="text" value={profNombre} onChange={(e) => setProfNombre(e.target.value)} placeholder="María López" className="w-full mt-1 px-3 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors" />
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 font-medium">Título / Especialidad</label>

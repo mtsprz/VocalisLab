@@ -34,7 +34,7 @@ const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
   praat: { label: 'Praat', color: 'bg-purple-500/20 text-purple-300' },
   voxplot: { label: 'VOXplot', color: 'bg-amber-500/20 text-amber-300' },
   manual: { label: 'Manual', color: 'bg-slate-700 text-slate-300' },
-  ai: { label: 'IA', color: 'bg-cyan-500/20 text-cyan-300' },
+  ai: { label: 'Borrador', color: 'bg-cyan-500/20 text-cyan-300' },
   system: { label: 'Sistema', color: 'bg-emerald-500/20 text-emerald-300' },
 };
 
@@ -62,7 +62,7 @@ function buildFields(patientData: any, metrics: any, aiText: string, voxPlotData
     { key: 'conclusion', label: 'Conclusión', type: 'textarea', source: 'manual', value: '' },
     { key: 'recomendaciones', label: 'Recomendaciones', type: 'textarea', source: 'manual', value: '' },
     { key: 'advertencias', label: 'Advertencias', type: 'textarea', source: 'manual', value: '' },
-    { key: 'sintesis_ia', label: 'Texto generado por IA', type: 'textarea', source: 'ai', value: aiText || '' },
+    { key: 'sintesis_ia', label: 'Borrador de interpretación (revisar)', type: 'textarea', source: 'ai', value: aiText || '' },
   ];
   return fields;
 }

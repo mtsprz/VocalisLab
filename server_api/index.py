@@ -1,7 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
 from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from typing import Any, Dict, Optional
 import shutil
 import os
 import sys
@@ -671,7 +671,7 @@ async def analizar_y_reportar(
     rasati: str = Form("{}"),
     tmf: float = Form(15.0),
     profesional_nombre: str = Form(""),
-    profesional_titulo: str = Form("Lic. en Fonoaudiología"),
+    profesional_titulo: str = Form("Fonoaudiólogo"),
     profesional_matricula: str = Form(""),
     profesional_centro: str = Form(""),
     profesional_email: str = Form(""),
@@ -796,7 +796,7 @@ async def analizar_y_reportar(
                 f"3. Describe qué parámetros acústicos sugieren qué tipo de alteración fonoaudiológica (ronquedad, breathiness, astenia, tensión).\n"
                 f"4. Indica qué estudios complementarios podrían complementar la evaluación.\n"
                 f"5. Formato: 3-4 párrafos, tono formal técnico fonoaudiológico latinoamericano.\n"
-                f"6. Incluye al final: 'Interpretación generada por IA — Requiere correlación clínica del profesional tratante.'\n"
+                f"6. No menciones inteligencia artificial ni que el texto fue generado automáticamente: el informe lo firma el profesional.\n"
             )
             from llm_client import groq_chat
             sintesis_ia, _model = groq_chat(
@@ -1167,6 +1167,25 @@ async def verificar_cuadernillo_endpoint(
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(content={"ok": False, "excluidos": [], "error": str(e)[:200]})
+
+
+@app.post("/api/cuadernillo/plan")
+async def plan_cuadernillo_endpoint(body: Dict[str, Any] = Body(...)):
+    """Plan clínico del cuadernillo: áreas a trabajar según el paciente y al
+    menos 3 variantes por área (4 en las prioritarias). Lo que eligió el
+    profesional se mantiene; los agregados vienen con su porqué.
+
+    Body: {ejercicios_ids: [...], clinica: {paciente, anamnesis, escalas,
+    acustica, riesgoVocal, recomendacion}, secciones?: [...]}"""
+    try:
+        from plan_cuadernillo import armar_plan
+        plan = armar_plan(body.get("ejercicios_ids") or [],
+                          body.get("clinica") or {},
+                          secciones=body.get("secciones") or None)
+        return JSONResponse(content={"ok": True, **plan})
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"ok": False, "error": f"No se pudo armar el plan: {str(e)[:200]}"})
 
 
 @app.post("/api/cuadernillo/generar")

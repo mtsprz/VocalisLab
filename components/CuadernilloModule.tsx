@@ -336,6 +336,13 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [expandiendo, setExpandiendo] = useState(false);
   const [seccionExpandir, setSeccionExpandir] = useState('sovte');
   const [expandMsg, setExpandMsg] = useState('');
+  // Plan clínico por áreas (/api/cuadernillo/plan): áreas a trabajar según
+  // el paciente y al menos 3 variantes por área.
+  const [plan, setPlan] = useState<any | null>(null);
+  const [planCargando, setPlanCargando] = useState(false);
+  const [asegurarAreas, setAsegurarAreas] = useState<boolean>(() => {
+    try { return localStorage.getItem('vocalislab_asegurar_areas') !== '0'; } catch { return true; }
+  });
   const [fichas, setFichas] = useState<any[]>([]);
   const [fichaAbierta, setFichaAbierta] = useState<string | null>(null);
   // Banco de imágenes (Supabase Storage): archivos + galería ordenada por ejercicio.
@@ -348,10 +355,19 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [profesional, setProfesional] = useState<Record<string, string>>(() => {
     try {
       const raw = localStorage.getItem('vocalislab_profesional');
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        // Firma como fonoaudiólogo: limpia el "Lic." guardado por versiones viejas.
+        const p = JSON.parse(raw);
+        const nombre = String(p.profesional_nombre || '').replace(/^\s*lic(enciad[oa])?\.?\s*/i, '').trim();
+        p.profesional_nombre = /^matias perez$/i.test(nombre) ? 'Matías Pérez' : nombre;
+        if (/\blic(enciad[oa]|enciatura)?\b/i.test(String(p.profesional_titulo || ''))) {
+          p.profesional_titulo = 'Fonoaudiólogo';
+        }
+        return p;
+      }
     } catch {}
     return {
-      profesional_nombre: 'Lic. Matias Perez',
+      profesional_nombre: 'Matías Pérez',
       profesional_titulo: 'Fonoaudiólogo',
       profesional_matricula: '',
       profesional_telefono: '',
@@ -409,8 +425,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   useEffect(() => {
     if (initialExerciseIds && initialExerciseIds.length > 0) {
       setSelectedExercises(initialExerciseIds);
-      setTitulo('Cuadernillo — Prescripción IA Fonoaudiológica');
+      setTitulo('Cuadernillo — Prescripción Fonoaudiológica');
+      if (asegurarAreas) armarPlan(initialExerciseIds);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialExerciseIds]);
 
   useEffect(() => {
@@ -613,7 +631,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       const r2 = await fetch(`${BACKEND_URL}/api/ejercicios/ia?estado=pendiente`);
       if (r2.ok) setSugerencias(await r2.json());
     } catch (e: any) {
-      setExpandMsg(e.message || 'La IA no pudo generar ejercicios');
+      setExpandMsg(e.message || 'No se pudieron generar ejercicios nuevos');
     }
     setExpandiendo(false);
   };
@@ -665,8 +683,38 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     return all;
   };
 
-  const getSelectedDetails = (): Exercise[] => {
-    return getAllExercises().filter(e => selectedExercises.includes(e.id));
+  const getSelectedDetails = (ids: string[] = selectedExercises): Exercise[] => {
+    // Respeta el orden de `ids` (el plan ordena por área terapéutica).
+    const porId = new Map(getAllExercises().map(e => [e.id, e] as [string, Exercise]));
+    return ids.map(id => porId.get(id)).filter((e): e is Exercise => Boolean(e));
+  };
+
+  /** Completa la selección por áreas según los datos del paciente. Devuelve
+   *  los ids del plan (o null si falló). Nunca quita lo elegido. */
+  const armarPlan = async (ids: string[] = selectedExercises): Promise<string[] | null> => {
+    setPlanCargando(true);
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/cuadernillo/plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ejercicios_ids: ids, clinica: clinical.data, secciones: sections }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) throw new Error(data.error || `Error ${r.status}`);
+      setPlan(data);
+      setSelectedExercises(data.ejercicios_ids);
+      return data.ejercicios_ids as string[];
+    } catch (e: any) {
+      setExportMsg(`No se pudo completar por áreas: ${e?.message || 'error de conexión'}`);
+      return null;
+    } finally {
+      setPlanCargando(false);
+    }
+  };
+
+  const cambiarAsegurarAreas = (v: boolean) => {
+    setAsegurarAreas(v);
+    try { localStorage.setItem('vocalislab_asegurar_areas', v ? '1' : '0'); } catch {}
   };
 
   const handleGenerate = async () => {
@@ -681,7 +729,12 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
     setGenerating(true);
     setExportMsg('');
     try {
-      const selected = getSelectedDetails();
+      let ids = selectedExercises;
+      if (asegurarAreas) {
+        const delPlan = await armarPlan(selectedExercises);
+        if (delPlan) ids = delPlan;
+      }
+      const selected = getSelectedDetails(ids);
       const presetsActivos = presets.filter(p => selectedPresets.includes(p.id));
       const contrato = {
         frecuencia: presetsActivos.map(p => p.frecuencia).join(' / ') || '2 veces por semana',
@@ -993,6 +1046,77 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
         </div>
       </div>
 
+      {/* Plan del paciente por áreas */}
+      <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
+            <Activity size={16} className="text-indigo-500" /> Plan del paciente por áreas
+          </h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+              <input type="checkbox" checked={asegurarAreas} onChange={e => cambiarAsegurarAreas(e.target.checked)} />
+              Asegurar al menos 3 por área al generar
+            </label>
+            <button
+              onClick={() => armarPlan()}
+              disabled={planCargando}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {planCargando ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+              Completar por áreas del paciente
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          Lee diagnóstico, síntomas, GRBAS/RASATI, TME y S/Z, acústica, VHI-10, riesgo vocal y demanda
+          vocal; decide qué áreas trabajar y completa cada una con variantes indicadas para este paciente.
+          Lo que elegiste no se quita.
+        </p>
+        {plan && (
+          <div className="space-y-3">
+            {plan.perfil?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {plan.perfil.filter((c: any) => c.peso >= 1).map((c: any) => (
+                  <span key={c.condicion} title={(c.evidencia || []).join(' · ')}
+                    className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
+                    {c.etiqueta}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="grid md:grid-cols-2 gap-2">
+              {plan.areas?.map((a: any) => (
+                <div key={a.id} className="rounded-xl border border-gray-200 dark:border-white/10 p-3">
+                  <p className="text-xs font-bold text-gray-900 dark:text-white flex items-center justify-between gap-2">
+                    <span>{a.nombre}{a.prioritaria && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300">prioritaria</span>}</span>
+                    <span className={a.faltan ? 'text-amber-600' : 'text-emerald-600'}>{a.cantidad}/{a.objetivo}</span>
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5">{a.motivo}</p>
+                  <ul className="space-y-1">
+                    {a.ejercicios.map((it: any) => (
+                      <li key={it.id} className="text-[11px] leading-snug">
+                        <span className={it.origen === 'agregado' ? 'text-indigo-600 dark:text-indigo-300 font-semibold' : 'text-gray-800 dark:text-gray-200 font-semibold'}>
+                          {it.origen === 'agregado' ? '+ ' : '✓ '}{it.name}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400"> — {it.motivo}</span>
+                        {it.alerta && <span className="block text-red-600 font-semibold">⚠ {it.alerta}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  {a.aviso && <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1.5">{a.aviso}</p>}
+                </div>
+              ))}
+            </div>
+            {plan.excluidos?.length > 0 && (
+              <p className="text-[11px] text-red-700 dark:text-red-300">
+                <Shield size={12} className="inline mr-1" />
+                No se agregaron por seguridad: {plan.excluidos.map((x: any) => `${x.name} (${x.motivo})`).join('; ')}.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Presets por Patología (multi-select, agrupados por categoría) */}
       <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1064,7 +1188,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
       <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2 mr-auto">
-            <Sparkles size={16} className="text-purple-500" /> Expandir banco con IA
+            <Sparkles size={16} className="text-purple-500" /> Expandir banco de ejercicios
           </h3>
           <select
             value={seccionExpandir}
@@ -1085,7 +1209,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
           </button>
         </div>
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
-          La IA propone ejercicios nuevos con fundamento Farías/Le Huche/Titze. Nada entra al
+          El sistema propone ejercicios nuevos con fundamento Farías/Le Huche/Titze. Nada entra al
           catálogo sin tu aprobación.
         </p>
         {expandMsg && <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">{expandMsg}</p>}
@@ -1256,8 +1380,8 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
           {showMembrete && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
               {[
-                { k: 'profesional_nombre', label: 'Nombre y apellido', ph: 'Lic. María García' },
-                { k: 'profesional_titulo', label: 'Título profesional', ph: 'Lic. en Fonoaudiología' },
+                { k: 'profesional_nombre', label: 'Nombre y apellido', ph: 'María García' },
+                { k: 'profesional_titulo', label: 'Título profesional', ph: 'Fonoaudiólogo' },
                 { k: 'profesional_matricula', label: 'Matrícula (M.P.)', ph: '12345' },
                 { k: 'profesional_telefono', label: 'Teléfono / WhatsApp', ph: '+54 9 ...' },
                 { k: 'profesional_email', label: 'Email', ph: 'contacto@consultorio.com' },

@@ -14,7 +14,7 @@ export default function LoginScreen() {
             <Stethoscope size={32} className="text-white" />
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Consultorio de Voz</h1>
-          <p className="text-sm text-indigo-300 font-semibold tracking-wider uppercase mt-1">Lic. Matías Pérez — Fonoaudiólogo</p>
+          <p className="text-sm text-indigo-300 font-semibold tracking-wider uppercase mt-1">Matías Pérez — Fonoaudiólogo</p>
         </div>
 
         {/* Login Card */}
@@ -51,7 +51,7 @@ export default function LoginScreen() {
           {[
             { icon: <Shield size={16} />, label: 'Riesgo Vocal' },
             { icon: <Activity size={16} />, label: 'Análisis Praat' },
-            { icon: <Sparkles size={16} />, label: 'Motor IA' },
+            { icon: <Sparkles size={16} />, label: 'Motor Terapéutico' },
           ].map((f) => (
             <div key={f.label} className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/5 p-3 text-center">
               <div className="text-indigo-400 flex justify-center mb-1">{f.icon}</div>

@@ -144,13 +144,13 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
           className="bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 rounded-2xl p-5 text-white text-left hover:shadow-xl dark:hover:shadow-indigo-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
         >
           <p className="text-lg font-bold mb-1 flex items-center gap-2">Nueva Anamnesis <Activity size={18} /></p>
-          <p className="text-sm text-indigo-100/90 font-medium">Grabar entrevista, transcribir con Whisper y estructurar con IA</p>
+          <p className="text-sm text-indigo-100/90 font-medium">Grabar entrevista, transcribir y estructurar automáticamente</p>
         </button>
         <button
           onClick={() => onNavigate('recomendacion')}
           className="bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 rounded-2xl p-5 text-white text-left hover:shadow-xl dark:hover:shadow-amber-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
         >
-          <p className="text-lg font-bold mb-1 flex items-center gap-2">Motor IA Terapéutico <Sparkles size={18} /></p>
+          <p className="text-lg font-bold mb-1 flex items-center gap-2">Motor Terapéutico <Sparkles size={18} /></p>
           <p className="text-sm text-amber-100/90 font-medium">Sintetizar caso clínico y generar prescripción de ejercicios Farías</p>
         </button>
         <button

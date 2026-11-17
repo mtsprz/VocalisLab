@@ -533,8 +533,8 @@ async def obtener_banco_ejercicios():
                     secs = bank.setdefault("sections", [])
                     ia_sec = next((s for s in secs if s.get("id") == "aporte_ia"), None)
                     if not ia_sec:
-                        ia_sec = {"id": "aporte_ia", "name": "Aporte IA (validados)",
-                                  "description": "Ejercicios generados por IA y aprobados por el profesional",
+                        ia_sec = {"id": "aporte_ia", "name": "Aporte del profesional (validados)",
+                                  "description": "Ejercicios nuevos aprobados por el profesional",
                                   "exercises": []}
                         secs.append(ia_sec)
                     if all(e.get("id") != ex["id"] for e in ia_sec["exercises"]):

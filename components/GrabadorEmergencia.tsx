@@ -200,7 +200,7 @@ export default function GrabadorEmergencia() {
             className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold flex items-center gap-2 disabled:opacity-50">
             {subiendo ? <Loader2 size={15} className="animate-spin" /> : <FileAudio size={15} />} Subir archivo de audio
           </button>
-          <p className="text-gray-400 mt-1">Grabadora de voz de Windows, celular u otra app (m4a, mp3, wav; máx. 45 MB). La IA transcribe, separa tu voz de la del paciente y mide su altura tonal.</p>
+          <p className="text-gray-400 mt-1">Grabadora de voz de Windows, celular u otra app (m4a, mp3, wav; máx. 45 MB). Se transcribe, se separa tu voz de la del paciente y mide su altura tonal.</p>
         </div>
       </div>
       <div className="bg-white/80 dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 p-4 text-xs">

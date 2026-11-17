@@ -22,5 +22,5 @@ export function firmaProfesional(): string {
       if (nom) return `— ${nom}`;
     }
   } catch {}
-  return '— Lic. Matías Pérez\nConsultorio de Voz y Rehabilitación Vocal';
+  return '— Matías Pérez, Fonoaudiólogo\nConsultorio de Voz y Rehabilitación Vocal';
 }

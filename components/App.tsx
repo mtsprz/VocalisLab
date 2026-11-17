@@ -33,7 +33,7 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
   { id: 'analisis', label: 'Análisis Praat', icon: <Activity size={20} /> },
   { id: 'sesiones', label: 'Voz y sesiones', icon: <AudioWaveform size={20} /> },
   { id: 'grabador', label: 'Grabar / subir audio', icon: <Mic size={20} /> },
-  { id: 'recomendacion', label: 'Motor IA', icon: <Sparkles size={20} /> },
+  { id: 'recomendacion', label: 'Motor Terapéutico', icon: <Sparkles size={20} /> },
   { id: 'pitch', label: 'Pitch Meter', icon: <Music size={20} /> },
   { id: 'cuadernillo', label: 'Cuadernillo', icon: <FileText size={20} /> },
   { id: 'imagenes', label: 'Generador Imagen', icon: <Sparkles size={20} /> },
@@ -167,7 +167,7 @@ function AppInner() {
               </div>
               <div>
                 <h1 className="text-sm font-bold text-gray-900 dark:text-white">Consultorio de Voz</h1>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold tracking-wider uppercase">Lic. Matías Pérez</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold tracking-wider uppercase">Matías Pérez · Fonoaudiólogo</p>
               </div>
             </div>
           </div>

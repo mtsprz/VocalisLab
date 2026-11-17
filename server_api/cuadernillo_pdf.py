@@ -22,6 +22,11 @@ from reportlab.platypus import (
     PageBreak, HRFlowable, KeepTogether
 )
 from reportlab.pdfgen.canvas import Canvas
+
+from plan_cuadernillo import AREAS, ORDEN_AREAS
+from firma_profesional import (
+    NOMBRE_DEFECTO, TITULO_DEFECTO, limpiar_nombre, limpiar_titulo, sin_mencion_ia,
+)
 from reportlab.graphics.shapes import Drawing, Line, String, PolyLine, Circle, Rect, Polygon
 
 
@@ -221,15 +226,28 @@ _CURVA_SIRENA = ("sirena", "trill", "fluctu", "tubo_agua", "glissandos",
                  "lax", "laxvox")
 _CURVA_DESCENSO = ("descenso", "bostezo", "enfriamiento", "suspiro",
                    "relaj", "pautas_rlf")
-_CURVA_SOSTENIDO = ("humming", "frases_balanceadas",
+_CURVA_SOSTENIDO = ("humming", "frases_balanceadas", "masticacion",
                     "consonantes_fricativas", "oclusion_succion",
                     "vibracion_labial", "oclusion_nasal",
                     "coordinacion_costo_abdominal", "empuje_glotico",
                     "automatismo", "sostenid", "mantener", "lectura")
 
 
+# Áreas sin indicación de tono: cuerpo, respiración, habla y rutinas
+# (masajes, soplos, lectura y pautas no tienen una curva tonal que seguir).
+_AREAS_SIN_TONO = ("corporal", "respiratorio", "resonancia", "higiene")
+# En boca/mandíbula solo llevan tono los que se hacen con voz.
+_OROFARINGEO_CON_TONO = ("bostezo_suspiro", "masticacion_froeschels")
+
+
 def _tipo_curva(ex: dict) -> str:
-    if str(ex.get("id", "")).strip().lower() in _SIN_CURVA:
+    ex_id = str(ex.get("id", "")).strip().lower()
+    seccion = str(ex.get("seccion_id", "")).strip().lower()
+    if ex_id in _SIN_CURVA or seccion in _AREAS_SIN_TONO:
+        return ""
+    if seccion == "orofaringeo" and ex_id not in _OROFARINGEO_CON_TONO:
+        return ""
+    if any(k in ex_id for k in ("masaje", "traccion", "shiatsu")):
         return ""
     blob = f"{ex.get('id', '')} {ex.get('name', '')} {ex.get('description', '')}".lower()
     if any(k in blob for k in _CURVA_STACCATO):
@@ -240,7 +258,11 @@ def _tipo_curva(ex: dict) -> str:
         return "descendente"
     if any(k in blob for k in _CURVA_SOSTENIDO):
         return "sostenido"
-    return "ascendente"
+    if any(k in blob for k in ("escala", "ascend", "falsete", "agudo", "messa")):
+        return "ascendente"
+    # Sin patrón tonal reconocible: sin indicación (antes se ponía "suba de
+    # grave a agudo" por defecto, incluso en voz confidencial o gárgaras).
+    return ""
 
 
 _CURVA_TITULO = {
@@ -1100,7 +1122,9 @@ def _barra_complejidad(nivel: int):
 # ─── Propósitos en lenguaje cotidiano por sección ─────────────────
 _PROPOSITO_SECCION = {
     "corporal": "Para aflojar el cuello, los hombros y la mandíbula, así la voz sale sin esfuerzo.",
-    "laringeo": "Para bajar y soltar la laringe y hablar sin apretar la garganta.",
+    # Neutro: según el caso el área relaja (tensión) o fortalece el cierre
+    # de las cuerdas (parálisis, hiato); no puede prometer solo "soltar".
+    "laringeo": "Para trabajar la garganta según su caso: soltarla si está apretada o lograr que las cuerdas cierren mejor.",
     "respiratorio": "Para aprender a usar bien el aire al hablar, sin quedarse sin aire.",
     "sovte": "Ejercicios con la boca casi cerrada que masajean y cuidan las cuerdas vocales.",
     "resonancia": "Para llevar la voz hacia adelante y que suene clara sin gritar.",
@@ -1166,6 +1190,11 @@ def _get_styles():
          alignment=TA_CENTER)
     _add('CuadHelp', parent=styles['Normal'], fontSize=9, textColor=GRAY_TEXT,
          leading=13, spaceAfter=2 * mm)
+    _add('AreaTitle', parent=styles['Heading2'], fontSize=15, leading=18,
+         textColor=SECONDARY, spaceBefore=2 * mm, spaceAfter=0.5 * mm,
+         keepWithNext=1)
+    _add('AreaProposito', parent=styles['Normal'], fontSize=11, leading=14,
+         textColor=GRAY_TEXT, spaceAfter=3 * mm, keepWithNext=1)
     _add('CuadSubTitle', parent=styles['Heading3'], fontSize=11, textColor=PRIMARY,
          spaceBefore=3 * mm, spaceAfter=1 * mm, leading=14)
     # Seguridad clínica: STOP y tono van dentro de una caja (Table, ver
@@ -1226,9 +1255,15 @@ def _caja_stop(styles, texto, ancho):
 def _prof(profesional: dict, key: str, default: str = "") -> str:
     """Lee un dato del profesional con fallback seguro."""
     if not isinstance(profesional, dict):
-        return default
-    v = profesional.get(key, default)
-    return str(v or default).strip()
+        v = default
+    else:
+        v = str(profesional.get(key, default) or default).strip()
+    # Firma como fonoaudiólogo, nunca "Lic." (aunque venga guardado así).
+    if key == "profesional_nombre":
+        return limpiar_nombre(v, default)
+    if key == "profesional_titulo":
+        return limpiar_titulo(v, default or TITULO_DEFECTO)
+    return v
 
 
 def _descargar_logo(url: str):
@@ -1306,7 +1341,7 @@ def _build_cover(styles, titulo, paciente_nombre, sesiones, fecha, profesional=N
     elements.append(_isologo_onda())
     elements.append(Spacer(1, 8 * mm))
 
-    nombre = _prof(profesional, "profesional_nombre", "Lic. Matías Pérez")
+    nombre = _prof(profesional, "profesional_nombre", NOMBRE_DEFECTO)
     elements.append(Paragraph(escape(nombre), styles['CoverTitle']))
     rol = " ".join(x for x in [
         _prof(profesional, "profesional_titulo", "Fonoaudiólogo"),
@@ -1574,7 +1609,7 @@ def _grilla_imagenes(bloques, ancho, por_fila=3):
 _ALTO_MAX_DOS_COLUMNAS = 170 * mm
 
 
-def _build_exercise_card(styles, exercise, idx, seccion_id=""):
+def _build_exercise_card(styles, exercise, idx, seccion_id="", encabezado=None):
     """Tarjeta del ejercicio, de arriba hacia abajo:
 
     1. Encabezado: número, nombre y recuadro con nivel + minutos por día.
@@ -1615,14 +1650,19 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
     ]))
-    flow = [head, Spacer(1, 2.5 * mm)]
+    # El encabezado del área (si es la primera tarjeta) va en el mismo
+    # bloque: nunca queda solo al pie de una página.
+    flow = list(encabezado or []) + [head, Spacer(1, 2.5 * mm)]
 
-    # 2. Para qué sirve
-    flow.append(Paragraph(f"<b>{escape(categoria)}</b> &nbsp;·&nbsp; "
-                          f"<font color='#64748B'>{escape(efecto)}</font>",
-                          styles['BadgeText']))
-    flow.append(Paragraph(f"<b>¿Para qué sirve?</b> {escape(proposito)}",
-                          styles['CuadBody']))
+    # 2. Para qué sirve ESTE ejercicio (el propósito del área va en el
+    # encabezado del área, ver _encabezado_area).
+    if ex_id in _EFECTO_POR_EJERCICIO:
+        flow.append(Paragraph(f"<b>¿Para qué sirve?</b> {escape(efecto)}.",
+                              styles['CuadBody']))
+    else:
+        flow.append(Paragraph(f"<b>{escape(categoria)}</b> &nbsp;·&nbsp; "
+                              f"<b>¿Para qué sirve?</b> {escape(proposito)}",
+                              styles['CuadBody']))
     if desc:
         flow.append(Paragraph(escape(desc), styles['CuadBody']))
     tipo = _tipo_curva(exercise)
@@ -1686,6 +1726,31 @@ def _build_exercise_card(styles, exercise, idx, seccion_id=""):
     flow.append(HRFlowable(width="100%", color=LIGHT_GRAY, thickness=0.6))
     flow.append(Spacer(1, 5 * mm))
     return [KeepTogether(flow)]
+
+
+# Nombre de cada área tal como lo lee el paciente (sin siglas técnicas).
+_AREA_PACIENTE = {
+    "corporal": "Cuerpo y postura",
+    "orofaringeo": "Boca, lengua y mandíbula",
+    "respiratorio": "Respiración",
+    "laringeo": "Garganta",
+    "sovte": "Voz con la boca semicerrada",
+    "metodos": "Ejercicios especiales de voz",
+    "resonancia": "Mi voz al hablar todos los días",
+    "higiene": "Cuidados diarios de la voz",
+}
+
+
+def _encabezado_area(styles, seccion_id):
+    """Título del área (ej. "Respiración") con su propósito en lenguaje
+    cotidiano. Queda pegado a la primera tarjeta del área."""
+    nombre = _AREA_PACIENTE.get(seccion_id) or AREAS.get(seccion_id)
+    if not nombre:
+        return []
+    proposito = _PROPOSITO_SECCION.get(seccion_id, "")
+    return [Spacer(1, 2 * mm),
+            Paragraph(escape(nombre), styles['AreaTitle']),
+            Paragraph(escape(proposito), styles['AreaProposito'])]
 
 
 def _build_weekly_grid(styles):
@@ -1841,6 +1906,9 @@ def generar_cuadernillo_pdf(
     fecha_inicio: str = "",
 ) -> str:
     fecha = _normalizar_fecha_inicio(fecha_inicio)
+    # El cuadernillo es del profesional: sin "IA" en título ni notas.
+    titulo = sin_mencion_ia(titulo) or "Cuadernillo Terapéutico Vocal"
+    notas = sin_mencion_ia(notas)
     profesional = profesional if isinstance(profesional, dict) else {}
 
     tmp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
@@ -1855,7 +1923,7 @@ def generar_cuadernillo_pdf(
         leftMargin=16 * mm,
         rightMargin=16 * mm,
         title=titulo or "Cuadernillo Terapéutico Vocal",
-        author=_prof(profesional, "profesional_nombre", "Lic. Matías Pérez"),
+        author=_prof(profesional, "profesional_nombre", NOMBRE_DEFECTO),
         subject="Cuadernillo terapéutico vocal personalizado",
         keywords="fonoaudiología, voz, terapia vocal, ejercicios",
     )
@@ -1863,9 +1931,15 @@ def generar_cuadernillo_pdf(
     styles = _get_styles()
     story = []
 
-    pie_izq = _prof(profesional, "profesional_nombre", "Matías Pérez · Fonoaudiólogo · M.P. 7276")
-    if "Matías Pérez" in pie_izq and "7276" not in pie_izq:
-        pie_izq = "Matías Pérez · Fonoaudiólogo · M.P. 7276"
+    # Pie: "Nombre · Fonoaudiólogo · M.P. NNNN" (sin "Lic.").
+    _mat = _prof(profesional, "profesional_matricula")
+    if not _mat and _prof(profesional, "profesional_nombre") == NOMBRE_DEFECTO:
+        _mat = "7276"
+    pie_izq = " · ".join(x for x in [
+        _prof(profesional, "profesional_nombre", NOMBRE_DEFECTO),
+        _prof(profesional, "profesional_titulo", TITULO_DEFECTO),
+        (_mat if _mat.upper().startswith("M.") else f"M.P. {_mat}") if _mat else "",
+    ] if x)
     pie_der = _prof(profesional, "profesional_telefono") or _prof(profesional, "profesional_email") or "Uso clínico supervisado"
 
     story.extend(_build_cover(styles, titulo, paciente_nombre, sesiones, fecha,
@@ -1902,15 +1976,28 @@ def generar_cuadernillo_pdf(
         for eid, path in _preguntar_ilustraciones(resto).items():
             ilustraciones.setdefault(eid, path)
 
+    # Agrupados por área en orden terapéutico (cuerpo → ... → rutinas),
+    # manteniendo el orden elegido dentro de cada área.
+    _orden_area = {a: n for n, a in enumerate(ORDEN_AREAS)}
+    ejercicios = sorted(
+        [dict(e or {}) for e in (ejercicios or [])],
+        key=lambda e: _orden_area.get(str(e.get("seccion_id", "")), len(ORDEN_AREAS)))
+    area_actual = None
     for idx, ex in enumerate(ejercicios, 1):
         ex = dict(ex or {})
+        area = str(ex.get("seccion_id", ""))
+        encabezado = None
+        if area != area_actual:
+            area_actual = area
+            encabezado = _encabezado_area(styles, area)
         # Ilustración pre-generada en paralelo (clave _ai_pre); si falta, la
         # tarjeta la genera al vuelo (solo modo 'ai') o usa el SVG pre-aprobado.
         _ai = (ilustraciones or {}).get(str(ex.get("id", "")).strip().lower())
         if _ai:
             ex["_ai_pre"] = _ai
         story.extend(_build_exercise_card(styles, ex, idx,
-                                          seccion_id=str(ex.get("seccion_id", ""))))
+                                          seccion_id=str(ex.get("seccion_id", "")),
+                                          encabezado=encabezado))
 
     # Hojas de seguimiento (orden del documento: 2 horario, 3 TME).
     # Sin VHI-10: se toma en la app al inicio y en la sesión 8.

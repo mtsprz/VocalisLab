@@ -278,7 +278,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
   const nombrePac = String(paciente.nombre_completo || paciente.nombre || '').trim().split(/\s+/)[0] || '';
   const reprocesar = async () => {
     if (!selId) return;
-    setMsg('Reprocesando: transcripción, separación de voces, altura tonal y análisis IA (puede tardar varios minutos)…');
+    setMsg('Reprocesando: transcripción, separación de voces, altura tonal y análisis (puede tardar varios minutos)…');
     try {
       const r = await fetch(`${BACKEND_URL}/api/companion/sessions/${selId}/reprocesar?user_id=${uid}`, { method: 'POST' });
       const d = await r.json().catch(() => ({}));
@@ -311,7 +311,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
   const recalcular = async () => {
     if (!selId) return;
     const { ok, d } = await jsonPost(`${BACKEND_URL}/api/companion/sessions/${selId}/recalcular`, 'POST', { analisis: regenerarIA });
-    setMsg(ok ? `Recalculando la F0 del paciente con tus correcciones${regenerarIA ? ' y regenerando el análisis IA' : ''}… tocá "Actualizar" en 1-3 minutos.`
+    setMsg(ok ? `Recalculando la F0 del paciente con tus correcciones${regenerarIA ? ' y regenerando el análisis' : ''}… tocá "Actualizar" en 1-3 minutos.`
       : `No se pudo recalcular: ${d.detail || ''}`);
     cargarSesiones();
   };
@@ -446,13 +446,13 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <button onClick={() => pedirAudio()} className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold flex items-center gap-1.5"><Play size={13} /> Reproducir audio</button>
                     <button onClick={() => descargarPDF('sesion')} className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-white/10 font-bold flex items-center gap-1.5"><Download size={13} /> PDF sesión</button>
-                    <button onClick={reprocesar} className="px-3 py-1.5 rounded-lg border border-indigo-400/50 text-indigo-700 dark:text-indigo-300 font-bold flex items-center gap-1.5"><RefreshCw size={13} /> Reprocesar con IA</button>
+                    <button onClick={reprocesar} className="px-3 py-1.5 rounded-lg border border-indigo-400/50 text-indigo-700 dark:text-indigo-300 font-bold flex items-center gap-1.5"><RefreshCw size={13} /> Reprocesar</button>
                   </div>
                   {audioUrl && <audio src={audioUrl} controls className="w-full" />}
                   {(() => {
                     const info = detalle.sesion?.device_info || {};
                     const dz = info.diarizacion;
-                    const nombres: Record<string, string> = { ia_contenido: 'contenido (IA)', huella_telefono: 'huella vocal del teléfono', tono_perfil: 'tono vs. "Mi voz"' };
+                    const nombres: Record<string, string> = { ia_contenido: 'contenido de la charla', huella_telefono: 'huella vocal del teléfono', tono_perfil: 'tono vs. "Mi voz"' };
                     return (
                       <div className="flex flex-wrap gap-1.5">
                         {info.origen === 'importado' && <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">Audio importado{info.archivo ? `: ${info.archivo}` : ''}</span>}
@@ -460,7 +460,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                         {dz && (
                           <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${dz.certeza === 'alta' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : dz.certeza === 'media' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30' : 'bg-red-500/10 text-red-600 border-red-500/30'}`}
                             title={dz.medianas_hz ? `Tono mediano por hablante: ${Object.entries(dz.medianas_hz).map(([k, v]) => `${k} ${v ?? '—'} Hz`).join(' · ')}` : ''}>
-                            Voces separadas por IA · certeza {dz.certeza}{Object.keys(dz.votos || {}).length ? ` (${Object.keys(dz.votos).map((k: string) => nombres[k] || k).join(' + ')}${dz.acuerdo ? ', coinciden' : ', no coinciden: revisar'})` : ''}{dz.hablantes > 2 ? ` · ${dz.hablantes} voces detectadas` : ''}
+                            Voces separadas automáticamente · certeza {dz.certeza}{Object.keys(dz.votos || {}).length ? ` (${Object.keys(dz.votos).map((k: string) => nombres[k] || k).join(' + ')}${dz.acuerdo ? ', coinciden' : ', no coinciden: revisar'})` : ''}{dz.hablantes > 2 ? ` · ${dz.hablantes} voces detectadas` : ''}
                           </span>
                         )}
                       </div>
@@ -502,7 +502,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                     const cmp = ia.comparacion || {};
                     return (
                       <div className="p-3 rounded-xl border border-violet-500/30 bg-violet-500/5 space-y-2">
-                        <p className="font-bold flex items-center gap-1.5"><Sparkles size={13} className="text-violet-500" /> Análisis de la sesión (IA) <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10">{String(ia.tipo_sesion || '').replace(/_/g, ' ')}</span></p>
+                        <p className="font-bold flex items-center gap-1.5"><Sparkles size={13} className="text-violet-500" /> Análisis de la sesión <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-white/10">{String(ia.tipo_sesion || '').replace(/_/g, ' ')}</span></p>
                         {ia.resumen && <p>{ia.resumen}</p>}
                         {ia.motivo_o_objetivo && <p><span className="font-semibold">Motivo / objetivo:</span> {ia.motivo_o_objetivo}</p>}
                         {lista('Síntomas referidos', ia.sintomas_referidos)}
@@ -560,7 +560,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                           </p>
                         )}
                         {lista('Próximos pasos sugeridos', ia.proximos_pasos)}
-                        <p className="text-[10px] text-gray-500">Generado por IA a partir de la transcripción: borrador para revisión profesional, no reemplaza el criterio clínico.</p>
+                        <p className="text-[10px] text-gray-500">Borrador automático a partir de la transcripción: borrador para revisión profesional, no reemplaza el criterio clínico.</p>
                       </div>
                     );
                   })()}
@@ -574,7 +574,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
                         <div className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
                           <span className="text-gray-500">Corrección: tocá el nombre para cambiar quién habla, o ✎ para editar el texto.</span>
                           <button onClick={intercambiarTodos} className="px-2.5 py-1 rounded-lg border border-gray-300 dark:border-white/10 font-bold">⇄ Invertir roles en toda la sesión</button>
-                          <label className="flex items-center gap-1"><input type="checkbox" checked={regenerarIA} onChange={e => setRegenerarIA(e.target.checked)} /> regenerar análisis IA</label>
+                          <label className="flex items-center gap-1"><input type="checkbox" checked={regenerarIA} onChange={e => setRegenerarIA(e.target.checked)} /> regenerar análisis</label>
                           <button onClick={recalcular} className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold">Recalcular F0 con mis correcciones</button>
                         </div>
                         <div className="space-y-1.5 max-h-[32rem] overflow-y-auto">

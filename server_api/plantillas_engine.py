@@ -15,6 +15,8 @@ import httpx
 import traceback
 from typing import Optional, Dict, Any, List
 
+from firma_profesional import limpiar_nombre, limpiar_titulo, sin_mencion_ia
+
 # ─── Dict Extractor de Variables Clínicas (Edición 2026) ─────────────
 
 def extraer_variables_cuadernillo(
@@ -84,15 +86,15 @@ def extraer_variables_cuadernillo(
 
     return {
         # Datos Institucionales
-        "profesional_nombre": profesional.get("profesional_nombre", "Lic. Matías Pérez"),
-        "profesional_titulo": profesional.get("profesional_titulo", "Fonoaudiólogo · Especialista en Voz"),
+        "profesional_nombre": limpiar_nombre(profesional.get("profesional_nombre", "")),
+        "profesional_titulo": limpiar_titulo(profesional.get("profesional_titulo", "")),
         "profesional_matricula": profesional.get("profesional_matricula", "M.P. 7276"),
         "profesional_contacto": f"{profesional.get('profesional_telefono', '')} | {profesional.get('profesional_email', '')}".strip(" |"),
         "firma_institucional": "Matías Pérez · Fonoaudiólogo · M.P. 7276",
         
         # Datos del Tratamiento
         "paciente_nombre": paciente_nombre or "Paciente Sin Especificar",
-        "cuadernillo_titulo": titulo or "Cuadernillo Terapéutico Vocal",
+        "cuadernillo_titulo": sin_mencion_ia(titulo) or "Cuadernillo Terapéutico Vocal",
         "fecha_creacion": fecha_hoy,
         "cantidad_sesiones": sesiones or 8,
         "frecuencia_sesiones": contrato.get("frecuencia", "2 veces por semana"),
@@ -269,7 +271,7 @@ class HTMLTemplateEngine:
 <body>
   <div class="header">
     <h1>Consultorio de Voz</h1>
-    <p class="sub">Lic. Matías Pérez — Fonoaudiólogo · M.P. 7276</p>
+    <p class="sub">Matías Pérez — Fonoaudiólogo · M.P. 7276</p>
     <p>Manual de Entrenamiento y Rehabilitación Vocal · Edición 2026</p>
     <h1 style="font-size: 19px; margin-top: 8px;">{variables['cuadernillo_titulo']}</h1>
     <p>{variables['profesional_nombre']} — {variables['profesional_matricula']}</p>

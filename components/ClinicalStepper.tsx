@@ -12,7 +12,7 @@ const STEPS = [
   { id: 'anamnesis', label: 'Anamnesis', icon: Mic },
   { id: 'escalas', label: 'Riesgo & Escalas', icon: Shield },
   { id: 'analisis', label: 'Análisis Praat', icon: Activity },
-  { id: 'recomendacion', label: 'Motor IA', icon: Sparkles },
+  { id: 'recomendacion', label: 'Motor Terapéutico', icon: Sparkles },
   { id: 'cuadernillo', label: 'Cuadernillo', icon: FileText },
 ];
 

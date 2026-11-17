@@ -401,7 +401,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
 
       guardarContextoClinico(data);
     } catch {
-      setError('Error al procesar la anamnesis con IA.');
+      setError('Error al procesar la anamnesis.');
     }
     setStructuring(false);
   };
@@ -675,7 +675,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
                 onChange={e => setAntecedentesSalud(e.target.value)}
                 onBlur={() => guardarContextoClinico()}
                 rows={2}
-                placeholder="Ej: hipotiroidismo, RGE, alergias estacionales, asma... (la IA los autocompleta desde la entrevista)"
+                placeholder="Ej: hipotiroidismo, RGE, alergias estacionales, asma... (se autocompletan desde la entrevista)"
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-[#0b0f19] border border-gray-300 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
             </div>
@@ -851,7 +851,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
                   className="px-3 py-1 rounded-full bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm disabled:opacity-50"
                 >
                   {structuring ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  Sintetizar IA
+                  Sintetizar
                 </button>
               )}
             </div>

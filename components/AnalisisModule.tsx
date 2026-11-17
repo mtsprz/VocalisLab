@@ -46,9 +46,9 @@ export default function AnalisisModule({ pacienteId }: Props) {
     return e != null ? String(e) : '40';
   });
   const [sexo, setSexo] = useState(clinical.data.paciente.sexo || 'Femenino');
-  const [profNombre, setProfNombre] = useState('Lic. Fonoaudiólogo/a');
-  const [profTitulo, setProfTitulo] = useState('Especialista en Voz Bioacústica');
-  const [profMatricula, setProfMatricula] = useState('M.N. 12345');
+  const [profNombre, setProfNombre] = useState('Matías Pérez');
+  const [profTitulo, setProfTitulo] = useState('Fonoaudiólogo');
+  const [profMatricula, setProfMatricula] = useState('M.P. 7276');
 
   const [showPerceptualCard, setShowPerceptualCard] = useState(true);
 

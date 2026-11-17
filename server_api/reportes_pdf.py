@@ -193,8 +193,9 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements = []
     audio = metricas.get("audio", {})
-    prof_name = paciente.get("profesional_nombre", "")
-    prof_title = paciente.get("profesional_titulo", "")
+    from firma_profesional import limpiar_nombre, limpiar_titulo
+    prof_name = limpiar_nombre(paciente.get("profesional_nombre", ""), "")
+    prof_title = limpiar_titulo(paciente.get("profesional_titulo", ""), "")
     prof_mat = paciente.get("profesional_matricula", "")
     prof_centro = paciente.get("profesional_centro", "")
     prof_email = paciente.get("profesional_email", "")
@@ -395,8 +396,9 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements.append(PageBreak())
 
-    elements.append(Paragraph("<b>5. Interpretación Asistida por IA</b>", section_style))
-    sintesis = paciente.get('sintesis_ia', '')
+    elements.append(Paragraph("<b>5. Interpretación Clínica</b>", section_style))
+    from firma_profesional import sin_mencion_ia
+    sintesis = sin_mencion_ia(paciente.get('sintesis_ia', ''))
     if sintesis and sintesis.strip():
         for para in sintesis.split('\n'):
             if para.strip():

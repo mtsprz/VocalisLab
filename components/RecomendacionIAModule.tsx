@@ -150,7 +150,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
         setError('No se pudo generar la recomendación.');
       }
     } catch (e: any) {
-      setError(e.message || 'Error de conexión con el motor IA');
+      setError(e.message || 'Error de conexión con el motor terapéutico');
     }
     setLoading(false);
   };
@@ -173,10 +173,10 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 flex items-center gap-1">
-                <Sparkles size={13} className="text-indigo-300" /> Motor IA Fonoaudiológico v2.0
+                <Sparkles size={13} className="text-indigo-300" /> Motor Terapéutico Fonoaudiológico v2.0
               </span>
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight">Prescripción Terapéutica Vocal Basada en IA</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">Prescripción Terapéutica Vocal</h2>
             <p className="text-sm text-indigo-200 mt-1 max-w-2xl">
               Sintetiza la Ficha de Riesgo Vocal, Anamnesis, Escalas Perceptuales (GRBAS/RASATI) y Acústica de Praat bajo la evidencia metodológica de la Lic. Patricia Farías.
             </p>
@@ -300,7 +300,7 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
             {contextoUsado && (
               <div className="pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1">
                 <p className={`font-bold ${contextoUsado.tiene_informe_orl ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>
-                  {contextoUsado.tiene_informe_orl ? '✓ Informe ORL inyectado a la IA' : '○ Sin informe ORL validado'}
+                  {contextoUsado.tiene_informe_orl ? '✓ Informe ORL incluido en el análisis' : '○ Sin informe ORL validado'}
                 </p>
                 <p className="text-gray-500 dark:text-gray-400">
                   Evaluaciones en DB: <strong>{contextoUsado.n_evaluaciones ?? 0}</strong>

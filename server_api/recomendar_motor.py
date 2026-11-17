@@ -103,7 +103,75 @@ def verificar_contraindicaciones(exercise_ids, diagnostico_texto=""):
     return seguros, excluidos
 
 
+def _ids_por_area(bank) -> str:
+    """Lista real de IDs del banco agrupada por área, para el prompt."""
+    return "\n".join(
+        f"  {s.get('id')}: " + ", ".join(e.get("id") for e in s.get("exercises", []) if e.get("id"))
+        for s in bank.get("sections", []))
+
+
+def _completar_con_plan(rec: dict, clinica: dict, bank: dict) -> dict:
+    """Pasa la recomendación por el planificador del cuadernillo: descarta
+    IDs inexistentes o contraindicados y completa cada área a trabajar con
+    al menos 3 variantes indicadas para el paciente."""
+    from plan_cuadernillo import armar_plan
+    secciones = bank.get("sections", [])
+    validos = {e.get("id"): e for s in secciones for e in s.get("exercises", [])}
+    propuestos = [e for e in (rec.get("ejercicios_recomendados") or [])
+                  if isinstance(e, dict)]
+    alertas = list(rec.get("alertas_seguridad") or [])
+    invalidos = [e.get("id") for e in propuestos if e.get("id") not in validos]
+    if invalidos:
+        alertas.append("Se descartaron ejercicios que no existen en el banco: "
+                       + ", ".join(str(i) for i in invalidos) + ".")
+    propuestos = [e for e in propuestos if e.get("id") in validos]
+    plan = armar_plan([e["id"] for e in propuestos], dict(clinica, recomendacion=rec),
+                      secciones=secciones)
+    contra = {a["id"]: a["motivo"] for a in plan["alertas"]}
+    for eid, motivo in contra.items():
+        alertas.append(f"EXCLUIDO POR SEGURIDAD: {validos[eid].get('name', eid)} — {motivo}.")
+    previos = {e["id"]: e for e in propuestos}
+    items = {it["id"]: (a, it) for a in plan["areas"] for it in a["ejercicios"]}
+    finales = []
+    for eid in plan["ejercicios_ids"]:
+        if eid in contra:
+            continue
+        if eid in previos:
+            finales.append(previos[eid])
+            continue
+        area, it = items[eid]
+        ex = validos[eid]
+        finales.append({
+            "id": eid, "name": ex.get("name", eid),
+            "justificacion": it["motivo"],
+            "dosificacion": f"{ex.get('duration_min', 5)} min por día",
+            "prioridad": "Alta" if area["prioritaria"] else "Media",
+        })
+    rec["ejercicios_recomendados"] = finales
+    rec["alertas_seguridad"] = alertas
+    rec["plan_areas"] = plan["areas"]
+    rec["perfil_clinico"] = plan["perfil"]
+    return rec
+
+
 def generar_recomendacion_terapeutica(
+    paciente: dict, anamnesis: dict, riesgo_vocal: dict, escalas: dict,
+    acustica: dict, extras: dict = None) -> dict:
+    """Recomendación terapéutica completada por áreas (ver
+    _completar_con_plan). Si el planificador falla, se devuelve la base."""
+    rec = _recomendacion_base(paciente, anamnesis, riesgo_vocal, escalas,
+                              acustica, extras)
+    try:
+        clinica = {"paciente": paciente, "anamnesis": anamnesis,
+                   "riesgoVocal": riesgo_vocal, "escalas": escalas,
+                   "acustica": acustica}
+        return _completar_con_plan(rec, clinica, _load_bank())
+    except Exception:
+        traceback.print_exc()
+        return rec
+
+
+def _recomendacion_base(
     paciente: dict,
     anamnesis: dict,
     riesgo_vocal: dict,
@@ -175,7 +243,7 @@ def generar_recomendacion_terapeutica(
                 '  "objetivos_terapeuticos": ["Obj 1", "Obj 2", "Obj 3"],\n'
                 '  "ejercicios_recomendados": [\n'
                 '    {\n'
-                '      "id": "uno de los IDs del banco: le_huche | shiatsu_cabeza | rotacion_hombros | masaje_laringeo | descenso_laringeo | moldeado_vocalico | respiracion_abdominal | expansion_costo_lateral | coordinacion_costo_abdominal | series_automaticas | glissandos | oclusion_nasal | escalas_vocalicas | frases_balanceadas | calentamiento | enfriamiento",\n'
+                '      "id": "un ID EXACTO del banco (ver lista por área abajo)",\n'
                 '      "name": "Nombre exacto del ejercicio",\n'
                 '      "justificacion": "Por qué es prioritario según su fisiopatología",\n'
                 '      "dosificacion": "Series, repeticiones y tiempo recomendado",\n'
@@ -189,7 +257,13 @@ def generar_recomendacion_terapeutica(
                 '    "total_sesiones_sugeridas": 10,\n'
                 '    "etapas": "Fase 1: ... Fase 2: ... Fase 3: ..."\n'
                 '  }\n'
-                "}\n"
+                "}\n\n"
+                "REGLAS DE SELECCIÓN:\n"
+                "- Usá solo IDs de esta lista (área: ids):\n" + _ids_por_area(bank) + "\n"
+                "- Elegí al menos 3 ejercicios por cada área que el caso necesite trabajar "
+                "(variantes del mismo objetivo, de lo básico a lo avanzado), justificando cada uno "
+                "con datos del paciente.\n"
+                "- Nunca elijas un ejercicio contraindicado para el diagnóstico.\n"
             )
 
             _extras = extras or {}
