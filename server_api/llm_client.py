@@ -48,3 +48,103 @@ def groq_chat(messages, temperature=0.3, max_tokens=1500, response_format=None, 
             print(f"[llm_client] Modelo {model} fallo ({str(e)[:120]}). Probando siguiente...")
             continue
     raise last_err
+
+
+# ─── Gemini: cliente único con respaldo de modelos ─────────────────────
+# Google apaga modelos seguido (gemini-2.0-flash se apagó el 1/6/2026;
+# gemini-2.5-flash se apaga el 1/12/2026). Antes cada módulo tenía el nombre
+# escrito a mano y dejaba de andar sin aviso. Ahora todos pasan por acá:
+# se prueba el modelo configurado (si no está apagado) y después los
+# vigentes, en orden. Lista oficial: aistudio.google.com/docs/deprecations
+GEMINI_TEXT_MODELS = [
+    "gemini-3.6-flash",       # reemplazo oficial de gemini-2.0-flash
+    "gemini-3.5-flash-lite",  # reemplazo oficial de gemini-2.5-flash
+    "gemini-2.5-flash-lite",  # sin fecha de baja anunciada
+]
+GEMINI_IMAGE_MODELS = [
+    "gemini-nano-banana-2.1",
+    "gemini-3.1-flash-image",
+    "gemini-2.5-flash-image",  # se apaga el 15/3/2027
+]
+# Prefijos de modelos ya apagados: se saltean aunque estén configurados.
+GEMINI_APAGADOS = ("gemini-1.0", "gemini-1.5", "gemini-2.0")
+_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+
+def gemini_models(tipo: str = "texto", preferidos=None) -> list:
+    """Modelos Gemini a probar, en orden: los preferidos/configurados que no
+    estén apagados y luego los vigentes por defecto."""
+    if preferidos is None:
+        var = "GEMINI_IMAGE_MODEL" if tipo == "imagen" else "GEMINI_MODEL"
+        preferidos = [os.environ.get(var, "")]
+        if tipo != "imagen":
+            preferidos.append(os.environ.get("AI_MODEL", ""))
+    candidatos = []
+    for valor in preferidos:
+        candidatos += [m.strip() for m in str(valor or "").split(",") if m.strip()]
+    candidatos += GEMINI_IMAGE_MODELS if tipo == "imagen" else GEMINI_TEXT_MODELS
+    return [m for m in dict.fromkeys(candidatos)
+            if m.startswith("gemini") and not m.startswith(GEMINI_APAGADOS)]
+
+
+def gemini_texto(data: dict) -> str:
+    """Texto de la primera respuesta de Gemini ("" si no hay)."""
+    cands = (data or {}).get("candidates") or []
+    parts = ((cands[0].get("content") or {}).get("parts") or []) if cands else []
+    return "".join(p.get("text", "") for p in parts if isinstance(p, dict))
+
+
+def _gemini_body(parts, generation_config):
+    body = {"contents": [{"parts": parts}]}
+    if generation_config:
+        body["generationConfig"] = generation_config
+    return body
+
+
+def _gemini_respuesta_util(resp) -> dict:
+    if resp.status_code != 200:
+        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+    data = resp.json()
+    if not data.get("candidates"):
+        raise RuntimeError(f"sin respuesta: {str(data)[:200]}")
+    return data
+
+
+def gemini_generate(parts, generation_config=None, tipo="texto", modelos=None,
+                    timeout=120.0):
+    """Llama a Gemini probando modelos en orden. Devuelve (json, modelo).
+    `parts` es la lista de partes del contenido (texto, imágenes)."""
+    import httpx
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY no configurada")
+    errores = []
+    for model in (modelos or gemini_models(tipo)):
+        try:
+            r = httpx.post(_GEMINI_URL.format(model=model), params={"key": key},
+                           json=_gemini_body(parts, generation_config), timeout=timeout)
+            return _gemini_respuesta_util(r), model
+        except Exception as e:
+            errores.append(f"{model}: {str(e)[:150]}")
+            print(f"[llm_client] Gemini {model} falló ({str(e)[:120]}). Probando siguiente...")
+    raise RuntimeError("Ningún modelo Gemini respondió: " + " | ".join(errores))
+
+
+async def gemini_generate_async(parts, generation_config=None, tipo="texto",
+                                modelos=None, timeout=120.0):
+    """Versión async de gemini_generate. Devuelve (json, modelo)."""
+    import httpx
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY no configurada")
+    errores = []
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for model in (modelos or gemini_models(tipo)):
+            try:
+                r = await client.post(_GEMINI_URL.format(model=model), params={"key": key},
+                                      json=_gemini_body(parts, generation_config))
+                return _gemini_respuesta_util(r), model
+            except Exception as e:
+                errores.append(f"{model}: {str(e)[:150]}")
+                print(f"[llm_client] Gemini {model} falló ({str(e)[:120]}). Probando siguiente...")
+    raise RuntimeError("Ningún modelo Gemini respondió: " + " | ".join(errores))

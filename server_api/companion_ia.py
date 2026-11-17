@@ -32,18 +32,11 @@ def _llm(prompt: str) -> str:
         res = groq_chat([{"role": "user", "content": prompt}],
                         temperature=0.0, max_tokens=4000)
         return res[0] if isinstance(res, tuple) else str(res or "")
-    import httpx
-    key = comp._env("GEMINI_API_KEY", "")
-    if not key:
-        raise RuntimeError("GEMINI_API_KEY ausente")
-    r = httpx.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{comp._ai_model()}:generateContent?key={key}",
-        json={"contents": [{"parts": [{"text": prompt}]}],
-              "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}},
-        timeout=120)
-    cands = r.json().get("candidates") or []
-    parts = ((cands[0].get("content") or {}).get("parts") or []) if cands else []
-    return "".join(p.get("text", "") for p in parts)
+    from llm_client import gemini_generate, gemini_models, gemini_texto
+    data, _modelo = gemini_generate(
+        [{"text": prompt}], {"temperature": 0, "responseMimeType": "application/json"},
+        modelos=gemini_models(preferidos=[comp._env("AI_MODEL", "")]), timeout=120)
+    return gemini_texto(data)
 
 
 def corregir_hablantes(base: list) -> list:

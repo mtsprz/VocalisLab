@@ -73,47 +73,21 @@ def _extract_json(text: str) -> dict:
     return json.loads(text[start:end])
 
 
-async def _gemini_vision_extract(image_b64: str, mime: str, prompt: str = None) -> dict:
-    """Procesamiento multimodal con Gemini Flash Vision (Opción Primaria VLM)."""
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("GEMINI_API_KEY no configurada")
-
-    import httpx
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-
-    payload = {
-        "contents": [{
-            "parts": [
-                {"text": prompt or EXTRACTION_PROMPT},
-                {
-                    "inline_data": {
-                        "mime_type": mime,
-                        "data": image_b64
-                    }
-                }
-            ]
-        }],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 3000,
-            "responseMimeType": "application/json"
-        }
-    }
-
-    async with httpx.AsyncClient(timeout=90.0) as client:
-        resp = await client.post(url, json=payload)
-        if resp.status_code != 200:
-            raise RuntimeError(f"Gemini Vision Error ({resp.status_code}): {resp.text[:200]}")
-        data = resp.json()
-        cands = data.get("candidates", [])
-        if not cands:
-            raise RuntimeError("Gemini no devolvió resultados")
-        parts = cands[0].get("content", {}).get("parts", [])
-        if not parts:
-            raise RuntimeError("Candidato de Gemini sin partes de texto")
-        return _extract_json(parts[0].get("text", ""))
+async def _gemini_vision_extract(image_b64: str, mime: str, prompt: str = None) -> tuple:
+    """Procesamiento multimodal con Gemini Vision (Opción Primaria VLM).
+    Prueba los modelos vigentes en orden. Devuelve (datos, modelo)."""
+    from llm_client import gemini_generate_async, gemini_texto
+    parts = [
+        {"text": prompt or EXTRACTION_PROMPT},
+        {"inline_data": {"mime_type": mime, "data": image_b64}},
+    ]
+    data, modelo = await gemini_generate_async(
+        parts, {"temperature": 0.1, "maxOutputTokens": 3000,
+                "responseMimeType": "application/json"}, timeout=90.0)
+    texto = gemini_texto(data)
+    if not texto:
+        raise RuntimeError("Candidato de Gemini sin partes de texto")
+    return _extract_json(texto), modelo
 
 
 def _groq_vision_extract(image_b64: str, mime: str, prompt: str = None,
@@ -152,8 +126,8 @@ async def _vision_extract(image_b64: str, mime: str, prompt: str = None) -> tupl
     """Pipeline multimodal: intenta Gemini Flash Vision primero, luego Groq Vision."""
     if os.environ.get("GEMINI_API_KEY", "").strip():
         try:
-            parsed = await _gemini_vision_extract(image_b64, mime, prompt)
-            model_used = f"gemini-vision ({os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')})"
+            parsed, modelo = await _gemini_vision_extract(image_b64, mime, prompt)
+            model_used = f"gemini-vision ({modelo})"
             return parsed, model_used
         except Exception as e:
             print(f"[informes_orl] Gemini Vision falló, probando Groq Vision fallback: {str(e)[:150]}")

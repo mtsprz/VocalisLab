@@ -1,7 +1,7 @@
 """
 VocalisLab Pro - Asistente Clinico IA (RAG hibrido)
 Primary cache: Supabase (patologias, ejercicios, patologia_ejercicio_relacion)
-Secondary engine: Gemini API (gemini-2.0-flash) con fallback a Groq y a motor heuristico.
+Secondary engine: Gemini API (modelos vigentes, ver llm_client.gemini_models) con fallback a Groq y a motor heuristico.
 """
 import os
 import json
@@ -81,21 +81,13 @@ def _kb_ranked_exercises(patologia_id: str = "", triggers: list = None):
 
 async def _call_gemini(prompt: str) -> str:
     """Llama a Gemini via REST (sin dependencias nuevas)."""
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY no configurada")
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.4, "maxOutputTokens": 2048}}
-    async with httpx.AsyncClient(timeout=45) as client:
-        resp = await client.post(url, json=body)
-    if resp.status_code != 200:
-        raise RuntimeError(f"Gemini API {resp.status_code}: {resp.text[:300]}")
-    data = resp.json()
-    try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception:
+    from llm_client import gemini_generate_async, gemini_texto
+    data, _modelo = await gemini_generate_async(
+        [{"text": prompt}], {"temperature": 0.4, "maxOutputTokens": 2048}, timeout=45)
+    texto = gemini_texto(data)
+    if not texto:
         raise RuntimeError(f"Respuesta Gemini inesperada: {str(data)[:300]}")
+    return texto
 
 
 async def _call_groq(prompt: str) -> str:
@@ -181,7 +173,7 @@ Devolve EXCLUSIVAMENTE JSON valido con estas claves:
     texto = ""
     try:
         texto = await _call_gemini(prompt)
-        engine = f"supabase+gemini({os.environ.get('GEMINI_MODEL','gemini-2.0-flash')})" if kb.get("source") == "supabase" else "gemini"
+        engine = "supabase+gemini" if kb.get("source") == "supabase" else "gemini"
     except Exception as e1:
         print(f"[ai_clinical] Gemini fallo: {e1}. Probando Groq...")
         try:

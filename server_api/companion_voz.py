@@ -338,8 +338,8 @@ def llm_json(prompt: str, max_tokens: int = 4000) -> dict:
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if key:
         import httpx
-        modelos = [m for m in (os.environ.get("AI_MODEL", ""), "gemini-2.5-flash", "gemini-2.0-flash")
-                   if m and m.startswith("gemini")]
+        from llm_client import gemini_models
+        modelos = gemini_models(preferidos=[os.environ.get("AI_MODEL", "")])
         for m in dict.fromkeys(modelos):
             try:
                 r = httpx.post(

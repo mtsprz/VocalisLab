@@ -66,10 +66,8 @@ IMG_DESC_POR_EJERCICIO = {
     "glissandos": "smooth ascending and descending pitch curve diagram, siren line, no text",
 }
 
-GEMINI_IMAGE_MODELS = [
-    "gemini-2.5-flash-image",
-    "gemini-2.0-flash-preview-image-generation",
-]
+# Lista vigente en llm_client (los modelos apagados se saltean solos).
+from llm_client import GEMINI_IMAGE_MODELS, gemini_models as _gemini_models
 
 # Modelos Cloudflare Workers AI (texto→imagen). FLUX.1 Schnell por defecto:
 # muy superior en coherencia anatómica al SDXL-Lightning de 4 pasos.
@@ -102,10 +100,7 @@ def _prompt_clinico(desc: str, estilo: str = "") -> str:
 
 
 def _gemini_image_models():
-    env = os.environ.get("GEMINI_IMAGE_MODEL", "").strip()
-    if env:
-        return [m.strip() for m in env.split(",") if m.strip()]
-    return list(GEMINI_IMAGE_MODELS)
+    return _gemini_models("imagen")
 
 
 def _descripcion_ejercicio(exercise_id: str, nombre: str, descripcion: str) -> str:

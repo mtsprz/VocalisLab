@@ -57,7 +57,10 @@ def _ai_provider():
 
 
 def _ai_model():
-    return _env("AI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+    # Primer modelo Gemini vigente (saltea los apagados aunque AI_MODEL
+    # siga configurado con uno viejo, ej. gemini-2.0-flash).
+    from llm_client import gemini_models
+    return gemini_models(preferidos=[_env("AI_MODEL", "")])[0]
 
 
 def _external_audio_ok():
@@ -1683,17 +1686,11 @@ def _ia_borrador(contexto: dict) -> dict:
                             temperature=0.2, max_tokens=1500)
             txt = res[0] if isinstance(res, tuple) else str(res or "")
         else:
-            import httpx
-            key = _env("GEMINI_API_KEY", "")
-            if not key:
-                raise RuntimeError("GEMINI_API_KEY ausente")
-            r = httpx.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{_ai_model()}:generateContent?key={key}",
-                json={"contents": [{"parts": [{"text": prompt + "\nDevolvé solo JSON válido."}]}]},
-                timeout=120)
-            cands = (r.json().get("candidates") or [])
-            parts = ((cands[0].get("content") or {}).get("parts") or []) if cands else []
-            txt = "".join(p.get("text", "") for p in parts)
+            from llm_client import gemini_generate, gemini_models, gemini_texto
+            data, _modelo = gemini_generate(
+                [{"text": prompt + "\nDevolvé solo JSON válido."}],
+                modelos=gemini_models(preferidos=[_env("AI_MODEL", "")]), timeout=120)
+            txt = gemini_texto(data)
         m = re.search(r"\{.*\}", txt, re.DOTALL)
         data = json.loads(m.group(0)) if m else {}
         for k in base:
