@@ -1311,9 +1311,8 @@ async def listar_turnos(
 ):
     if not supabase:
         return JSONResponse(content=[])
-    try:
-        # Intento con join relacional
-        q = supabase.table("turnos").select("*, pacientes(nombre_completo, dni, telefono, email)")
+    def _armar(join: str):
+        q = supabase.table("turnos").select(f"*, pacientes({join})")
         if fecha_desde:
             q = q.gte("fecha_hora", fecha_desde)
         if fecha_hasta:
@@ -1324,8 +1323,17 @@ async def listar_turnos(
             q = q.eq("modalidad", modalidad.upper())
         if paciente_id:
             q = q.eq("paciente_id", paciente_id)
-        q = q.order("fecha_hora").limit(limit)
-        result = q.execute()
+        return q.order("fecha_hora").limit(limit)
+
+    try:
+        # Join con centro y obra social (agenda filtrada por centro); si la
+        # base aún no tiene esas columnas (migración de centros), sin ellas.
+        try:
+            result = _armar("nombre_completo, dni, telefono, email, centro, obra_social").execute()
+        except Exception as e_centro:
+            if "centro" not in str(e_centro) and "obra_social" not in str(e_centro):
+                raise
+            result = _armar("nombre_completo, dni, telefono, email").execute()
         return JSONResponse(content=result.data or [])
     except Exception as e:
         print(f"[api_clinica] Error con join relacional en listar_turnos: {e}. Probando consulta simple...")

@@ -8,6 +8,7 @@ import FiltroModalidad, { ModalidadFiltro } from './FiltroModalidad';
 import TargetPacienteCard from './TargetPacienteCard';
 import NuevoTurnoModal from './NuevoTurnoModal';
 import ImportarAgendaFonoar from './ImportarAgendaFonoar';
+import { FiltroCentro, diaLocal, esCanto, esVirtual, pasaFiltroCentro, rangoVista } from './filtrosAgenda';
 import ZoomTeleconsulta from '../ZoomTeleconsulta';
 import { useAuth } from '../AuthContext';
 
@@ -30,13 +31,38 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
   const [modalNuevoAbierto, setModalNuevoAbierto] = useState(false);
   const [turnoEditar, setTurnoEditar] = useState<any | null>(null);
   const [turnoZoom, setTurnoZoom] = useState<any | null>(null);
-  const [formato, setFormato] = useState<VistaFormato>('semana');
+  // Vista y centro elegidos se recuerdan (por defecto: el día de hoy).
+  const [formato, setFormatoEstado] = useState<VistaFormato>(() => {
+    try { return (localStorage.getItem('vocalislab_agenda_formato') as VistaFormato) || 'dia'; } catch { return 'dia'; }
+  });
+  const setFormato = (v: VistaFormato) => {
+    setFormatoEstado(v);
+    try { localStorage.setItem('vocalislab_agenda_formato', v); } catch {}
+  };
+  const [filtroCentro, setFiltroCentroEstado] = useState<FiltroCentro>(() => {
+    try { return (localStorage.getItem('vocalislab_agenda_centro') as FiltroCentro) || 'TODOS'; } catch { return 'TODOS'; }
+  });
+  const setFiltroCentro = (v: FiltroCentro) => {
+    setFiltroCentroEstado(v);
+    try { localStorage.setItem('vocalislab_agenda_centro', v); } catch {}
+  };
   const [filtroModalidad, setFiltroModalidad] = useState<ModalidadFiltro>('TODAS');
   const [fechaActual, setFechaActual] = useState(new Date());
 
+  // Rango de días que muestra la vista (hora de Argentina). "lista" = próximos 60 días.
+  const rango = useMemo(() => {
+    if (formato === 'lista') {
+      const desde = diaLocal(new Date());
+      const hasta = diaLocal(new Date(Date.now() + 60 * 86400000));
+      return { desde, hasta };
+    }
+    return rangoVista(fechaActual, formato as any);
+  }, [fechaActual, formato]);
+
   useEffect(() => {
     cargarAgenda();
-  }, [fechaActual]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rango.desde, rango.hasta]);
 
   const [importarAbierto, setImportarAbierto] = useState(false);
 
@@ -44,7 +70,13 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
     setLoading(true);
     // Cargar turnos de la agenda clínica
     try {
-      const r = await fetch(`${BACKEND_URL}/api/turnos?limit=300`);
+      // Solo el rango visible (antes traía los 300 turnos más viejos, sin filtrar).
+      const q = new URLSearchParams({
+        fecha_desde: `${rango.desde}T00:00:00-03:00`,
+        fecha_hasta: `${rango.hasta}T23:59:59-03:00`,
+        limit: '500',
+      });
+      const r = await fetch(`${BACKEND_URL}/api/turnos?${q}`);
       if (r.ok) {
         const data = await r.json();
         setTurnos(Array.isArray(data) ? data : []);
@@ -88,32 +120,49 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
     } catch {}
   };
 
-  // Filtrado según modalidad (Presencial / Virtual)
+  // Turnos del rango visible (hora de Argentina).
+  const turnosDelRango = useMemo(
+    () => turnos.filter(t => { const d = diaLocal(t.fecha_hora); return d >= rango.desde && d <= rango.hasta; }),
+    [turnos, rango.desde, rango.hasta]);
+
+  // Filtrado según modalidad (Presencial / Virtual) y centro.
   const turnosFiltrados = useMemo(() => {
-    let list = [...turnos];
+    let list = turnosDelRango.filter(t => pasaFiltroCentro(t, filtroCentro));
     if (filtroModalidad === 'PRESENCIAL') {
-      list = list.filter(t => (t.modalidad || '').toUpperCase() !== 'VIRTUAL' && !t.meet_link);
+      list = list.filter(t => !esVirtual(t));
     } else if (filtroModalidad === 'VIRTUAL') {
-      list = list.filter(t => (t.modalidad || '').toUpperCase() === 'VIRTUAL' || Boolean(t.meet_link));
+      list = list.filter(t => esVirtual(t));
     }
     return list.sort((a, b) => new Date(a.fecha_hora).getTime() - new Date(b.fecha_hora).getTime());
-  }, [turnos, filtroModalidad]);
+  }, [turnosDelRango, filtroModalidad, filtroCentro]);
+
+  const conteoCentro = useMemo(() => {
+    const c: Record<string, number> = { TODOS: turnosDelRango.length };
+    for (const f of ['fonoar_la_plata', 'due_brandsen', 'virtual', 'CANTO'] as FiltroCentro[]) {
+      c[f] = turnosDelRango.filter(t => pasaFiltroCentro(t, f)).length;
+    }
+    return c;
+  }, [turnosDelRango]);
+
+  const eventosGoogleDelRango = useMemo(
+    () => googleEvents.filter(ev => { const d = diaLocal(ev.start_datetime); return d >= rango.desde && d <= rango.hasta; }),
+    [googleEvents, rango.desde, rango.hasta]);
 
   // Conteo para los badges del filtro
   const conteoModalidad = useMemo(() => {
-    const virtuales = turnos.filter(t => (t.modalidad || '').toUpperCase() === 'VIRTUAL' || Boolean(t.meet_link)).length;
+    const virtuales = turnosDelRango.filter(esVirtual).length;
     return {
-      todas: turnos.length,
-      presenciales: turnos.length - virtuales,
+      todas: turnosDelRango.length,
+      presenciales: turnosDelRango.length - virtuales,
       virtuales,
     };
-  }, [turnos]);
+  }, [turnosDelRango]);
 
   // Citas agrupadas por día
   const turnosPorDia = useMemo(() => {
     const map = new Map<string, any[]>();
     turnosFiltrados.forEach(t => {
-      const diaKey = new Date(t.fecha_hora).toISOString().split('T')[0];
+      const diaKey = diaLocal(t.fecha_hora);  // hora de Argentina, no UTC
       if (!map.has(diaKey)) map.set(diaKey, []);
       map.get(diaKey)!.push(t);
     });
@@ -273,8 +322,24 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
         </div>
       </div>
 
+      {/* Filtro por centro y alumnos de canto */}
+      <div className="flex flex-wrap gap-2">
+        {([
+          ['TODOS', 'Todos'], ['fonoar_la_plata', 'Fonoar La Plata'], ['due_brandsen', 'DUE Brandsen'],
+          ['virtual', 'Virtual'], ['CANTO', 'Alumnos de canto'],
+        ] as [FiltroCentro, string][]).map(([id, label]) => (
+          <button key={id} onClick={() => setFiltroCentro(id)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+              filtroCentro === id
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white/80 dark:bg-white/5 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:border-indigo-400'}`}>
+            {label} <span className="opacity-70">({conteoCentro[id] || 0})</span>
+          </button>
+        ))}
+      </div>
+
       {/* Main Agenda Grid / List */}
-      {turnosFiltrados.length === 0 && googleEvents.length === 0 ? (
+      {turnosFiltrados.length === 0 && eventosGoogleDelRango.length === 0 ? (
         <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/10 p-12 text-center">
           <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-500 mx-auto flex items-center justify-center mb-3">
             <CalendarIcon size={32} />
@@ -294,9 +359,16 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Turnos clínicos de la agenda */}
+          {/* Turnos clínicos agrupados por día */}
+          {Array.from(turnosPorDia.entries()).map(([dia, delDia]) => (
+          <div key={dia} className="space-y-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 capitalize">
+              {new Date(`${dia}T12:00:00-03:00`).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {' '}· {delDia.length} turno{delDia.length === 1 ? '' : 's'}
+              {delDia.some(esCanto) ? ` · ${delDia.filter(esCanto).length} de canto` : ''}
+            </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {turnosFiltrados.map(turno => (
+            {delDia.map(turno => (
               <TargetPacienteCard
                 key={turno.id}
                 turno={turno}
@@ -310,16 +382,18 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
               />
             ))}
           </div>
+          </div>
+          ))}
 
           {/* Google Calendar Direct Synchronized Events */}
-          {googleEvents.length > 0 && (
+          {eventosGoogleDelRango.length > 0 && (
             <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
               <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-3">
                 <CalendarDays size={14} className="text-indigo-500" />
-                Eventos Externos Importados de Google Calendar ({googleEvents.length})
+                Eventos Externos Importados de Google Calendar ({eventosGoogleDelRango.length})
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {googleEvents.slice(0, 9).map(ev => {
+                {eventosGoogleDelRango.slice(0, 12).map(ev => {
                   const evDate = new Date(ev.start_datetime);
                   return (
                     <div

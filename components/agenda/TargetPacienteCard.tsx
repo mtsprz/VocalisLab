@@ -1,4 +1,6 @@
 import React from 'react';
+import { nombreCentro } from '../centros';
+import { centroTurno, esCanto } from './filtrosAgenda';
 import { User, Mic, BarChart3, Activity, FileText, Phone, Mail, ExternalLink, Calendar, Video, Clock } from 'lucide-react';
 
 interface PacienteData {
@@ -51,6 +53,8 @@ export default function TargetPacienteCard({
   const paciente = turno.pacientes;
   const pId = turno.paciente_id || paciente?.id;
   const esVirtual = turno.modalidad?.toUpperCase() === 'VIRTUAL' || Boolean(turno.meet_link);
+  const centro = nombreCentro(centroTurno(turno));
+  const canto = esCanto(turno);
 
   const fechaObj = new Date(turno.fecha_hora);
   const horaStr = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
@@ -82,10 +86,17 @@ export default function TargetPacienteCard({
               }`}>
                 {esVirtual ? 'Virtual' : 'Presencial'}
               </span>
+              {canto && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-pink-100 text-pink-800 dark:bg-pink-950/50 dark:text-pink-300 border border-pink-300 dark:border-pink-800">
+                  Canto
+                </span>
+              )}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">
               <span>{turno.motivo || turno.tipo || 'Consulta Vocal'}</span>
-              {paciente?.dni && <span>• DNI {paciente.dni}</span>}
+              {centro && !esVirtual && <span>• {centro}</span>}
+              {paciente?.obra_social && <span>• {paciente.obra_social}</span>}
+              {paciente?.dni && !String(paciente.dni).startsWith('SD-') && <span>• DNI {paciente.dni}</span>}
             </p>
           </div>
         </div>
