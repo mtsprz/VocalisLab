@@ -8,6 +8,7 @@ import FiltroModalidad, { ModalidadFiltro } from './FiltroModalidad';
 import TargetPacienteCard from './TargetPacienteCard';
 import NuevoTurnoModal from './NuevoTurnoModal';
 import ImportarAgendaFonoar from './ImportarAgendaFonoar';
+import ImportarPlanillaCanto from './ImportarPlanillaCanto';
 import { FiltroCentro, diaLocal, esCanto, esVirtual, pasaFiltroCentro, rangoVista } from './filtrosAgenda';
 import ZoomTeleconsulta from '../ZoomTeleconsulta';
 import { useAuth } from '../AuthContext';
@@ -65,6 +66,7 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
   }, [rango.desde, rango.hasta]);
 
   const [importarAbierto, setImportarAbierto] = useState(false);
+  const [planillaAbierta, setPlanillaAbierta] = useState(false);
 
   const cargarAgenda = async () => {
     setLoading(true);
@@ -242,6 +244,13 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
             title="Pegar el mail «Fonoar: Turnos del …»"
           >
             <ClipboardPaste size={16} /> Importar agenda Fonoar
+          </button>
+          <button
+            onClick={() => setPlanillaAbierta(true)}
+            className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 font-bold text-xs flex items-center gap-2 transition-all"
+            title="Pegar la planilla «ALUMNOS DE CANTO» (pestaña MATIAS)"
+          >
+            <ClipboardPaste size={16} /> Planilla de canto
           </button>
           <button
             onClick={() => setModalNuevoAbierto(true)}
@@ -436,6 +445,12 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
       <ImportarAgendaFonoar
         isOpen={importarAbierto}
         onClose={() => setImportarAbierto(false)}
+        onImportado={() => cargarAgenda()}
+      />
+
+      <ImportarPlanillaCanto
+        isOpen={planillaAbierta}
+        onClose={() => setPlanillaAbierta(false)}
         onImportado={() => cargarAgenda()}
       />
 

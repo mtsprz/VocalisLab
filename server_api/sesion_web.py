@@ -40,6 +40,7 @@ RUTAS_PUBLICAS = {
     "/api/telegram/webhook",        # valida su propio secreto
     "/api/agenda/importar-fonoar/script",  # script de Gmail: valida su clave
     "/api/asistente/telegram",      # webhook de Telegram: valida su secreto
+    "/api/canto/importar-planilla/script",  # script de Gmail/Drive: valida su clave
     "/api/asistente/repaso-dia",    # GitHub Actions 07:30: una vez por día
 }
 # Prefijo donde además se acepta el token de dispositivo del Companion.

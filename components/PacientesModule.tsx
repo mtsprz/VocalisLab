@@ -20,7 +20,12 @@ interface Paciente {
   activo: boolean;
   centro?: string | null;
   obra_social?: string | null;
+  tipo_atencion?: string | null;
+  datos_canto?: { horario?: string; edad?: string; pagos?: Record<string, string> } | null;
 }
+
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto',
+  'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 interface Props {
   onSelectPaciente: (id: string) => void;
@@ -58,6 +63,8 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
   const [loading, setLoading] = useState(true);
   // Ficha de archivos (informes ORL, fotos y videos en Google Drive).
   const [archivosDe, setArchivosDe] = useState<Paciente | null>(null);
+  // Pacientes de voz / alumnos de canto (tipo_atencion; la planilla de Fonoar marca 'canto').
+  const [filtroTipo, setFiltroTipo] = useState<'todos' | 'voz' | 'canto'>('todos');
 
   useEffect(() => { loadPacientes(); }, [buscar]);
 
@@ -126,6 +133,19 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
 
   return (
     <div className="max-w-5xl mx-auto w-full space-y-4">
+      {/* Pacientes de voz / alumnos de canto */}
+      <div className="flex gap-2">
+        {([['todos', 'Todos'], ['voz', 'Pacientes de voz'], ['canto', 'Alumnos de canto']] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setFiltroTipo(id)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${filtroTipo === id
+              ? 'bg-indigo-600 text-white border-indigo-600'
+              : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10'}`}>
+            {label} <span className="opacity-70">({id === 'todos' ? pacientes.length
+              : pacientes.filter(p => id === 'canto' ? p.tipo_atencion === 'canto' : p.tipo_atencion !== 'canto').length})</span>
+          </button>
+        ))}
+      </div>
+
       {/* Header Search & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1 relative min-w-0">
@@ -248,9 +268,9 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
               {loading ? (
                 <tr><td colSpan={6} className="text-center py-10 text-slate-400 font-medium">Cargando nómina de pacientes...</td></tr>
-              ) : pacientes.length === 0 ? (
+              ) : pacientes.filter(p => filtroTipo === 'todos' || (filtroTipo === 'canto' ? p.tipo_atencion === 'canto' : p.tipo_atencion !== 'canto')).length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-10 text-slate-400 font-medium">No se encontraron pacientes registrados</td></tr>
-              ) : pacientes.map(p => (
+              ) : pacientes.filter(p => filtroTipo === 'todos' || (filtroTipo === 'canto' ? p.tipo_atencion === 'canto' : p.tipo_atencion !== 'canto')).map(p => (
                 <tr key={p.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3.5">
                     <button
@@ -274,6 +294,12 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                     >
                       {p.nombre_completo}
                     </button>
+                    {p.tipo_atencion === 'canto' && (
+                      <span className="text-[10px] text-pink-700 dark:text-pink-300 font-semibold">
+                        Canto{p.datos_canto?.horario ? ` · ${p.datos_canto.horario}` : ''}
+                        {p.datos_canto?.pagos?.[MESES[new Date().getMonth()]] ? ` · ${MESES[new Date().getMonth()]}: ${p.datos_canto.pagos[MESES[new Date().getMonth()]]}` : ''}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.dni && !p.dni.startsWith('SD-') ? p.dni : '—'}</td>
                   <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.sexo}</td>

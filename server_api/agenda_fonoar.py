@@ -222,7 +222,8 @@ def _sb():
     return supabase
 
 
-_CAMPOS_NUEVOS = ("centro", "obra_social", "origen")
+# Columnas de las migraciones de centros y de canto (pueden faltar en la base).
+_CAMPOS_NUEVOS = ("centro", "obra_social", "origen", "tipo_atencion", "datos_canto")
 
 
 def _insertar_paciente(sb, datos: dict) -> tuple:
@@ -306,6 +307,8 @@ def importar_agenda(agenda: dict, centro: str = CENTRO_FONOAR, simular: bool = F
                 cambios["obra_social"] = t["obra_social"]
             if not paciente.get("centro"):
                 cambios["centro"] = centro
+            if t.get("motivo") == "Clase de canto" and paciente.get("tipo_atencion") != "canto":
+                cambios["tipo_atencion"] = "canto"
             if cambios:
                 item["accion_paciente"] = "actualizado"
                 if not simular:
@@ -319,6 +322,7 @@ def importar_agenda(agenda: dict, centro: str = CENTRO_FONOAR, simular: bool = F
                     "nombre_completo": t["nombre"], "nombre": t["nombre"], "dni": None,
                     "telefono": t.get("telefono", ""), "centro": centro,
                     "obra_social": t.get("obra_social", ""), "origen": "agenda_fonoar",
+                    "tipo_atencion": "canto" if t.get("motivo") == "Clase de canto" else "voz",
                     "notas_iniciales": f"Alta automática desde la agenda de Fonoar ({fecha}).",
                 })
                 resultado["avisos"] += avisos
