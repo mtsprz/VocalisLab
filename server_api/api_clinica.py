@@ -123,7 +123,9 @@ def _db_delete(table: str, record_id: str):
 @router.post("/api/pacientes")
 async def crear_paciente(
     nombre_completo: str = Form(...),
-    dni: str = Form(...),
+    # DNI opcional: la agenda de Fonoar no lo trae (requiere la migración
+    # supabase/migracion_2026_11_centros.sql que quita el NOT NULL).
+    dni: str = Form(""),
     fecha_nacimiento: str = Form(""),
     sexo: str = Form(""),
     telefono: str = Form(""),
@@ -132,12 +134,14 @@ async def crear_paciente(
     demanda_vocal_horas: int = Form(0),
     derivador: str = Form(""),
     notas_iniciales: str = Form(""),
+    centro: str = Form(""),
+    obra_social: str = Form(""),
 ):
     data = {
         "nombre_completo": nombre_completo,
         # Columna legacy del schema v1 (NOT NULL): se mantiene sincronizada
         "nombre": nombre_completo,
-        "dni": dni,
+        "dni": dni.strip() or None,
         "sexo": sexo,
         "telefono": telefono,
         "email": email,
@@ -148,7 +152,21 @@ async def crear_paciente(
     }
     if fecha_nacimiento:
         data["fecha_nacimiento"] = fecha_nacimiento
-    result = _db_insert("pacientes", data)
+    if centro:
+        data["centro"] = centro
+    if obra_social:
+        data["obra_social"] = obra_social
+    if not supabase:
+        return JSONResponse(content=_db_insert("pacientes", data))
+    # Tolera una base sin la migración de centros (ver agenda_fonoar).
+    from agenda_fonoar import _insertar_paciente
+    try:
+        result, avisos = _insertar_paciente(supabase, data)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error insertando en pacientes: {str(e)}")
+    if avisos:
+        result = {**result, "avisos": avisos}
     return JSONResponse(content=result)
 
 
@@ -199,12 +217,14 @@ async def actualizar_paciente(
     derivador: str = Form(None),
     notas_iniciales: str = Form(None),
     demanda_vocal_horas: str = Form(None),
+    centro: str = Form(None),
+    obra_social: str = Form(None),
 ):
     data = {}
     if nombre_completo is not None:
         data["nombre_completo"] = nombre_completo
         data["nombre"] = nombre_completo  # columna legacy v1, mantener sincronizada
-    if dni is not None: data["dni"] = dni
+    if dni is not None: data["dni"] = dni.strip() or None
     if fecha_nacimiento is not None: data["fecha_nacimiento"] = fecha_nacimiento
     if sexo is not None: data["sexo"] = sexo
     if telefono is not None: data["telefono"] = telefono
@@ -217,7 +237,14 @@ async def actualizar_paciente(
             data["demanda_vocal_horas"] = int(float(demanda_vocal_horas))
         except Exception:
             pass
-    result = _db_update("pacientes", paciente_id, data)
+    nuevos = {}
+    if centro is not None: nuevos["centro"] = centro or None
+    if obra_social is not None: nuevos["obra_social"] = obra_social or None
+    result = _db_update("pacientes", paciente_id, data) if data else {"id": paciente_id}
+    if nuevos and supabase:
+        from agenda_fonoar import _actualizar_paciente
+        avisos = _actualizar_paciente(supabase, paciente_id, nuevos)
+        result = {**result, **({} if avisos else nuevos), **({"avisos": avisos} if avisos else {})}
     return JSONResponse(content=result)
 
 

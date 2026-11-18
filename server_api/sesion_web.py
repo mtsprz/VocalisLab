@@ -38,6 +38,7 @@ RUTAS_PUBLICAS = {
     "/api/companion/pair",          # el teléfono aún no tiene token
     "/api/companion/google/start",  # login del teléfono en el navegador
     "/api/telegram/webhook",        # valida su propio secreto
+    "/api/agenda/importar-fonoar/script",  # script de Gmail: valida su clave
 }
 # Prefijo donde además se acepta el token de dispositivo del Companion.
 PREFIJO_COMPANION = "/api/companion/"

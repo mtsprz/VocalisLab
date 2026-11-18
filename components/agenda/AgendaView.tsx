@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar as CalendarIcon, Clock, Plus, Video, Building2, ChevronLeft, ChevronRight,
-  RefreshCw, Users, CheckCircle2, AlertCircle, ExternalLink, Filter, CalendarDays, ListFilter
+  RefreshCw, Users, CheckCircle2, AlertCircle, ExternalLink, Filter, CalendarDays, ListFilter,
+  ClipboardPaste,
 } from 'lucide-react';
 import FiltroModalidad, { ModalidadFiltro } from './FiltroModalidad';
 import TargetPacienteCard from './TargetPacienteCard';
 import NuevoTurnoModal from './NuevoTurnoModal';
+import ImportarAgendaFonoar from './ImportarAgendaFonoar';
 import ZoomTeleconsulta from '../ZoomTeleconsulta';
 import { useAuth } from '../AuthContext';
 
@@ -35,6 +37,8 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
   useEffect(() => {
     cargarAgenda();
   }, [fechaActual]);
+
+  const [importarAbierto, setImportarAbierto] = useState(false);
 
   const cargarAgenda = async () => {
     setLoading(true);
@@ -182,6 +186,13 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
             title="Recargar citas"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={() => setImportarAbierto(true)}
+            className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 font-bold text-xs flex items-center gap-2 transition-all"
+            title="Pegar el mail «Fonoar: Turnos del …»"
+          >
+            <ClipboardPaste size={16} /> Importar agenda Fonoar
           </button>
           <button
             onClick={() => setModalNuevoAbierto(true)}
@@ -346,6 +357,13 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
           )}
         </div>
       )}
+
+      {/* Importar la agenda que manda Fonoar por mail */}
+      <ImportarAgendaFonoar
+        isOpen={importarAbierto}
+        onClose={() => setImportarAbierto(false)}
+        onImportado={() => cargarAgenda()}
+      />
 
       {/* Modal Nuevo / Editar Turno */}
       <NuevoTurnoModal

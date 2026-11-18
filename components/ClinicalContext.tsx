@@ -197,6 +197,9 @@ export function ClinicalProvider({ children }: { children: ReactNode }) {
           email: p.email || '',
           ocupacion: p.ocupacion || '',
           demanda_vocal_horas: p.demanda_vocal_horas || 4,
+          // Centro: en Fonoar no se genera cuadernillo (usan el suyo).
+          centro: p.centro || '',
+          obra_social: p.obra_social || '',
         });
         markStep('pacientes');
       }

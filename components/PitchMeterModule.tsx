@@ -31,8 +31,18 @@ interface KeyInfo {
   freq: number;
 }
 
-export default function PitchMeterModule() {
+interface PitchMeterProps {
+  /** Dónde se usa: módulo propio o dentro de la anamnesis (queda registrado). */
+  contexto?: 'pitchmeter' | 'anamnesis';
+}
+
+export default function PitchMeterModule({ contexto = 'pitchmeter' }: PitchMeterProps = {}) {
   const clinical = useClinical();
+  // Guardado en la base: antes "Volcar a historia clínica" solo quedaba en el
+  // navegador y la F0 no aparecía en ningún informe.
+  const [guardado, setGuardado] = useState<{ estado: '' | 'guardando' | 'ok' | 'error'; msg: string }>({ estado: '', msg: '' });
+  const medicionGuardadaRef = useRef<number>(-1);
+  const inicioRef = useRef<number>(0);
 
   const [active, setActive] = useState(false);
   const [currentFreq, setCurrentFreq] = useState<number | null>(null);
@@ -161,6 +171,9 @@ export default function PitchMeterModule() {
       analyserRef.current = analyser;
 
       historyRef.current = [];
+      inicioRef.current = Date.now();
+      medicionGuardadaRef.current = -1;
+      setGuardado({ estado: '', msg: '' });
       setHistory([]);
       setActive(true);
 
@@ -216,6 +229,47 @@ export default function PitchMeterModule() {
     };
   }, [pitchHistory]);
 
+  /** Guarda la medición en la historia del paciente (una vez por medición). */
+  const guardarEnBase = async () => {
+    if (!stats.median) return;
+    const pid = clinical.data.paciente?.id;
+    if (!pid) {
+      setGuardado({ estado: 'error', msg: 'Elegí un paciente en "Pacientes" para guardar la F0 en su historia.' });
+      return;
+    }
+    if (medicionGuardadaRef.current === stats.count) {
+      setGuardado({ estado: 'ok', msg: 'Esta medición ya está guardada en la historia del paciente.' });
+      return;
+    }
+    // Desvío en semitonos respecto de la mediana y contorno resumido (≤ 600 puntos).
+    const st = pitchHistory.map(f => 12 * Math.log2(f / (stats.median as number)));
+    const media = st.reduce((a, b) => a + b, 0) / (st.length || 1);
+    const sdSt = Math.sqrt(st.reduce((a, b) => a + (b - media) ** 2, 0) / (st.length || 1));
+    const paso = Math.max(1, Math.ceil(pitchHistory.length / 600));
+    const contorno = pitchHistory.filter((_, i) => i % paso === 0).map(f => Math.round(f * 10) / 10);
+    setGuardado({ estado: 'guardando', msg: 'Guardando en la historia del paciente…' });
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/companion/pitchmeter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paciente_id: pid,
+          contexto,
+          duracion_s: inicioRef.current ? (Date.now() - inicioRef.current) / 1000 : null,
+          f0: { mean: stats.mean, median: stats.median, p5: stats.p5, p95: stats.p95,
+                min: stats.min, max: stats.max, sd_st: Math.round(sdSt * 100) / 100 },
+          contorno,
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error(d.detail || `Error ${r.status}`);
+      medicionGuardadaRef.current = stats.count;
+      setGuardado({ estado: 'ok', msg: `F0 conversacional ${stats.median} Hz guardada en la historia del paciente.` });
+    } catch (e: any) {
+      setGuardado({ estado: 'error', msg: `No se guardó: ${e?.message || 'error de conexión'}. Probá de nuevo con el botón.` });
+    }
+  };
+
   const saveToClinicalContext = () => {
     if (stats.mean) {
       clinical.setAcustica({
@@ -226,6 +280,7 @@ export default function PitchMeterModule() {
         f0_max: stats.max || undefined,
       });
       clinical.markStep('pitch');
+      guardarEnBase();
     }
   };
 
@@ -469,13 +524,18 @@ export default function PitchMeterModule() {
             </div>}
       </div>
 
-      {/* Button to manually persist to clinical context */}
-      <div className="flex justify-end">
+      {/* Guardado en la historia del paciente */}
+      <div className="flex justify-end items-center gap-3 flex-wrap">
+        {guardado.msg && (
+          <p className={`text-xs font-semibold ${guardado.estado === 'error' ? 'text-red-600' : guardado.estado === 'ok' ? 'text-emerald-600' : 'text-gray-500'}`}>
+            {guardado.estado === 'ok' && <CheckCircle2 size={13} className="inline mr-1" />}{guardado.msg}
+          </p>
+        )}
         <button
           onClick={saveToClinicalContext}
           className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20"
         >
-          <Save size={15} /> Volcar F0 Conversacional a Historia Clínica
+          <Save size={15} /> Guardar F0 en la historia del paciente
         </button>
       </div>
     </div>

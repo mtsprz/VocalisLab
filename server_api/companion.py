@@ -1312,6 +1312,75 @@ async def informe_evolucion(request: Request):
 
 
 # ─── Sesiones web (grabador de emergencia PWA): multipart directo ───
+def _num_o_none(v, minimo=None, maximo=None):
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return None
+    if x != x or (minimo is not None and x < minimo) or (maximo is not None and x > maximo):
+        return None
+    return round(x, 2)
+
+
+@router.post("/api/companion/pitchmeter")
+async def guardar_pitchmeter(request: Request):
+    """Guarda en la base la F0 conversacional medida con PitchMeter (web).
+
+    Antes el botón "Volcar a historia clínica" solo la dejaba en el navegador:
+    se perdía al cambiar de equipo y no llegaba a ningún informe. Se guarda
+    con el mismo formato que las sesiones del Companion (sesión + acústica de
+    tarea "conversacion_espontanea"), así aparece en la evolución de F0, en
+    "Voz y sesiones" y en el PDF de evolución.
+
+    Body JSON: {paciente_id, recorded_at?, duracion_s?, contexto?
+    ("anamnesis"|"pitchmeter"), f0: {mean, median, p5, p95, min, max, sd_st},
+    contorno?: [hz, ...]}"""
+    prof, _actor = _auth_dual(request, "")
+    body = await request.json()
+    pid = str(body.get("paciente_id") or "").strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="Elegí un paciente antes de guardar la F0.")
+    f0 = body.get("f0") or {}
+    mediana = _num_o_none(f0.get("median"), 50, 1200)
+    if mediana is None:
+        raise HTTPException(status_code=400, detail="No hay F0 válida para guardar (medí unos segundos de habla).")
+    sb = _sb()
+    if not sb:
+        raise HTTPException(status_code=503, detail="Supabase no configurado")
+    if not (sb.table("pacientes").select("id").eq("id", pid).execute().data or []):
+        raise HTTPException(status_code=404, detail="Paciente inexistente")
+    contexto = str(body.get("contexto") or "pitchmeter")[:30]
+    contorno = [v for v in (_num_o_none(x, 50, 1200) for x in (body.get("contorno") or [])[:600])
+                if v is not None]
+    ses = sb.table("companion_sessions").insert({
+        "patient_id": pid, "profesional_google_id": prof,
+        "device_id": None, "device_session_id": f"pm-{secrets.token_hex(6)}",
+        "recorded_at": body.get("recorded_at") or _now_iso(),
+        "audio_storage_path": None,
+        "audio_duration_sec": _num_o_none(body.get("duracion_s"), 0, 7200),
+        "status": "processed", "dsp_version": "web-pitchmeter/1.0",
+        "device_info": {"origen": "pitchmeter", "contexto": contexto},
+        "consent_recorded": False,
+    }).execute()
+    sid = (ses.data or [{}])[0].get("id")
+    if not sid:
+        raise HTTPException(status_code=500, detail="No se pudo crear la sesión")
+    sb.table("session_acoustics").insert({
+        "session_id": sid, "task_type": "conversacion_espontanea",
+        "f0_mean_hz": _num_o_none(f0.get("mean"), 50, 1200),
+        "f0_median_hz": mediana,
+        "f0_p5_hz": _num_o_none(f0.get("p5"), 50, 1200),
+        "f0_p95_hz": _num_o_none(f0.get("p95"), 50, 1200),
+        "f0_min_hz": _num_o_none(f0.get("min"), 50, 1200),
+        "f0_max_hz": _num_o_none(f0.get("max"), 50, 1200),
+        "f0_sd_semitones": _num_o_none(f0.get("sd_st"), 0, 48),
+        "f0_contour": contorno,
+        "dsp_version": "web-pitchmeter/1.0",
+        "validada": True,
+    }).execute()
+    return {"ok": True, "session_id": sid, "f0_median_hz": mediana, "contexto": contexto}
+
+
 @router.post("/api/companion/sesiones-web")
 async def crear_sesion_web(
     user_id: str = Form(""),

@@ -3,6 +3,7 @@ import { FileText, Download, Loader2, CheckCircle2, Settings, Sparkles, AlertCir
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
 import { firmaProfesional } from './clinicalUtils';
+import { centroPorId } from './centros';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -389,6 +390,8 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   };
 
   const pacienteNombreClinico = clinical.data.paciente?.nombre_completo || '';
+  // Pacientes de centros con cuadernillo propio (Fonoar): no se genera uno.
+  const centroPaciente = centroPorId(clinical.data.paciente?.centro);
   // El nombre del PDF: editable, pre-cargado desde la ficha clínica.
   const pacienteNombre = nombrePaciente || pacienteNombreClinico;
   const pacienteTelefono = (clinical.data.paciente?.telefono || '').replace(/\D/g, '');
@@ -718,6 +721,10 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   };
 
   const handleGenerate = async () => {
+    if (centroPaciente?.cuadernilloPropio && !confirm(
+      `${pacienteNombreClinico || 'Este paciente'} se atiende en ${centroPaciente.nombre}, que entrega su propio cuadernillo.\n\n¿Generar igual un cuadernillo de la app?`)) {
+      return;
+    }
     if (!selectedExercises.length) {
       alert('Seleccioná al menos un ejercicio terapéutico.');
       return;
@@ -936,6 +943,17 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6">
+      {centroPaciente?.cuadernilloPropio && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+          <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+            {pacienteNombreClinico || 'Este paciente'} se atiende en {centroPaciente.nombre}: usa el cuadernillo que entrega el centro.
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-300/90 mt-1">
+            No hace falta generar uno. Seguí su evolución con Anamnesis, Escalas, Análisis Praat, PitchMeter y Voz y sesiones.
+            Si igual lo necesitás, podés generarlo (se pide confirmación).
+          </p>
+        </div>
+      )}
       {/* Alerta de seguridad clínica (contraindicaciones vs diagnóstico) */}
       {alertasSeguridad.length > 0 && (
         <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-1">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Search, Edit2, Trash2, Phone, Mail, Save, X, UserCheck, MessageCircle } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
+import { CENTROS, nombreCentro } from './centros';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -16,6 +17,8 @@ interface Paciente {
   derivador: string;
   notas_iniciales: string;
   activo: boolean;
+  centro?: string | null;
+  obra_social?: string | null;
 }
 
 interface Props {
@@ -25,6 +28,7 @@ interface Props {
 const EMPTY_FORM = {
   nombre_completo: '', dni: '', fecha_nacimiento: '', sexo: 'Femenino',
   telefono: '', email: '', ocupacion: '', derivador: '', notas_iniciales: '',
+  centro: '', obra_social: '',
 };
 
 function FormField({ label, value, onChange, type = 'text', required = false }: {
@@ -74,7 +78,8 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
   };
 
   const handleSave = async () => {
-    if (!form.nombre_completo || !form.dni) return alert('Nombre y DNI son obligatorios');
+    // DNI opcional: los pacientes que llegan por la agenda de Fonoar no lo traen.
+    if (!form.nombre_completo) return alert('El nombre es obligatorio');
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => fd.append(k, v));
     try {
@@ -93,7 +98,7 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
   const handleEdit = (p: Paciente) => {
     setForm({
       nombre_completo: p.nombre_completo,
-      dni: p.dni,
+      dni: p.dni || '',
       fecha_nacimiento: p.fecha_nacimiento || '',
       sexo: p.sexo || 'Femenino',
       telefono: p.telefono || '',
@@ -101,6 +106,8 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
       ocupacion: p.ocupacion || '',
       derivador: p.derivador || '',
       notas_iniciales: p.notas_iniciales || '',
+      centro: p.centro || '',
+      obra_social: p.obra_social || '',
     });
     setEditId(p.id);
     setShowForm(true);
@@ -153,7 +160,21 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField label="Nombre completo" value={form.nombre_completo} onChange={set('nombre_completo')} required />
-            <FormField label="DNI / Cédula" value={form.dni} onChange={set('dni')} required />
+            <FormField label="DNI / Cédula" value={form.dni} onChange={set('dni')} />
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Centro de atención</label>
+              <select
+                value={form.centro}
+                onChange={e => setForm({ ...form, centro: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              >
+                <option value="">Sin asignar</option>
+                {CENTROS.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre}{c.cuadernilloPropio ? ' (usa su cuadernillo)' : ''}</option>
+                ))}
+              </select>
+            </div>
+            <FormField label="Obra social" value={form.obra_social} onChange={set('obra_social')} />
             <FormField label="Fecha de nacimiento" value={form.fecha_nacimiento} onChange={set('fecha_nacimiento')} type="date" />
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
@@ -217,7 +238,7 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                 <th className="px-4 py-3.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">DNI</th>
                 <th className="px-4 py-3.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sexo</th>
                 <th className="px-4 py-3.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Teléfono</th>
-                <th className="px-4 py-3.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ocupación</th>
+                <th className="px-4 py-3.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Centro / O. social</th>
                 <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
@@ -239,6 +260,8 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                           sexo: p.sexo,
                           ocupacion: p.ocupacion,
                           demanda_vocal_horas: 4,
+                          centro: p.centro || '',
+                          obra_social: p.obra_social || '',
                         });
                         // Hidratar anamnesis + escalas + acústica desde el backend
                         clinical.cargarPaciente(p.id).catch(() => {});
@@ -249,10 +272,13 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                       {p.nombre_completo}
                     </button>
                   </td>
-                  <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.dni}</td>
+                  <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.dni && !p.dni.startsWith('SD-') ? p.dni : '—'}</td>
                   <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.sexo}</td>
                   <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.telefono || '—'}</td>
-                  <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.ocupacion || '—'}</td>
+                  <td className="px-4 py-3.5 font-medium text-slate-700 dark:text-slate-300">
+                    {nombreCentro(p.centro) || '—'}
+                    {p.obra_social && <span className="block text-[11px] text-slate-500">{p.obra_social}</span>}
+                  </td>
                   <td className="px-4 py-3.5 text-right space-x-1">
                     {p.telefono && (
                       <>

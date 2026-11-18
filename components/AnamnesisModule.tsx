@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 import InformeOrlUpload from './InformeOrlUpload';
+import PitchMeterModule from './PitchMeterModule';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -809,11 +810,13 @@ export default function AnamnesisModule({ pacienteId }: Props) {
               <canvas ref={canvasRef} width={300} height={60} className="w-full h-full" />
             </div>
 
-            {/* F0 conversacional capturada de la propia voz del paciente */}
+            {/* F0 del monitor: mide TODO lo que entra al micrófono (tu voz y la
+                del paciente), así que es solo orientativa y no se guarda. La F0
+                del paciente se mide abajo, con PitchMeter, y queda en su historia. */}
             {f0Stats && (
-              <div className="mt-2 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                  F0 conversacional: {f0Stats.mean} Hz
+              <div className="mt-2 p-2 rounded-xl bg-gray-500/10 border border-gray-500/30 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                  F0 de la entrevista (ambas voces, orientativa): {f0Stats.mean} Hz
                 </span>
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
                   mín {f0Stats.min} · máx {f0Stats.max} · n={f0Stats.count}
@@ -822,7 +825,7 @@ export default function AnamnesisModule({ pacienteId }: Props) {
             )}
             {recording && (
               <p className="mt-1.5 text-[10px] text-gray-400">
-                Midiendo F0 conversacional en vivo con la voz del paciente…
+                Midiendo F0 de la entrevista (incluye tu voz). Para la F0 del paciente usá PitchMeter, abajo.
               </p>
             )}
 
@@ -898,6 +901,20 @@ export default function AnamnesisModule({ pacienteId }: Props) {
           </div>
         </div>
       </div>
+
+      {/* F0 conversacional del paciente: parte de la evaluación inicial. Se
+          guarda en la historia (misma serie que el Companion y "Voz y sesiones"). */}
+      <details className="bg-white/80 dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 p-4 shadow-sm" open>
+        <summary className="cursor-pointer text-sm font-bold text-gray-900 dark:text-white">
+          F0 conversacional del paciente (PitchMeter)
+          <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+            Pedile que hable solo unos 30–60 s (por ejemplo, que cuente qué hizo hoy). Al detener se guarda en su historia.
+          </span>
+        </summary>
+        <div className="mt-4">
+          <PitchMeterModule contexto="anamnesis" />
+        </div>
+      </details>
     </div>
   );
 }
