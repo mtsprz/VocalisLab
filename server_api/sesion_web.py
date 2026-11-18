@@ -39,6 +39,8 @@ RUTAS_PUBLICAS = {
     "/api/companion/google/start",  # login del teléfono en el navegador
     "/api/telegram/webhook",        # valida su propio secreto
     "/api/agenda/importar-fonoar/script",  # script de Gmail: valida su clave
+    "/api/asistente/telegram",      # webhook de Telegram: valida su secreto
+    "/api/asistente/repaso-dia",    # GitHub Actions 07:30: una vez por día
 }
 # Prefijo donde además se acepta el token de dispositivo del Companion.
 PREFIJO_COMPANION = "/api/companion/"

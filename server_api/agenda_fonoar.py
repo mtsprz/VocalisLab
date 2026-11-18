@@ -351,6 +351,13 @@ def importar_agenda(agenda: dict, centro: str = CENTRO_FONOAR, simular: bool = F
                 }).execute()
         resultado["detalle"].append(item)
     resultado["avisos"] = list(dict.fromkeys(resultado["avisos"]))
+    if not simular:
+        # El asistente avisa por Telegram (no interrumpe si falla).
+        try:
+            from asistente import aviso_agenda_importada
+            aviso_agenda_importada(resultado)
+        except Exception:
+            traceback.print_exc()
     return resultado
 
 

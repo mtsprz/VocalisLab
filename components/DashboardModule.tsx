@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Calendar, FileText, Activity, Clock, AlertCircle, Sparkles, ExternalLink } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import AsistenteCard from './AsistenteCard';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -54,6 +55,7 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto w-full">
+      <AsistenteCard />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card) => (
           <button
