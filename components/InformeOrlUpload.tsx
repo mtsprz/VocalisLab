@@ -152,17 +152,23 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
     try {
       const fd = new FormData();
       fd.append('estado', estado);
-      await fetch(`${BACKEND_URL}/api/informes-orl/${id}`, { method: 'PUT', body: fd });
+      const r = await fetch(`${BACKEND_URL}/api/informes-orl/${id}`, { method: 'PUT', body: fd });
+      if (!r.ok) throw new Error(`error ${r.status}`);
       await cargarHistorial();
-    } catch { /* noop */ }
+    } catch (e: any) {
+      alert(`No se pudo cambiar el estado del informe: ${e?.message || 'sin conexión'}`);
+    }
   };
 
   const eliminar = async (id: string) => {
     if (!confirm('¿Eliminar este informe del historial?')) return;
     try {
-      await fetch(`${BACKEND_URL}/api/informes-orl/${id}`, { method: 'DELETE' });
+      const r = await fetch(`${BACKEND_URL}/api/informes-orl/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error(`error ${r.status}`);
       await cargarHistorial();
-    } catch { /* noop */ }
+    } catch (e: any) {
+      alert(`No se pudo eliminar el informe: ${e?.message || 'sin conexión'}`);
+    }
   };
 
   const estadoBadge = (estado: string) => {

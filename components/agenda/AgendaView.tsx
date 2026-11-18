@@ -109,17 +109,29 @@ export default function AgendaView({ onNavigate, onSelectPaciente, onVideoconfer
     try {
       const fd = new FormData();
       fd.append('estado', nuevoEstado);
-      await fetch(`${BACKEND_URL}/api/turnos/${turnoId}`, { method: 'PUT', body: fd });
+      const r = await fetch(`${BACKEND_URL}/api/turnos/${turnoId}`, { method: 'PUT', body: fd });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        alert(`No se pudo cambiar el estado del turno: ${d.detail || `error ${r.status}`}`);
+      }
       cargarAgenda();
-    } catch {}
+    } catch {
+      alert('No se pudo cambiar el estado del turno (sin conexión).');
+    }
   };
 
   const handleEliminarTurno = async (turnoId: string) => {
     if (!window.confirm('¿Seguro que deseas eliminar esta cita?')) return;
     try {
-      await fetch(`${BACKEND_URL}/api/turnos/${turnoId}`, { method: 'DELETE' });
+      const r = await fetch(`${BACKEND_URL}/api/turnos/${turnoId}`, { method: 'DELETE' });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        alert(`No se pudo eliminar el turno: ${d.detail || `error ${r.status}`}`);
+      }
       cargarAgenda();
-    } catch {}
+    } catch {
+      alert('No se pudo eliminar el turno (sin conexión).');
+    }
   };
 
   // Turnos del rango visible (hora de Argentina).

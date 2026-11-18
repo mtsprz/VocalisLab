@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserPlus, Search, Edit2, Trash2, Phone, Mail, Save, X, UserCheck, MessageCircle, FolderOpen } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 import { CENTROS, nombreCentro } from './centros';
@@ -65,6 +65,9 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
   const [archivosDe, setArchivosDe] = useState<Paciente | null>(null);
   // Pacientes de voz / alumnos de canto (tipo_atencion; la planilla de Fonoar marca 'canto').
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'voz' | 'canto'>('todos');
+  const [errorForm, setErrorForm] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { loadPacientes(); }, [buscar]);
 
@@ -95,14 +98,22 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
     try {
       const url = editId ? `${BACKEND_URL}/api/pacientes/${editId}` : `${BACKEND_URL}/api/pacientes`;
       const method = editId ? 'PUT' : 'POST';
-      await fetch(url, { method, body: fd });
+      setGuardando(true);
+      setErrorForm('');
+      // Antes no se miraba la respuesta: si el servidor rechazaba el cambio,
+      // el formulario se cerraba igual y parecía que no se podía editar.
+      const r = await fetch(url, { method, body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || `Error ${r.status}`);
+      if (d.avisos?.length) alert(d.avisos.join('\n'));
       setShowForm(false);
       setEditId(null);
       setForm(EMPTY_FORM);
       loadPacientes();
-    } catch (e) {
-      alert('Error guardando paciente');
+    } catch (e: any) {
+      setErrorForm(e?.message || 'No se pudo guardar el paciente.');
     }
+    setGuardando(false);
   };
 
   const handleEdit = (p: Paciente) => {
@@ -120,12 +131,19 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
       obra_social: p.obra_social || '',
     });
     setEditId(p.id);
+    setErrorForm('');
     setShowForm(true);
+    // El formulario está arriba de la lista: llevarlo a la vista.
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('¿Eliminar este paciente?')) return;
-    await fetch(`${BACKEND_URL}/api/pacientes/${id}`, { method: 'DELETE' });
+    const r = await fetch(`${BACKEND_URL}/api/pacientes/${id}`, { method: 'DELETE' }).catch(() => null);
+    if (!r || !r.ok) {
+      const d = r ? await r.json().catch(() => ({})) : {};
+      alert(`No se pudo eliminar el paciente: ${(d as any).detail || 'error de conexión'}`);
+    }
     loadPacientes();
   };
 
@@ -167,7 +185,7 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
 
       {/* Form Drawer */}
       {showForm && (
-        <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-lg transition-all">
+        <div ref={formRef} className="scroll-mt-4 bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-lg transition-all">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
             <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
               <UserCheck size={18} className="text-indigo-500" />
@@ -243,11 +261,15 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
             <button
               type="button"
               onClick={handleSave}
-              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
+              disabled={guardando}
+              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition-all disabled:opacity-60"
             >
-              <Save size={15} /> {editId ? 'Actualizar Paciente' : 'Guardar Paciente'}
+              <Save size={15} /> {guardando ? 'Guardando…' : editId ? 'Actualizar Paciente' : 'Guardar Paciente'}
             </button>
           </div>
+          {errorForm && (
+            <p className="mt-3 text-xs font-semibold text-red-600 dark:text-red-400 text-right">{errorForm}</p>
+          )}
         </div>
       )}
 
@@ -294,6 +316,12 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                     >
                       {p.nombre_completo}
                     </button>
+                    {(!p.dni || String(p.dni).startsWith('SD-') || !p.fecha_nacimiento || !p.telefono) && (
+                      <button onClick={() => handleEdit(p)} title="Completar DNI, fecha de nacimiento o teléfono"
+                        className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 hover:underline">
+                        Faltan datos: completar
+                      </button>
+                    )}
                     {p.tipo_atencion === 'canto' && (
                       <span className="text-[10px] text-pink-700 dark:text-pink-300 font-semibold">
                         Canto{p.datos_canto?.horario ? ` · ${p.datos_canto.horario}` : ''}

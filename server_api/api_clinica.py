@@ -120,6 +120,21 @@ def _db_delete(table: str, record_id: str):
 
 # ─── PACIENTES ──────────────────────────────────────────────
 
+def _es_dni_duplicado(texto) -> bool:
+    t = str(texto or "").lower()
+    return "dni" in t and ("duplicate" in t or "23505" in t or "already exists" in t)
+
+
+def _mensaje_paciente(texto) -> str:
+    """Error de la base traducido a algo que se pueda corregir."""
+    if _es_dni_duplicado(texto):
+        return "Ya hay otro paciente con ese DNI. Revisá si es la misma persona."
+    t = str(texto or "")
+    if "date" in t.lower() and "invalid" in t.lower():
+        return "La fecha de nacimiento no es válida."
+    return f"No se pudo guardar el paciente: {t[:200]}"
+
+
 @router.post("/api/pacientes")
 async def crear_paciente(
     nombre_completo: str = Form(...),
@@ -164,7 +179,8 @@ async def crear_paciente(
         result, avisos = _insertar_paciente(supabase, data)
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error insertando en pacientes: {str(e)}")
+        raise HTTPException(status_code=409 if _es_dni_duplicado(str(e)) else 500,
+                            detail=_mensaje_paciente(str(e)))
     if avisos:
         result = {**result, "avisos": avisos}
     return JSONResponse(content=result)
@@ -225,10 +241,13 @@ async def actualizar_paciente(
         data["nombre_completo"] = nombre_completo
         data["nombre"] = nombre_completo  # columna legacy v1, mantener sincronizada
     if dni is not None: data["dni"] = dni.strip() or None
-    if fecha_nacimiento is not None: data["fecha_nacimiento"] = fecha_nacimiento
+    # Fecha vacía → NULL (antes se mandaba "" y la base rechazaba toda la
+    # edición: pacientes de la agenda de Fonoar, que no traen fecha, no se
+    # podían editar).
+    if fecha_nacimiento is not None: data["fecha_nacimiento"] = fecha_nacimiento.strip() or None
     if sexo is not None: data["sexo"] = sexo
     if telefono is not None: data["telefono"] = telefono
-    if email is not None: data["email"] = email
+    if email is not None: data["email"] = email.strip()
     if ocupacion is not None: data["ocupacion"] = ocupacion
     if derivador is not None: data["derivador"] = derivador
     if notas_iniciales is not None: data["notas_iniciales"] = notas_iniciales
@@ -240,7 +259,11 @@ async def actualizar_paciente(
     nuevos = {}
     if centro is not None: nuevos["centro"] = centro or None
     if obra_social is not None: nuevos["obra_social"] = obra_social or None
-    result = _db_update("pacientes", paciente_id, data) if data else {"id": paciente_id}
+    try:
+        result = _db_update("pacientes", paciente_id, data) if data else {"id": paciente_id}
+    except HTTPException as e:
+        raise HTTPException(status_code=409 if _es_dni_duplicado(e.detail) else 500,
+                            detail=_mensaje_paciente(e.detail))
     if nuevos and supabase:
         from agenda_fonoar import _actualizar_paciente
         avisos = _actualizar_paciente(supabase, paciente_id, nuevos)
@@ -1510,11 +1533,14 @@ async def dashboard():
         })
 
     try:
-        hoy = datetime.now().strftime("%Y-%m-%d")
-        mes_inicio = datetime.now().replace(day=1).strftime("%Y-%m-%d")
+        # Hora de Argentina (el servidor corre en UTC: a la noche contaba el día siguiente).
+        from datetime import timezone as _tz
+        ahora_ar = datetime.now(_tz(timedelta(hours=-3)))
+        hoy = ahora_ar.strftime("%Y-%m-%d")
+        mes_inicio = ahora_ar.replace(day=1).strftime("%Y-%m-%d")
 
         pacientes = supabase.table("pacientes").select("id", count="exact").eq("activo", True).execute()
-        turnos_hoy = supabase.table("turnos").select("id", count="exact").gte("fecha_hora", hoy).lt("fecha_hora", hoy + "T23:59:59").execute()
+        turnos_hoy = supabase.table("turnos").select("id", count="exact").gte("fecha_hora", hoy + "T00:00:00-03:00").lte("fecha_hora", hoy + "T23:59:59-03:00").execute()
         evaluaciones = supabase.table("evaluaciones_clinicas").select("id", count="exact").gte("fecha", mes_inicio).execute()
         analisis = supabase.table("analisis_acusticos").select("id", count="exact").gte("fecha", mes_inicio).execute()
 

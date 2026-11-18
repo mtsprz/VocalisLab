@@ -28,8 +28,10 @@ export default function DashboardModule({ onNavigate, onSelectPaciente }: Dashbo
       if (r.ok) setStats(await r.json());
     } catch {}
     try {
-      const hoy = new Date().toISOString().split('T')[0];
-      const r = await fetch(`${BACKEND_URL}/api/turnos?fecha_desde=${hoy}T00:00:00&fecha_hasta=${hoy}T23:59:59`);
+      // Hoy en hora de Argentina (antes en UTC: a la noche mostraba los de mañana).
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+      const q = new URLSearchParams({ fecha_desde: `${hoy}T00:00:00-03:00`, fecha_hasta: `${hoy}T23:59:59-03:00` });
+      const r = await fetch(`${BACKEND_URL}/api/turnos?${q}`);
       if (r.ok) setTurnos(await r.json());
     } catch {}
     setLoading(false);

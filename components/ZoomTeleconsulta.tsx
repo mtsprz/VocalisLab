@@ -82,11 +82,14 @@ export default function ZoomTeleconsulta({ turno, pacienteNombre, onClose, onSal
     try {
       const fd = new FormData();
       fd.append('notas', notas);
-      await fetch(`${BACKEND_URL}/api/turnos/${turno.id}`, { method: 'PUT', body: fd });
+      const r = await fetch(`${BACKEND_URL}/api/turnos/${turno.id}`, { method: 'PUT', body: fd });
+      if (!r.ok) throw new Error(`error ${r.status}`);
       setNotaGuardada(true);
       setTimeout(() => setNotaGuardada(false), 3000);
       onSalaActualizada();
-    } catch {}
+    } catch (e: any) {
+      alert(`No se pudieron guardar las notas: ${e?.message || 'sin conexión'}`);
+    }
     setGuardandoNota(false);
   };
 

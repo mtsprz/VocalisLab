@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, User, Video, Building2, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { ZONA_AR, diaLocal } from './filtrosAgenda';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -30,7 +31,8 @@ export default function NuevoTurnoModal({
   const { user } = useAuth();
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
   const [pacienteId, setPacienteId] = useState(pacientePreseleccionadoId || '');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  // Fechas en hora de Argentina (toISOString es UTC: después de las 21 h daba el día siguiente).
+  const [fecha, setFecha] = useState(diaLocal(new Date()));
   const [horaInicio, setHoraInicio] = useState('10:00');
   const [duracionMin, setDuracionMin] = useState(45);
   const [modalidad, setModalidad] = useState<'PRESENCIAL' | 'VIRTUAL'>('PRESENCIAL');
@@ -51,8 +53,8 @@ export default function NuevoTurnoModal({
         if (turnoEditar.paciente_id) setPacienteId(turnoEditar.paciente_id);
         if (turnoEditar.fecha_hora) {
           const d = new Date(turnoEditar.fecha_hora);
-          setFecha(d.toISOString().split('T')[0]);
-          setHoraInicio(d.toTimeString().slice(0, 5));
+          setFecha(diaLocal(d));
+          setHoraInicio(d.toLocaleTimeString('en-GB', { timeZone: ZONA_AR, hour: '2-digit', minute: '2-digit' }));
         }
         if (turnoEditar.duracion_min) setDuracionMin(turnoEditar.duracion_min);
         if (turnoEditar.modalidad) setModalidad(turnoEditar.modalidad.toUpperCase() === 'VIRTUAL' ? 'VIRTUAL' : 'PRESENCIAL');
@@ -89,7 +91,9 @@ export default function NuevoTurnoModal({
     setErrorMsg('');
 
     try {
-      const fechaHoraIso = `${fecha}T${horaInicio}:00`;
+      // Con zona horaria: sin ella la base la tomaba como UTC y el turno
+      // quedaba 3 horas antes (15:00 se veía 12:00).
+      const fechaHoraIso = `${fecha}T${horaInicio}:00-03:00`;
 
       const fd = new FormData();
       if (!turnoEditar) fd.append('paciente_id', pacienteId);
