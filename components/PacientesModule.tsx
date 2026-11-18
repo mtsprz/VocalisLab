@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Search, Edit2, Trash2, Phone, Mail, Save, X, UserCheck, MessageCircle } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, Phone, Mail, Save, X, UserCheck, MessageCircle, FolderOpen } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
 import { CENTROS, nombreCentro } from './centros';
+import ArchivosPaciente from './ArchivosPaciente';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -55,6 +56,8 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
+  // Ficha de archivos (informes ORL, fotos y videos en Google Drive).
+  const [archivosDe, setArchivosDe] = useState<Paciente | null>(null);
 
   useEffect(() => { loadPacientes(); }, [buscar]);
 
@@ -309,6 +312,13 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
                       </a>
                     )}
                     <button
+                      onClick={() => setArchivosDe(p)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                      title="Archivos: informes ORL, fotos y videos"
+                    >
+                      <FolderOpen size={15} />
+                    </button>
+                    <button
                       onClick={() => handleEdit(p)}
                       className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                       title="Editar datos"
@@ -329,6 +339,7 @@ export default function PacientesModule({ onSelectPaciente }: Props) {
           </table>
         </div>
       </div>
+      {archivosDe && <ArchivosPaciente paciente={archivosDe} onClose={() => setArchivosDe(null)} />}
     </div>
   );
 }

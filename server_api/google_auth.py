@@ -29,6 +29,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/gmail.send",
+    # Ficha del paciente: solo los archivos que crea la app (archivos_drive.py).
+    "https://www.googleapis.com/auth/drive.file",
 ]
 
 _tokens_store: dict = {}

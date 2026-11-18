@@ -379,6 +379,8 @@ app.include_router(whatsapp_cloud_router)
 app.include_router(gmail_api_router)
 from agenda_fonoar import router as agenda_fonoar_router
 app.include_router(agenda_fonoar_router)
+from archivos_drive import router as archivos_drive_router
+app.include_router(archivos_drive_router)
 try:
     from companion import router as companion_router, start_companion_worker
     app.include_router(companion_router)
