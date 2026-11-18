@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Calendar, Users, FileText, Mic, BarChart3, Music,
   Stethoscope, Activity, ChevronRight, Menu, X, Sun, Moon, Sparkles, LogOut,
-  AudioWaveform
+  AudioWaveform, Video
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginScreen from './LoginScreen';
@@ -16,6 +16,7 @@ import EscalasModule from './EscalasModule';
 import AnalisisModule from './AnalisisModule';
 import CuadernilloModule from './CuadernilloModule';
 import PitchMeterModule from './PitchMeterModule';
+import SalaVirtualModule from './sala/SalaVirtualModule';
 import RecomendacionIAModule from './RecomendacionIAModule';
 import VideoconferenciaModule from './VideoconferenciaModule';
 import CloudflareImageGenerator from './CloudflareImageGenerator';
@@ -35,6 +36,7 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
   { id: 'grabador', label: 'Grabar / subir audio', icon: <Mic size={20} /> },
   { id: 'recomendacion', label: 'Motor Terapéutico', icon: <Sparkles size={20} /> },
   { id: 'pitch', label: 'Pitch Meter', icon: <Music size={20} /> },
+  { id: 'sala', label: 'Sala virtual', icon: <Video size={20} /> },
   { id: 'cuadernillo', label: 'Cuadernillo', icon: <FileText size={20} /> },
   { id: 'imagenes', label: 'Generador Imagen', icon: <Sparkles size={20} /> },
 ];
@@ -128,6 +130,8 @@ function AppInner() {
             }}
           />
         );
+      case 'sala':
+        return <SalaVirtualModule />;
       case 'pitch':
         return <PitchMeterModule />;
       case 'cuadernillo':

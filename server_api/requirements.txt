@@ -1,5 +1,7 @@
 fastapi==0.115.0
 uvicorn==0.30.0
+# WebSocket de la sala virtual (uvicorn lo necesita para /ws/...).
+websockets==13.1
 praat-parselmouth==0.4.3
 numpy==1.26.4
 scipy==1.12.0

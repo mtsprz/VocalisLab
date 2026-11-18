@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./src/index.css";
 import App from "./components/App";
+import SalaPaciente from "./components/sala/SalaPaciente";
 import { instalarAuthFetch } from "./utils/authFetch";
 
 // Antes de montar la app: todo pedido al servidor lleva el token de sesión.
@@ -10,7 +11,9 @@ instalarAuthFetch();
 const container = document.getElementById("root");
 if (container) {
   const root = createRoot(container);
-  root.render(<App />);
+  // Enlace de la sala virtual (?sala=<token>): página del paciente, sin login.
+  const sala = new URLSearchParams(window.location.search).get("sala");
+  root.render(sala ? <SalaPaciente token={sala} /> : <App />);
 }
 
 // PWA: registrar service worker (no bloquea el arranque)
