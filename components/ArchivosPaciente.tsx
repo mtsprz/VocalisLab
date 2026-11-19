@@ -54,6 +54,7 @@ export default function ArchivosPaciente({ paciente, onClose }: Props) {
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [notas, setNotas] = useState('');
   const [subiendo, setSubiendo] = useState(false);
+  const [hecho, setHecho] = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -84,6 +85,7 @@ export default function ArchivosPaciente({ paciente, onClose }: Props) {
     if (archivo.size > 300 * 1024 * 1024) { setError('El archivo supera 300 MB.'); return; }
     setSubiendo(true);
     setError('');
+    setHecho('');
     const fd = new FormData();
     fd.append('archivo', archivo);
     fd.append('tipo', tipo);
@@ -96,6 +98,8 @@ export default function ArchivosPaciente({ paciente, onClose }: Props) {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.detail || `Error ${r.status}`);
       setArchivo(null); setTitulo(''); setNotas('');
+      const n = Number(d.imagenes_extraidas) || 0;
+      setHecho(n ? `Subido. Se separaron ${n} imagen${n === 1 ? '' : 'es'} del PDF y quedaron en la galería de la ficha integral.` : 'Subido.');
       await cargar();
     } catch (e: any) {
       setError(e?.message || 'No se pudo subir el archivo.');
@@ -165,6 +169,7 @@ export default function ArchivosPaciente({ paciente, onClose }: Props) {
             </>
           )}
           {error && <p className="text-xs text-red-600">{error}</p>}
+          {hecho && <p className="text-xs text-emerald-600">{hecho}</p>}
         </div>
 
         {/* Lista */}

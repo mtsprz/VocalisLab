@@ -21,7 +21,11 @@ VISION_MODELS = [
     "qwen/qwen3.8-27b",
 ]
 
-# Claves acústicas que la IA debe extraer (todas opcionales, null si ausente)
+# Claves acústicas que la IA debe extraer (todas opcionales, null si ausente).
+# Antes el PDF iba como texto a Groq sin pedir JSON y con 1500 tokens: los
+# modelos que razonan antes de responder se quedaban sin espacio y la
+# respuesta llegaba vacía ("La IA no devolvió un JSON válido"). Ahora Gemini
+# lee el archivo completo y Groq queda de respaldo con JSON estricto.
 METRIC_KEYS = [
     "f0_mean", "f0_min", "f0_max", "f0_sd",
     "jitter_local_pct", "jitter_rap_pct", "jitter_ppq5_pct",
@@ -76,11 +80,41 @@ def _vision_models():
 
 
 def _extract_json(text: str) -> dict:
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    if start < 0 or end <= start:
+    """JSON de la respuesta del modelo, tolerante a lo que suelen agregar:
+    bloques ```json, texto antes/después, comas sobrantes, None/NaN."""
+    t = (text or "").strip()
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t, flags=re.IGNORECASE | re.MULTILINE)
+    start = t.find("{")
+    if start < 0:
         raise ValueError("La IA no devolvió un JSON válido")
-    return json.loads(text[start:end])
+    # Primer objeto con llaves balanceadas (ignora texto posterior).
+    nivel, fin, en_texto, escape = 0, -1, False, False
+    for i, ch in enumerate(t[start:], start):
+        if en_texto:
+            escape = (ch == "\\") and not escape
+            if ch == '"' and not escape:
+                en_texto = False
+            continue
+        if ch == '"':
+            en_texto = True
+        elif ch == "{":
+            nivel += 1
+        elif ch == "}":
+            nivel -= 1
+            if nivel == 0:
+                fin = i + 1
+                break
+    bloque = t[start:fin] if fin > 0 else t[start:]
+    intentos = [bloque,
+                re.sub(r",\s*([}\]])", r"\1", bloque),
+                re.sub(r"\b(None|NaN|nan|undefined)\b", "null",
+                       re.sub(r",\s*([}\]])", r"\1", bloque)).replace("True", "true").replace("False", "false")]
+    for candidato in intentos:
+        try:
+            return json.loads(candidato)
+        except Exception:
+            continue
+    raise ValueError("La IA no devolvió un JSON válido")
 
 
 def _to_number(v):
@@ -144,6 +178,17 @@ def _vision_extract(image_b64: str, mime: str) -> dict:
     raise last_err
 
 
+def _gemini_extract(data: bytes, mime: str) -> tuple:
+    """Gemini lee el archivo completo (PDF con tablas o gráficos, PDF
+    escaneado o imagen) y devuelve JSON estricto. Devuelve (datos, modelo)."""
+    from llm_client import gemini_generate, gemini_texto
+    parts = [{"text": EXTRACTION_PROMPT},
+             {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode()}}]
+    resp, modelo = gemini_generate(parts, {"temperature": 0.1, "maxOutputTokens": 4096,
+                                           "responseMimeType": "application/json"}, timeout=120)
+    return _extract_json(gemini_texto(resp)), modelo
+
+
 def _pdf_to_text(data: bytes) -> str:
     try:
         from pypdf import PdfReader
@@ -178,33 +223,49 @@ async def ocr_analisis_externo(archivo: UploadFile = File(...)):
     es_pdf = fname.endswith(".pdf") or "pdf" in ctype
 
     try:
-        if es_pdf:
+        mime = "application/pdf" if es_pdf else "image/jpeg"
+        if fname.endswith(".png") or "png" in ctype:
+            mime = "image/png"
+        elif fname.endswith(".webp") or "webp" in ctype:
+            mime = "image/webp"
+        errores = []
+        parsed, model, formato = None, "", ""
+        # 1) Gemini: lee el archivo tal cual (tablas, gráficos, escaneados).
+        if os.environ.get("GEMINI_API_KEY", "").strip():
+            try:
+                parsed, model = _gemini_extract(data, mime)
+                formato = "pdf" if es_pdf else "imagen"
+            except Exception as e:
+                errores.append(f"Gemini: {str(e)[:150]}")
+                print(f"[externo_ocr] Gemini falló: {str(e)[:200]}")
+        # 2) Respaldo Groq: texto del PDF (JSON estricto) o visión para imágenes.
+        if parsed is None and es_pdf:
             texto = _pdf_to_text(data)
-            if len(texto.strip()) < 100:
-                return JSONResponse(content={
-                    "ok": False,
-                    "error": "El PDF no contiene texto extraíble (parece escaneado). Subí una foto o captura de pantalla del informe.",
-                })
-            from llm_client import groq_chat
-            prompt = (EXTRACTION_PROMPT
-                      + "\n\nTEXTO DEL INFORME:\n" + texto[:6000])
-            raw, model = groq_chat(
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=1500,
-            )
-            parsed = _extract_json(raw)
-            formato = "pdf-texto"
-        else:
-            mime = "image/jpeg"
-            if fname.endswith(".png") or "png" in ctype:
-                mime = "image/png"
-            elif fname.endswith(".webp") or "webp" in ctype:
-                mime = "image/webp"
-            image_b64 = base64.b64encode(data).decode()
-            parsed = _vision_extract(image_b64, mime)
-            model = "vision"
-            formato = "imagen"
+            if len(texto.strip()) >= 100:
+                try:
+                    from llm_client import groq_chat
+                    raw, model = groq_chat(
+                        messages=[{"role": "user", "content": EXTRACTION_PROMPT
+                                   + "\n\nTEXTO DEL INFORME:\n" + texto[:12000]}],
+                        temperature=0.1, max_tokens=4000,
+                        response_format={"type": "json_object"}, timeout=90)
+                    parsed = _extract_json(raw)
+                    formato = "pdf-texto"
+                except Exception as e:
+                    errores.append(f"Groq: {str(e)[:150]}")
+            else:
+                errores.append("el PDF no tiene texto (escaneado) y solo Gemini puede leerlo")
+        elif parsed is None:
+            try:
+                parsed = _vision_extract(base64.b64encode(data).decode(), mime)
+                model, formato = "groq-vision", "imagen"
+            except Exception as e:
+                errores.append(f"Groq visión: {str(e)[:150]}")
+        if parsed is None:
+            return JSONResponse(content={
+                "ok": False,
+                "error": "No se pudo leer el informe con ningún modelo: " + " | ".join(errores),
+            })
 
         valores = _normalize_valores(parsed.get("valores", {}))
         if not any(v is not None for v in valores.values()):
@@ -221,7 +282,7 @@ async def ocr_analisis_externo(archivo: UploadFile = File(...)):
             "confianza": parsed.get("confianza", "media"),
             "observaciones": parsed.get("observaciones", ""),
             "formato_origen": formato,
-            "modelo_ia": model if formato == "pdf-texto" else "vision",
+            "modelo_ia": model,
         })
     except HTTPException:
         raise

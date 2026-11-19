@@ -164,6 +164,64 @@ async def subir_a_drive(client, token, ruta: str, nombre: str, mime: str, carpet
             enviado = fin + 1
 
 
+MAX_IMAGENES_PDF = 12
+MIN_LADO_PX = 200  # descarta íconos, logos chicos y firmas
+
+
+def extraer_imagenes_pdf(ruta: str) -> list:
+    """[(bytes, ext, ancho, alto)] de las imágenes de un PDF, sin repetidas."""
+    import fitz
+    vistas, out = set(), []
+    with fitz.open(ruta) as doc:
+        for pagina in doc:
+            for img in pagina.get_images(full=True):
+                xref = img[0]
+                if xref in vistas:
+                    continue
+                vistas.add(xref)
+                try:
+                    datos = doc.extract_image(xref)
+                except Exception:
+                    continue
+                if datos.get("width", 0) >= MIN_LADO_PX and datos.get("height", 0) >= MIN_LADO_PX:
+                    out.append((datos["image"], datos.get("ext") or "png", datos["width"], datos["height"]))
+                if len(out) >= MAX_IMAGENES_PDF:
+                    return out
+    return out
+
+
+async def _imagenes_de_pdf(token, carpeta, ruta_pdf, fila_pdf, sb) -> int:
+    imagenes = extraer_imagenes_pdf(ruta_pdf)
+    if not imagenes:
+        return 0
+    n = 0
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=20.0)) as client:
+        for i, (datos, ext, ancho, alto) in enumerate(imagenes, 1):
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+            try:
+                tmp.write(datos)
+                tmp.close()
+                titulo = f"{fila_pdf['titulo']} (imagen {i} del PDF)"
+                mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+                subido = await subir_a_drive(
+                    client, token, tmp.name, _nombre_seguro(f"{fila_pdf['fecha']} {titulo}", 120) + f".{ext}",
+                    mime, carpeta["id"], {"vocalislab_paciente": fila_pdf["paciente_id"], "vocalislab_tipo": "foto"})
+                sb.table("archivos_paciente").insert({
+                    **{k: fila_pdf[k] for k in ("paciente_id", "origen", "fecha", "subido_por")},
+                    "tipo": "foto", "titulo": titulo, "nombre_archivo": f"imagen_{i}.{ext}",
+                    "notas": f"Extraída del PDF «{fila_pdf['nombre_archivo']}» ({ancho}×{alto} px).",
+                    "mime": mime, "tamano_bytes": len(datos), "drive_file_id": subido.get("id"),
+                    "drive_url": subido.get("webViewLink"), "drive_carpeta_url": carpeta.get("webViewLink"),
+                }).execute()
+                n += 1
+            finally:
+                try:
+                    os.unlink(tmp.name)
+                except Exception:
+                    pass
+    return n
+
+
 def _fila_valida(paciente_id: str):
     sb = _sb()
     if not sb:
@@ -254,7 +312,15 @@ async def subir_archivo(
                     "detail": MSG_MIGRACION + " El archivo SÍ quedó en Drive.",
                     "drive_url": subido.get("webViewLink")})
             raise
-        return {"ok": True, "archivo": guardada}
+        # Informes en PDF con fotos (laringoscopía, espectrogramas): las
+        # imágenes se suman a la galería de la ficha.
+        imagenes = 0
+        if mime == "application/pdf":
+            try:
+                imagenes = await _imagenes_de_pdf(token, carpeta, tmp.name, fila, sb)
+            except Exception as e:
+                print(f"[archivos_drive] no se extrajeron imágenes del PDF: {str(e)[:150]}")
+        return {"ok": True, "archivo": guardada, "imagenes_extraidas": imagenes}
     except HTTPException:
         raise
     except Exception as e:

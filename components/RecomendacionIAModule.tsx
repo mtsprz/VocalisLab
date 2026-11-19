@@ -15,52 +15,25 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
   const [loading, setLoading] = useState(false);
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>(pacienteId || '');
-  const [recomendacion, setRecomendacion] = useState<any>(null);
+  // Al volver a la sección se recupera el plan en pantalla (solo si es del mismo paciente).
+  const [recomendacion, setRecomendacion] = useState<any>(
+    clinical.data.recomendacion && clinical.data.paciente?.id && clinical.data.paciente.id === (pacienteId || clinical.data.paciente.id)
+      ? clinical.data.recomendacion : null);
   const [transferred, setTransferred] = useState(false);
   const [error, setError] = useState('');
   const [contextoUsado, setContextoUsado] = useState<any>(null);
 
-  // Data from clinical context or fallback demo data
-  const [pacienteData, setPacienteData] = useState<any>(
-    clinical.data.paciente || {
-      nombre_completo: 'María Laura González',
-      edad: 38,
-      sexo: 'Femenino',
-      ocupacion: 'Docente de Nivel Primario',
-      demanda_vocal_horas: 6
-    }
-  );
-  const [anamnesisData, setAnamnesisData] = useState<any>(
-    clinical.data.anamnesis || {
-      motivo_consulta: 'Disfonía fluctuante de 6 meses de evolución, fatiga vocal al final de la jornada laboral.',
-      diagnostico_orl: 'Esbozo nodular bilateral / Lesión exofítica en tercio medio',
-      sintomas: { disfonia: true, fatiga_vocal: true, carraspeo: true, dolor: false }
-    }
-  );
-  const [riesgoVocalData, setRiesgoVocalData] = useState<any>(
-    clinical.data.riesgoVocal || {
-      puntaje_total: 82,
-      grupo: 'Grupo 2 (Tendencia elevada a desarrollar problema vocal)',
-      subtotales_dimensiones: {
-        "Hábitos Vocales": 38, "Estado Emocional": 12, "Condiciones Biológicas": 14,
-        "Condiciones Ambientales": 12, "Hábitos de Vida": 6
-      },
-      alertas_conductas_3: ["Habla en ambientes ruidosos", "Carraspea en forma habitual", "Usa la voz estando resfriado"]
-    }
-  );
-  const [escalasData, setEscalasData] = useState<any>(
-    clinical.data.escalas || {
-      grbas: { G: 2, R: 1, B: 1, A: 0, S: 2 },
-      rasati: { R: 1, A: 1, S: 1, A2: 0, T: 2, I: 0 },
-      vhi10_score: 18, tme_o: 11.5, tme_s: 9.2, indice_so: 0.8
-    }
-  );
-  const [acusticaData, setAcusticaData] = useState<any>(
-    clinical.data.acustica || {
-      f0_mean: 215.4, jitter_local_pct: 1.42, shimmer_local_pct: 4.85,
-      hnr_db: 15.8, cpps_db: 11.2, avqi: 3.85
-    }
-  );
+  // Datos SOLO del paciente real (antes había un paciente de demostración
+  // y, si faltaba un dato, se le mandaba a la IA el valor inventado).
+  const [pacienteData, setPacienteData] = useState<any>(clinical.data.paciente || {});
+  const [anamnesisData, setAnamnesisData] = useState<any>(clinical.data.anamnesis || {});
+  const [riesgoVocalData, setRiesgoVocalData] = useState<any>(clinical.data.riesgoVocal || {});
+  const [escalasData, setEscalasData] = useState<any>(clinical.data.escalas || {});
+  const [acusticaData, setAcusticaData] = useState<any>(clinical.data.acustica || {});
+  // Historial de planes guardados de este paciente.
+  const [guardadas, setGuardadas] = useState<any[]>([]);
+  const [estadoGuardado, setEstadoGuardado] = useState<{ ok: boolean; t: string } | null>(null);
+  const [avisoTabla, setAvisoTabla] = useState('');
 
   useEffect(() => {
     loadPacientes();
@@ -110,22 +83,64 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
   };
 
   const fetchPacienteData = async (id: string) => {
+    // Carga anamnesis, escalas, riesgo y acústica del paciente en el contexto
+    // clínico (el efecto de sincronización los pasa a esta pantalla).
+    if (clinical.data.paciente?.id !== id) {
+      setPacienteData({}); setAnamnesisData({}); setRiesgoVocalData({}); setEscalasData({}); setAcusticaData({});
+      setRecomendacion(null);
+      try { await clinical.cargarPaciente(id); } catch {}
+    }
     try {
       const r = await fetch(`${BACKEND_URL}/api/pacientes/${id}`);
       if (r.ok) {
         const data = await r.json();
-        setPacienteData({
-          nombre_completo: data.nombre_completo || 'Paciente',
-          edad: calcularEdad(data.fecha_nacimiento) ?? 35,
-          sexo: data.sexo || 'Femenino',
-          ocupacion: data.ocupacion || 'Profesional de la voz',
-          demanda_vocal_horas: data.demanda_vocal_horas || 4
-        });
+        setPacienteData((prev: any) => ({
+          ...prev,
+          nombre_completo: data.nombre_completo || data.nombre || prev.nombre_completo,
+          edad: calcularEdad(data.fecha_nacimiento) ?? null,
+          sexo: data.sexo || null,
+          ocupacion: data.ocupacion || null,
+          demanda_vocal_horas: data.demanda_vocal_horas || null,
+        }));
       }
+    } catch {}
+    cargarGuardadas(id);
+  };
+
+  const cargarGuardadas = async (id: string) => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/recomendaciones?paciente_id=${id}`);
+      const d = await r.json();
+      setGuardadas(d.recomendaciones || []);
+      setAvisoTabla(d.aviso || '');
+      // Sin plan en pantalla: mostrar el último guardado.
+      setRecomendacion((actual: any) => actual || d.recomendaciones?.[0]?.recomendacion || null);
     } catch {}
   };
 
+  const guardarRecomendacion = async (rec: any, contexto: any) => {
+    const pid = selectedId || clinical.data.paciente?.id;
+    if (!pid || !rec) return;
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/recomendaciones`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paciente_id: pid, recomendacion: rec, contexto }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || `Error ${r.status}`);
+      setEstadoGuardado({ ok: true, t: `Plan guardado el ${new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}.` });
+      cargarGuardadas(pid);
+    } catch (e: any) {
+      setEstadoGuardado({ ok: false, t: `No se guardó: ${e?.message || 'error'}` });
+    }
+  };
+
   const ejecutarRecomendador = async () => {
+    if (!(selectedId || clinical.data.paciente?.id)) {
+      setError('Elegí un paciente para generar su plan.');
+      return;
+    }
+    setEstadoGuardado(null);
     setLoading(true);
     setError('');
     setTransferred(false);
@@ -146,6 +161,8 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
       if (data.ok && data.recomendacion) {
         setRecomendacion(data.recomendacion);
         setContextoUsado(data.contexto_usado || null);
+        // Se guarda solo: no se pierde al cambiar de sección.
+        guardarRecomendacion(data.recomendacion, data.contexto_usado || {});
       } else {
         setError('No se pudo generar la recomendación.');
       }
@@ -209,16 +226,16 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
               }}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-200"
             >
-              <option value="">-- Usar Caso de Demostración --</option>
+              <option value="">-- Elegí un paciente --</option>
               {pacientes.map(p => (
                 <option key={p.id} value={p.id}>{p.nombre_completo} ({p.dni})</option>
               ))}
             </select>
           </div>
           <div className="text-xs space-y-1 pt-2 border-t border-gray-100 dark:border-gray-800">
-            <p className="font-bold text-gray-700 dark:text-gray-300">{pacienteData.nombre_completo}</p>
-            <p className="text-gray-500 dark:text-gray-400">{pacienteData.edad} años • {pacienteData.sexo} • {pacienteData.ocupacion}</p>
-            <p className="text-gray-500 dark:text-gray-400">Demanda vocal: {pacienteData.demanda_vocal_horas} hs/día</p>
+            <p className="font-bold text-gray-700 dark:text-gray-300">{pacienteData.nombre_completo || 'Sin paciente elegido'}</p>
+            <p className="text-gray-500 dark:text-gray-400">{pacienteData.edad != null ? `${pacienteData.edad} años` : 'edad —'} • {pacienteData.sexo || 'sexo —'} • {pacienteData.ocupacion || 'ocupación —'}</p>
+            <p className="text-gray-500 dark:text-gray-400">Demanda vocal: {pacienteData.demanda_vocal_horas ? `${pacienteData.demanda_vocal_horas} hs/día` : '—'}</p>
           </div>
         </div>
 
@@ -231,19 +248,19 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
           <div className="space-y-2 text-xs">
             <div className="flex justify-between items-center bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200/50 dark:border-amber-900/50">
               <span className="font-bold text-amber-800 dark:text-amber-300">Puntaje Riesgo Vocal:</span>
-              <span className="font-extrabold text-amber-700 dark:text-amber-400">{riesgoVocalData.puntaje_total} pts</span>
+              <span className="font-extrabold text-amber-700 dark:text-amber-400">{riesgoVocalData.puntaje_total ? `${riesgoVocalData.puntaje_total} pts` : '—'}</span>
             </div>
             <div className="flex justify-between text-gray-600 dark:text-gray-400">
               <span>GRBAS (G R B A S):</span>
-              <span className="font-bold text-gray-800 dark:text-gray-200">G{escalasData.grbas.G} R{escalasData.grbas.R} B{escalasData.grbas.B} A{escalasData.grbas.A} S{escalasData.grbas.S}</span>
+              <span className="font-bold text-gray-800 dark:text-gray-200">{escalasData.grbas ? `G${escalasData.grbas.G ?? '–'} R${escalasData.grbas.R ?? '–'} B${escalasData.grbas.B ?? '–'} A${escalasData.grbas.A ?? '–'} S${escalasData.grbas.S ?? '–'}` : '—'}</span>
             </div>
             <div className="flex justify-between text-gray-600 dark:text-gray-400">
               <span>RASATI Tensión (T):</span>
-              <span className="font-bold text-gray-800 dark:text-gray-200">T{escalasData.rasati.T}</span>
+              <span className="font-bold text-gray-800 dark:text-gray-200">{escalasData.rasati?.T != null ? `T${escalasData.rasati.T}` : '—'}</span>
             </div>
             <div className="flex justify-between text-gray-600 dark:text-gray-400">
               <span>Índice S/O (TME):</span>
-              <span className="font-bold text-gray-800 dark:text-gray-200">{escalasData.indice_so}</span>
+              <span className="font-bold text-gray-800 dark:text-gray-200">{escalasData.indice_so ?? '—'}</span>
             </div>
           </div>
         </div>
@@ -257,19 +274,19 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="bg-gray-50 dark:bg-[#0b0f19] p-2 rounded-lg border border-gray-200 dark:border-gray-800">
               <p className="text-gray-400">F0 Media</p>
-              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.f0_mean} Hz</p>
+              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.f0_mean ? `${Math.round(acusticaData.f0_mean)} Hz` : '—'}</p>
             </div>
             <div className="bg-gray-50 dark:bg-[#0b0f19] p-2 rounded-lg border border-gray-200 dark:border-gray-800">
               <p className="text-gray-400">Jitter %</p>
-              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.jitter_local_pct}%</p>
+              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.jitter_local_pct != null ? `${acusticaData.jitter_local_pct}%` : '—'}</p>
             </div>
             <div className="bg-gray-50 dark:bg-[#0b0f19] p-2 rounded-lg border border-gray-200 dark:border-gray-800">
               <p className="text-gray-400">CPPS</p>
-              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.cpps_db} dB</p>
+              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.cpps_db != null ? `${acusticaData.cpps_db} dB` : '—'}</p>
             </div>
             <div className="bg-gray-50 dark:bg-[#0b0f19] p-2 rounded-lg border border-gray-200 dark:border-gray-800">
               <p className="text-gray-400">AVQI v03.01</p>
-              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.avqi}</p>
+              <p className="font-extrabold text-gray-800 dark:text-gray-200">{acusticaData.avqi ?? '—'}</p>
             </div>
           </div>
         </div>
@@ -302,6 +319,11 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
                 <p className={`font-bold ${contextoUsado.tiene_informe_orl ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>
                   {contextoUsado.tiene_informe_orl ? '✓ Informe ORL incluido en el análisis' : '○ Sin informe ORL validado'}
                 </p>
+                {contextoUsado.datos?.faltan?.length > 0 && (
+                  <p className="text-amber-600 dark:text-amber-400 font-semibold">
+                    Sin datos de: {contextoUsado.datos.faltan.join(', ')} (el plan no los tuvo en cuenta)
+                  </p>
+                )}
                 <p className="text-gray-500 dark:text-gray-400">
                   Evaluaciones en DB: <strong>{contextoUsado.n_evaluaciones ?? 0}</strong>
                   {contextoUsado.basal_autopercepcion != null && (
@@ -317,6 +339,27 @@ export default function RecomendacionIAModule({ pacienteId, onTransferToCuaderni
       {error && (
         <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* Planes guardados de este paciente */}
+      {(estadoGuardado || guardadas.length > 0 || avisoTabla) && (
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          {estadoGuardado && (
+            <span className={`font-semibold ${estadoGuardado.ok ? 'text-emerald-600' : 'text-red-600'}`}>{estadoGuardado.t}</span>
+          )}
+          {avisoTabla && <span className="text-amber-600">{avisoTabla}</span>}
+          {guardadas.length > 0 && (
+            <label className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+              Planes guardados:
+              <select onChange={e => { const g = guardadas.find(x => x.id === e.target.value); if (g) { setRecomendacion(g.recomendacion); setContextoUsado(g.contexto || null); } }}
+                className="px-2 py-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0b0f19]">
+                {guardadas.map(g => (
+                  <option key={g.id} value={g.id}>{new Date(g.creada_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       )}
 

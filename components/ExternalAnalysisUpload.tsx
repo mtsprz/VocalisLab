@@ -165,7 +165,7 @@ export default function ExternalAnalysisUpload({ pacienteId }: Props) {
           <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer text-xs font-bold text-gray-600 dark:text-gray-300 transition-all">
             {uploading
               ? <><Loader2 size={16} className="animate-spin" /> Procesando con IA…</>
-              : <><Upload size={16} /> Subir informe (imagen PNG/JPG o PDF con texto)</>}
+              : <><Upload size={16} /> Subir informe (PDF —también escaneado—, foto o captura)</>}
             <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} disabled={uploading} />
           </label>
 

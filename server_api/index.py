@@ -389,6 +389,10 @@ from planilla_canto import router as planilla_canto_router
 app.include_router(planilla_canto_router)
 from autoevaluacion import router as autoevaluacion_router
 app.include_router(autoevaluacion_router)
+from recomendaciones import router as recomendaciones_router
+app.include_router(recomendaciones_router)
+from ficha_integral import router as ficha_integral_router
+app.include_router(ficha_integral_router)
 try:
     from companion import router as companion_router, start_companion_worker
     app.include_router(companion_router)
@@ -1461,6 +1465,19 @@ async def recomendar_terapia_endpoint(
                     print(f"[recomendar] evolucion no hidratada: {str(e)[:120]}")
         except Exception as e:
             print(f"[recomendar] hidratacion fallo: {str(e)[:150]}")
+
+    # Completa ficha, escalas, riesgo y acústica desde la base (lo que la
+    # pantalla no trajo) e informa qué datos se usaron y cuáles faltaban.
+    if paciente_id:
+        try:
+            from api_clinica import _get_supabase
+            from recomendaciones import hidratar_desde_db
+            sb2 = _get_supabase()
+            if sb2:
+                contexto_usado["datos"] = hidratar_desde_db(sb2, paciente_id, paciente, escalas,
+                                                            riesgo_vocal, acustica)
+        except Exception as e:
+            print(f"[recomendar] hidratacion desde la base fallo: {str(e)[:150]}")
 
     try:
         recomendacion = generar_recomendacion_terapeutica(
