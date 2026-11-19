@@ -8,6 +8,27 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 const OPC_VHI = ['Nunca', 'Casi nunca', 'A veces', 'Casi siempre', 'Siempre'];
 const OPC_RIESGO = ['Nada / nunca', 'Poco / a veces', 'Bastante / a menudo', 'Mucho / siempre'];
 
+// Semáforo: cada respuesta tiene su color (verde = nada/nunca … rojo =
+// mucho/siempre) para que el paciente la reconozca de un vistazo. Clases
+// completas y literales para que Tailwind las incluya.
+interface Color { suave: string; activo: string; punto: string }
+const C: Record<string, Color> = {
+  verde: { suave: 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-500/10 dark:border-emerald-500/40 dark:text-emerald-200',
+           activo: 'bg-emerald-500 border-emerald-500 text-white ring-2 ring-emerald-300', punto: 'bg-emerald-500' },
+  lima: { suave: 'bg-lime-50 border-lime-300 text-lime-900 dark:bg-lime-500/10 dark:border-lime-500/40 dark:text-lime-200',
+          activo: 'bg-lime-500 border-lime-500 text-white ring-2 ring-lime-300', punto: 'bg-lime-500' },
+  amarillo: { suave: 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-500/10 dark:border-amber-500/40 dark:text-amber-200',
+              activo: 'bg-amber-400 border-amber-400 text-white ring-2 ring-amber-200', punto: 'bg-amber-400' },
+  naranja: { suave: 'bg-orange-50 border-orange-300 text-orange-900 dark:bg-orange-500/10 dark:border-orange-500/40 dark:text-orange-200',
+             activo: 'bg-orange-500 border-orange-500 text-white ring-2 ring-orange-300', punto: 'bg-orange-500' },
+  rojo: { suave: 'bg-red-50 border-red-300 text-red-900 dark:bg-red-500/10 dark:border-red-500/40 dark:text-red-200',
+          activo: 'bg-red-500 border-red-500 text-white ring-2 ring-red-300', punto: 'bg-red-500' },
+};
+const COLORES_VHI = [C.verde, C.lima, C.amarillo, C.naranja, C.rojo];
+const COLORES_RIESGO = [C.verde, C.amarillo, C.naranja, C.rojo];
+// Autopercepción 0–10: al revés (0 = muy mala → rojo, 10 = excelente → verde).
+const COLORES_AUTO = [C.rojo, C.rojo, C.naranja, C.naranja, C.amarillo, C.amarillo, C.lima, C.lima, C.verde, C.verde, C.verde];
+
 // Aclaraciones para las preguntas más técnicas (no cambian la pregunta).
 const AYUDA: Record<string, string> = {
   A4: 'Hablar con la voz muy grave y raspada, como gruñendo.',
@@ -93,15 +114,26 @@ export default function AutoevaluacionPaciente({ token }: { token: string }) {
     setEnviando(false);
   };
 
-  const Opciones = ({ opciones, valor, onElegir }: { opciones: string[]; valor: number | undefined; onElegir: (v: number) => void }) => (
+  const Opciones = ({ opciones, colores, valor, onElegir }: {
+    opciones: string[]; colores: Color[]; valor: number | undefined; onElegir: (v: number) => void;
+  }) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
       {opciones.map((o, v) => (
         <button key={v} onClick={() => onElegir(v)}
-          className={`text-left px-3 py-2.5 rounded-xl border text-sm transition-all ${valor === v
-            ? 'bg-indigo-600 text-white border-indigo-600 font-semibold'
-            : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200'}`}>
+          className={`text-left px-3 py-2.5 rounded-xl border-2 text-sm transition-all flex items-center gap-2 ${valor === v
+            ? `${colores[v].activo} font-bold`
+            : `${colores[v].suave} ${valor != null ? 'opacity-60' : ''}`}`}>
+          <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${valor === v ? 'bg-white' : colores[v].punto}`} />
           {o}
         </button>
+      ))}
+    </div>
+  );
+
+  const Leyenda = ({ opciones, colores }: { opciones: string[]; colores: Color[] }) => (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+      {opciones.map((o, i) => (
+        <span key={o} className="flex items-center gap-1"><span className={`w-2.5 h-2.5 rounded-full ${colores[i].punto}`} />{o}</span>
       ))}
     </div>
   );
@@ -111,11 +143,16 @@ export default function AutoevaluacionPaciente({ token }: { token: string }) {
     if (actual.tipo === 'auto') return (
       <div>
         <p className="text-base font-semibold">Del 0 al 10, ¿qué puntaje le darías a la calidad de tu voz hoy?</p>
-        <p className="text-xs text-slate-500 mt-1">0 = muy mala · 10 = excelente</p>
+        <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-red-500" /> 0 = muy mala
+          <span className="w-3 h-3 rounded-full bg-emerald-500 ml-2" /> 10 = excelente
+        </p>
         <div className="grid grid-cols-6 sm:grid-cols-11 gap-1.5 mt-3">
           {Array.from({ length: 11 }, (_, v) => (
             <button key={v} onClick={() => setResp(r => ({ ...r, auto: v }))}
-              className={`py-3 rounded-xl border text-base font-bold ${resp.auto === v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
+              className={`py-3 rounded-xl border-2 text-base font-bold transition-all ${resp.auto === v
+                ? COLORES_AUTO[v].activo
+                : `${COLORES_AUTO[v].suave} ${resp.auto != null ? 'opacity-60' : ''}`}`}>
               {v}
             </button>
           ))}
@@ -125,10 +162,11 @@ export default function AutoevaluacionPaciente({ token }: { token: string }) {
     if (actual.tipo === 'vhi') return (
       <div className="space-y-5">
         <p className="text-xs text-slate-500">Marcá con qué frecuencia te pasa cada situación.</p>
+        <Leyenda opciones={OPC_VHI} colores={COLORES_VHI} />
         {VHI10.items.map(it => (
           <div key={it.key}>
             <p className="text-sm font-semibold">{it.label}</p>
-            <Opciones opciones={OPC_VHI} valor={resp.vhi[it.key]} onElegir={v => setResp(r => ({ ...r, vhi: { ...r.vhi, [it.key]: v } }))} />
+            <Opciones opciones={OPC_VHI} colores={COLORES_VHI} valor={resp.vhi[it.key]} onElegir={v => setResp(r => ({ ...r, vhi: { ...r.vhi, [it.key]: v } }))} />
           </div>
         ))}
       </div>
@@ -136,11 +174,12 @@ export default function AutoevaluacionPaciente({ token }: { token: string }) {
     if (actual.tipo === 'riesgo') return (
       <div className="space-y-5">
         <p className="text-xs text-slate-500">Respondé pensando en tu día a día.</p>
+        <Leyenda opciones={OPC_RIESGO} colores={COLORES_RIESGO} />
         {RIESGO_VOCAL_2026.dimensions[actual.seccion!].items.map(it => (
           <div key={it.key}>
             <p className="text-sm font-semibold">{it.label}</p>
             {AYUDA[it.key] && <p className="text-xs text-slate-500 mt-0.5">{AYUDA[it.key]}</p>}
-            <Opciones opciones={OPC_RIESGO} valor={resp.riesgo[it.key]} onElegir={v => setResp(r => ({ ...r, riesgo: { ...r.riesgo, [it.key]: v } }))} />
+            <Opciones opciones={OPC_RIESGO} colores={COLORES_RIESGO} valor={resp.riesgo[it.key]} onElegir={v => setResp(r => ({ ...r, riesgo: { ...r.riesgo, [it.key]: v } }))} />
           </div>
         ))}
       </div>

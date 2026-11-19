@@ -29,7 +29,7 @@ def cliente(monkeypatch):
 
 
 def test_sala_en_vivo(cliente):
-    r = cliente.post("/api/salas", json={"nombre": "Alvarez Yesica", "modo": "canto"}).json()
+    r = cliente.post("/api/salas", json={"nombre": "Yesica Alvarez", "modo": "canto"}).json()
     token = r["token"]
     assert r["enlace"].endswith(f"/?sala={token}") and r["nombre"] == "Yesica"
     info = cliente.get(f"/api/sala/{token}/info").json()

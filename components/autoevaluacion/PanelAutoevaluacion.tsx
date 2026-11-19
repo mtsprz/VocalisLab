@@ -28,6 +28,9 @@ export default function PanelAutoevaluacion({ pacienteId, pacienteNombre, telefo
   const [error, setError] = useState('');
   const [copiado, setCopiado] = useState('');
   const [cargadoId, setCargadoId] = useState('');
+  // Nombre con el que se saluda al paciente (editable: «Hola León»).
+  const [saludo, setSaludo] = useState('');
+  const [saludoGuardado, setSaludoGuardado] = useState(true);
 
   const listar = async () => {
     if (!pacienteId) return;
@@ -50,6 +53,8 @@ export default function PanelAutoevaluacion({ pacienteId, pacienteNombre, telefo
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.detail || `Error ${r.status}`);
       setNuevo(d);
+      setSaludo(d.nombre || '');
+      setSaludoGuardado(true);
       await listar();
     } catch (e: any) {
       setError(e?.message || 'No se pudo crear el enlace');
@@ -63,8 +68,18 @@ export default function PanelAutoevaluacion({ pacienteId, pacienteNombre, telefo
     setCopiado(id); setTimeout(() => setCopiado(''), 2000);
   };
   const tel = (telefono || nuevo?.telefono || '').replace(/\D/g, '');
+  const guardarSaludo = async () => {
+    if (!nuevo?.id || !saludo.trim()) return;
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/autoevaluaciones/${nuevo.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saludo: saludo.trim() }),
+      });
+      if (r.ok) setSaludoGuardado(true);
+    } catch {}
+  };
   const mensajeWa = (enlace: string) => encodeURIComponent(
-    `Hola${nuevo?.nombre ? ` ${nuevo.nombre}` : ''}, te comparto un cuestionario breve sobre tu voz para la próxima sesión. ` +
+    `Hola${saludo.trim() ? ` ${saludo.trim()}` : ''}, te comparto un cuestionario breve sobre tu voz para la próxima sesión. ` +
     `Lo completás desde el celular en unos 10 minutos: ${enlace}`);
 
   if (!pacienteId) {
@@ -105,6 +120,12 @@ export default function PanelAutoevaluacion({ pacienteId, pacienteNombre, telefo
 
       {nuevo && (
         <div className="rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 p-3 space-y-2">
+          <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+            Saludar como
+            <input value={saludo} onChange={e => { setSaludo(e.target.value); setSaludoGuardado(false); }} onBlur={guardarSaludo}
+              className="px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0b0f19] text-xs w-40" />
+            <span className="text-[11px] text-slate-500">{saludoGuardado ? `«Hola ${saludo || '…'}»` : 'se guarda al salir del campo'}</span>
+          </label>
           <p className="text-[11px] font-mono break-all">{nuevo.enlace}</p>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => copiar(nuevo.enlace, 'nuevo')} className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-bold flex items-center gap-1">

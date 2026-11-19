@@ -115,9 +115,17 @@ def _vencido(fila: dict) -> bool:
         return False
 
 
-def _nombre_pila(nombre: str) -> str:
-    partes = (nombre or "").split()
-    return partes[-1].capitalize() if len(partes) >= 2 else (partes[0].capitalize() if partes else "")
+def _paciente(sb, pid: str) -> dict:
+    """Fila del paciente (con origen y tipo de atención si existen)."""
+    filas = sb.table("pacientes").select("*").eq("id", pid).execute().data or []
+    return filas[0] if filas else {}
+
+
+def _saludo(fila_auto: dict, paciente: dict) -> str:
+    """Nombre con el que se saluda: el que eligió el profesional al crear el
+    enlace (guardado en respuestas.saludo) o el nombre de pila deducido."""
+    from nombres import saludo_de_paciente
+    return str((fila_auto.get("respuestas") or {}).get("saludo") or "").strip() or saludo_de_paciente(paciente)
 
 
 @router.post("/api/autoevaluaciones")
@@ -130,11 +138,15 @@ async def crear(request: Request):
     if not instrumentos:
         raise HTTPException(status_code=400, detail="Elegí al menos un cuestionario.")
     sb = _sb()
-    pac = sb.table("pacientes").select("id, nombre_completo, nombre, telefono").eq("id", pid).execute().data or []
+    pac = _paciente(sb, pid)
     if not pac:
         raise HTTPException(status_code=404, detail="Paciente inexistente")
+    from nombres import saludo_de_paciente
+    saludo = str(body.get("saludo") or "").strip()[:60] or saludo_de_paciente(pac)
     token = secrets.token_urlsafe(18)
+    # El saludo elegido viaja en respuestas.saludo (se conserva al responder).
     fila = {"token": token, "paciente_id": pid, "estado": "pendiente", "instrumentos": instrumentos,
+            "respuestas": {"saludo": saludo},
             "vence_at": (_ahora() + timedelta(days=VIGENCIA_DIAS)).isoformat()}
     try:
         guardada = (sb.table("autoevaluaciones").insert(fila).execute().data or [fila])[0]
@@ -145,8 +157,25 @@ async def crear(request: Request):
     frontend = os.environ.get("FRONTEND_URL", "https://vocalis-lab.vercel.app").rstrip("/")
     return {"ok": True, "id": guardada.get("id"), "token": token, "enlace": f"{frontend}/?autoeval={token}",
             "vence_at": fila["vence_at"], "instrumentos": instrumentos,
-            "nombre": _nombre_pila(pac[0].get("nombre_completo") or pac[0].get("nombre") or ""),
-            "telefono": pac[0].get("telefono") or ""}
+            "nombre": saludo, "telefono": pac.get("telefono") or ""}
+
+
+@router.patch("/api/autoevaluaciones/{autoeval_id}")
+async def cambiar_saludo(autoeval_id: str, request: Request):
+    """Corrige el nombre con el que se saluda al paciente (enlace pendiente)."""
+    body = await request.json()
+    saludo = str(body.get("saludo") or "").strip()[:60]
+    if not saludo:
+        raise HTTPException(status_code=400, detail="Escribí el nombre para saludar.")
+    sb = _sb()
+    filas = sb.table("autoevaluaciones").select("*").eq("id", autoeval_id).execute().data or []
+    if not filas:
+        raise HTTPException(status_code=404, detail="Autoevaluación inexistente")
+    if filas[0].get("estado") == "completada":
+        raise HTTPException(status_code=409, detail="Ya fue completada.")
+    respuestas = dict(filas[0].get("respuestas") or {}, saludo=saludo)
+    sb.table("autoevaluaciones").update({"respuestas": respuestas}).eq("id", autoeval_id).execute()
+    return {"ok": True, "saludo": saludo}
 
 
 @router.get("/api/autoevaluaciones")
@@ -168,12 +197,10 @@ async def listar(paciente_id: str):
 async def ver(token: str):
     sb = _sb()
     fila = _fila_token(sb, token)
-    nombre = ""
     try:
-        p = sb.table("pacientes").select("nombre_completo, nombre").eq("id", fila["paciente_id"]).execute().data or []
-        nombre = _nombre_pila((p[0].get("nombre_completo") or p[0].get("nombre") or "") if p else "")
+        nombre = _saludo(fila, _paciente(sb, fila["paciente_id"]))
     except Exception:
-        pass
+        nombre = ""
     return {"ok": True, "nombre": nombre, "instrumentos": fila.get("instrumentos") or list(INSTRUMENTOS),
             "estado": "vencida" if fila.get("estado") == "pendiente" and _vencido(fila) else fila.get("estado"),
             "profesional": "Matías Pérez · Fonoaudiólogo"}
@@ -189,8 +216,11 @@ async def responder(token: str, request: Request):
         raise HTTPException(status_code=410, detail="El enlace venció. Pedile uno nuevo a tu fonoaudiólogo.")
     cuerpo = await request.json()
     resultado = puntuar(fila.get("instrumentos") or list(INSTRUMENTOS), cuerpo)
+    respuestas = dict(resultado["respuestas"])
+    if (fila.get("respuestas") or {}).get("saludo"):
+        respuestas["saludo"] = fila["respuestas"]["saludo"]
     cambios = {"estado": "completada", "completada_at": _ahora().isoformat(),
-               "respuestas": resultado["respuestas"], "comentario": resultado["comentario"],
+               "respuestas": respuestas, "comentario": resultado["comentario"],
                "vhi10_score": resultado.get("vhi10_score"),
                "riesgo_vocal_score": resultado.get("riesgo_vocal_score"),
                "autopercepcion": resultado.get("autopercepcion")}

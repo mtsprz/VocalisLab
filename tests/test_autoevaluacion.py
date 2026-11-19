@@ -57,7 +57,10 @@ class _Q:
 
 class _Base:
     def __init__(self):
-        self.t = {"pacientes": [{"id": "p1", "nombre_completo": "Alvarez Yesica", "telefono": "221555"}]}
+        # p1 viene de la agenda de Fonoar (APELLIDO NOMBRE); p2 se cargó a mano.
+        self.t = {"pacientes": [{"id": "p1", "nombre_completo": "Alvarez Yesica", "telefono": "221555",
+                                 "origen": "agenda_fonoar"},
+                                {"id": "p2", "nombre_completo": "León Murillo", "telefono": ""}]}
 
     def table(self, t):
         return _Q(self, t)
@@ -95,6 +98,19 @@ def test_circuito_completo(entorno):
     assert c.post(f"/api/autoevaluacion/{nuevo['token']}", json=_respuestas()).status_code == 409
     lista = c.get("/api/autoevaluaciones?paciente_id=p1").json()["autoevaluaciones"]
     assert lista[0]["vhi10_score"] == 20
+
+
+def test_saludo_con_nombre_de_pila_y_corregible(entorno):
+    c, base, _ = entorno
+    nuevo = c.post("/api/autoevaluaciones", json={"paciente_id": "p2"}).json()
+    assert nuevo["nombre"] == "León"  # antes decía «Hola Murillo»
+    assert c.get(f"/api/autoevaluacion/{nuevo['token']}").json()["nombre"] == "León"
+    assert c.patch(f"/api/autoevaluaciones/{nuevo['id']}", json={"saludo": "Leo"}).status_code == 200
+    assert c.get(f"/api/autoevaluacion/{nuevo['token']}").json()["nombre"] == "Leo"
+    respuestas = {"autopercepcion": 5, "vhi10": {k: 1 for k in AE.VHI10_ITEMS},
+                  "riesgo": {k: 0 for k in AE.RIESGO_ITEMS}}
+    c.post(f"/api/autoevaluacion/{nuevo['token']}", json=respuestas)
+    assert c.get(f"/api/autoevaluacion/{nuevo['token']}").json()["nombre"] == "Leo"  # se conserva
 
 
 def test_respuestas_incompletas_o_fuera_de_rango(entorno):

@@ -72,12 +72,6 @@ def _sala(token: str) -> Sala:
     return sala
 
 
-def _nombre_de_pila(nombre_completo: str) -> str:
-    """Al paciente se le muestra solo un nombre (sin apellido ni datos)."""
-    partes = (nombre_completo or "").split()
-    return partes[-1].capitalize() if len(partes) >= 2 else (partes[0].capitalize() if partes else "")
-
-
 async def _enviar_a(conexiones: set, mensaje: dict):
     for ws in list(conexiones):
         try:
@@ -92,19 +86,22 @@ async def crear_sala(request: Request):
     body = await request.json()
     modo = body.get("modo") if body.get("modo") in MODOS else "habla"
     pid = str(body.get("paciente_id") or "").strip() or None
-    nombre = str(body.get("nombre") or "").strip()
-    if pid and not nombre:
+    from nombres import nombre_para_saludo, saludo_de_paciente
+    nombre = ""
+    if pid:
         try:
             from api_clinica import supabase
-            filas = supabase.table("pacientes").select("nombre_completo").eq("id", pid).execute().data or []
-            nombre = filas[0]["nombre_completo"] if filas else ""
+            filas = supabase.table("pacientes").select("*").eq("id", pid).execute().data or []
+            nombre = saludo_de_paciente(filas[0]) if filas else ""
         except Exception:
             nombre = ""
+    if not nombre:
+        nombre = nombre_para_saludo(str(body.get("nombre") or "").strip())
     _limpiar()
     if len(SALAS) >= MAX_SALAS:
         raise HTTPException(status_code=429, detail="Demasiadas salas abiertas; cerrá alguna.")
     token = secrets.token_urlsafe(16)
-    sala = Sala(token, pid, _nombre_de_pila(nombre), str(usuario.get("sub") or ""), modo)
+    sala = Sala(token, pid, nombre, str(usuario.get("sub") or ""), modo)
     SALAS[token] = sala
     frontend = os.environ.get("FRONTEND_URL", "https://vocalis-lab.vercel.app").rstrip("/")
     return {"ok": True, "token": token, "enlace": f"{frontend}/?sala={token}", "vence": int(sala.vence),
