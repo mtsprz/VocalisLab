@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./src/index.css";
 import App from "./components/App";
 import SalaPaciente from "./components/sala/SalaPaciente";
+import AutoevaluacionPaciente from "./components/autoevaluacion/AutoevaluacionPaciente";
 import { instalarAuthFetch } from "./utils/authFetch";
 
 // Antes de montar la app: todo pedido al servidor lleva el token de sesión.
@@ -12,8 +13,14 @@ const container = document.getElementById("root");
 if (container) {
   const root = createRoot(container);
   // Enlace de la sala virtual (?sala=<token>): página del paciente, sin login.
-  const sala = new URLSearchParams(window.location.search).get("sala");
-  root.render(sala ? <SalaPaciente token={sala} /> : <App />);
+  // Formulario de autoevaluación del paciente (?autoeval=<token>), sin login.
+  const params = new URLSearchParams(window.location.search);
+  const sala = params.get("sala");
+  const autoeval = params.get("autoeval");
+  root.render(
+    autoeval ? <AutoevaluacionPaciente token={autoeval} />
+      : sala ? <SalaPaciente token={sala} /> : <App />
+  );
 }
 
 // PWA: registrar service worker (no bloquea el arranque)

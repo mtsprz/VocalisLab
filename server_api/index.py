@@ -387,6 +387,8 @@ from sala_virtual import router as sala_virtual_router
 app.include_router(sala_virtual_router)
 from planilla_canto import router as planilla_canto_router
 app.include_router(planilla_canto_router)
+from autoevaluacion import router as autoevaluacion_router
+app.include_router(autoevaluacion_router)
 try:
     from companion import router as companion_router, start_companion_worker
     app.include_router(companion_router)
