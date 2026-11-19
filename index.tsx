@@ -4,6 +4,7 @@ import "./src/index.css";
 import App from "./components/App";
 import SalaPaciente from "./components/sala/SalaPaciente";
 import AutoevaluacionPaciente from "./components/autoevaluacion/AutoevaluacionPaciente";
+import PracticaPaciente from "./components/practica/PracticaPaciente";
 import { instalarAuthFetch } from "./utils/authFetch";
 
 // Antes de montar la app: todo pedido al servidor lleva el token de sesión.
@@ -17,8 +18,10 @@ if (container) {
   const params = new URLSearchParams(window.location.search);
   const sala = params.get("sala");
   const autoeval = params.get("autoeval");
+  const practica = params.get("practica");
   root.render(
-    autoeval ? <AutoevaluacionPaciente token={autoeval} />
+    practica ? <PracticaPaciente token={practica} />
+      : autoeval ? <AutoevaluacionPaciente token={autoeval} />
       : sala ? <SalaPaciente token={sala} /> : <App />
   );
 }

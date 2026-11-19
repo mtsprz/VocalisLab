@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Loader2, Image as ImageIcon, Film, Columns2, Eye, EyeOff, Sparkles, AlertTriangle, ExternalLink } from 'lucide-react';
 import { nombreCentro } from '../centros';
+import PanelPractica from '../practica/PanelPractica';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -48,10 +49,11 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
   const [abiertos, setAbiertos] = useState<string[]>([]);
   const [comparar, setComparar] = useState<string[]>([]);
   const [analisis, setAnalisis] = useState<{ texto?: string; cargando?: boolean; error?: string }>({});
+  const [sintesis, setSintesis] = useState<{ texto?: string; quitadas?: string[]; cargando?: boolean; error?: string }>({});
 
   useEffect(() => {
     if (!pacienteId) return;
-    setCargando(true); setError(''); setD(null); setComparar([]); setAnalisis({});
+    setCargando(true); setError(''); setD(null); setComparar([]); setAnalisis({}); setSintesis({});
     fetch(`${BACKEND_URL}/api/ficha/${pacienteId}`)
       .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.detail || `Error ${r.status}`); return j; })
       .then(setD).catch(e => setError(e.message)).finally(() => setCargando(false));
@@ -72,6 +74,18 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
       setAnalisis({ texto: j.texto });
     } catch (e: any) {
       setAnalisis({ error: e?.message || 'No se pudo analizar' });
+    }
+  };
+
+  const redactar = async () => {
+    setSintesis({ cargando: true });
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/ficha/${pacienteId}/sintesis`, { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || `Error ${r.status}`);
+      setSintesis({ texto: j.texto, quitadas: j.quitadas });
+    } catch (e: any) {
+      setSintesis({ error: e?.message || 'No se pudo redactar' });
     }
   };
 
@@ -264,6 +278,92 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
           </div>
         </Tarjeta>
       )}
+
+      <Tarjeta titulo="Práctica guiada en casa">
+        <PanelPractica pacienteId={pacienteId} />
+      </Tarjeta>
+
+      {d.lectura && <LecturaClinica l={d.lectura} aps={d.autopercepciones || []} sintesis={sintesis} redactar={redactar} />}
     </div>
+  );
+}
+
+const NIVEL: Record<string, string> = {
+  normal: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
+  leve: 'bg-lime-100 text-lime-800 dark:bg-lime-500/15 dark:text-lime-300',
+  moderado: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+  alterado: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  sin_dato: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300',
+};
+const NIVEL_TXT: Record<string, string> = { normal: 'Normal', leve: 'Leve', moderado: 'Moderado', alterado: 'Alterado', sin_dato: 'Sin referencia' };
+
+/** Lectura por reglas clínicas fijas + indicación general redactada (verificada). */
+function LecturaClinica({ l, aps, sintesis, redactar }: { l: any; aps: any[]; sintesis: any; redactar: () => void }) {
+  const [refs, setRefs] = useState(false);
+  return (
+    <Tarjeta titulo="Lectura clínica integrada">
+      <p className="text-[11px] text-slate-500 mb-2">
+        Cada valor se muestra tal como está guardado, con su fecha y su origen; la lectura sale de criterios de referencia fijos.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <tbody>
+            {l.hallazgos.map((h: any, i: number) => (
+              <tr key={i} className="border-t border-slate-100 dark:border-white/5 align-top">
+                <td className="px-2 py-1.5 text-[10px] uppercase font-bold text-slate-500 whitespace-nowrap">{h.area}</td>
+                <td className="px-2 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100">{h.parametro}</td>
+                <td className="px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200">{h.lectura}
+                  <span className="block text-[10px] text-slate-500">{h.fuente}{h.fecha ? ` · ${fecha(h.fecha)}` : ''}</span></td>
+                <td className="px-2 py-1.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${NIVEL[h.nivel] || NIVEL.sin_dato}`}>{NIVEL_TXT[h.nivel] || h.nivel}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {aps.length > 1 && (
+        <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-2">
+          <b>Autopercepción registrada:</b> {aps.map((a: any) => `${a.valor}/10 (${a.fuente}, ${fecha(a.fecha)})`).join(' · ')}
+        </p>
+      )}
+      {l.alertas.map((a: string, i: number) => (
+        <p key={i} className="mt-2 text-xs text-amber-700 dark:text-amber-300 flex gap-1.5"><AlertTriangle size={13} className="shrink-0 mt-0.5" />{a}</p>
+      ))}
+      {l.patrones.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {l.patrones.map((p: any, i: number) => (
+            <div key={i} className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-xs">
+              <p className="font-bold text-indigo-900 dark:text-indigo-200">{p.patron}</p>
+              <p className="text-indigo-800 dark:text-indigo-300">Datos: {p.evidencia.join(' · ')}</p>
+              <p className="text-slate-600 dark:text-slate-300">{p.sugerencia}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {l.faltan.length > 0 && <p className="mt-2 text-xs text-slate-500">Sin datos de: {l.faltan.join(', ')}.</p>}
+      <button onClick={() => setRefs(v => !v)} className="mt-2 text-[11px] text-indigo-600">{refs ? 'Ocultar' : 'Ver'} valores de referencia usados</button>
+      {refs && (
+        <ul className="mt-1 text-[11px] text-slate-500 list-disc pl-4">
+          {Object.values(l.referencias).map((r: any, i: number) => <li key={i}>{r}</li>)}
+        </ul>
+      )}
+      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+        <button onClick={redactar} disabled={sintesis.cargando}
+          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+          {sintesis.cargando ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          Redactar indicación general (orientativa)
+        </button>
+        {sintesis.error && <p className="mt-2 text-xs text-red-600 flex gap-1.5"><AlertTriangle size={13} />{sintesis.error}</p>}
+        {sintesis.texto && (
+          <div className="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
+            {sintesis.texto}
+            {sintesis.quitadas?.length > 0 && (
+              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">
+                Se quitaron {sintesis.quitadas.length} frase(s) con valores que no coinciden con los datos cargados.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </Tarjeta>
   );
 }

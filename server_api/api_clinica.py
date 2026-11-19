@@ -550,12 +550,18 @@ async def listar_analisis(
 
 @router.get("/api/ejercicios")
 async def obtener_banco_ejercicios():
-    import copy
-    bank = _load_exercise_bank()
-    bank = copy.deepcopy(bank)
+    bank = banco_ejercicios_completo()
     # Fichas clínicas del manual (Farías/Cobeta/Pinho/Guzmán/Boone/Smith/Mura):
     # fundamento, dosificación, precauciones, efecto y fuente por ejercicio.
     bank["fichas_clinicas"] = _load_fichas_clinicas()
+    return JSONResponse(content=bank)
+
+
+def banco_ejercicios_completo() -> dict:
+    """Banco del cuadernillo + ejercicios aprobados por el profesional. Lo usan
+    el cuadernillo, el motor terapéutico y la práctica guiada (mismo banco)."""
+    import copy
+    bank = copy.deepcopy(_load_exercise_bank())
     # Fusionar ejercicios IA aprobados con el catálogo base
     try:
         if supabase:
@@ -591,7 +597,7 @@ async def obtener_banco_ejercicios():
                         ia_sec["exercises"].append(ex)
     except Exception as e:
         print(f"[api_clinica] Merge ejercicios IA omitido: {e}")
-    return JSONResponse(content=bank)
+    return bank
 
 
 # ─── BANCO DE IMÁGENES (Supabase Storage bucket "ejercicios" + tabla ejercicio_imagenes) ───

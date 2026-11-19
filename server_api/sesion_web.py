@@ -149,7 +149,9 @@ async def middleware_sesion(request, call_next):
             # Página del paciente en la sala virtual (valida su propio token).
             or (ruta.startswith("/api/sala/") and ruta.endswith("/info"))
             # Formulario de autoevaluación del paciente (valida su propio token).
-            or ruta.startswith("/api/autoevaluacion/")):
+            or ruta.startswith("/api/autoevaluacion/")
+            # Práctica guiada del paciente (valida su propio token).
+            or ruta.startswith("/api/practica/")):
         return await call_next(request)
     token = token_bearer(request)
     usuario = verificar_token(token) if token else None

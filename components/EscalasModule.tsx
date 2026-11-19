@@ -64,6 +64,11 @@ export default function EscalasModule({ pacienteId }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // Valores que se guardan con ESTA evaluación: visibles y editables (antes se
+  // copiaba en silencio la autopercepción de la anamnesis, que podía ser vieja,
+  // y la F0 de la vocal sostenida como si fuera conversacional).
+  const [autoEval, setAutoEval] = useState('');
+  const [f0Conv, setF0Conv] = useState('');
   const [evolucion, setEvolucion] = useState<any[]>([]);
 
   const blankScores = () => {
@@ -212,12 +217,23 @@ export default function EscalasModule({ pacienteId }: Props) {
     }
   };
 
-  const getSeverity = (total: number, max: number) => {
-    const pct = max > 0 ? (total / max) * 100 : 0;
-    if (pct === 0) return { label: 'Normal', color: 'text-green-600 bg-green-50 dark:bg-green-950/30 dark:text-green-400' };
-    if (pct <= 25) return { label: 'Leve', color: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-950/30 dark:text-yellow-400' };
-    if (pct <= 50) return { label: 'Moderado', color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/30 dark:text-orange-400' };
-    return { label: 'Severo', color: 'text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400' };
+
+  // Lectura clínica por escala (no por porcentaje): VHI-10 con corte > 11
+  // (Arffa y cols., 2012); GRBAS por el grado general G; RASATI por el grado máximo.
+  const lecturaEscala = (escala: string) => {
+    const verde = 'text-green-600 bg-green-50 dark:bg-green-950/30 dark:text-green-400';
+    const amarillo = 'text-yellow-600 bg-yellow-50 dark:bg-yellow-950/30 dark:text-yellow-400';
+    const naranja = 'text-orange-600 bg-orange-50 dark:bg-orange-950/30 dark:text-orange-400';
+    const rojo = 'text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400';
+    const grados = [{ label: 'Normal', color: verde }, { label: 'Leve', color: amarillo }, { label: 'Moderado', color: naranja }, { label: 'Severo', color: rojo }];
+    const v: Record<string, number> = (scores as any)[escala] || {};
+    if (escala === 'VHI10') {
+      const t = getTotal('VHI10');
+      return t > 11 ? { label: 'Por encima del corte (> 11)', color: rojo } : { label: 'Dentro de lo esperado (≤ 11)', color: verde };
+    }
+    if (escala === 'GRBAS') return { ...grados[Math.min(3, Number(v.G) || 0)], label: `Grado general ${grados[Math.min(3, Number(v.G) || 0)].label.toLowerCase()} (G${Number(v.G) || 0})` };
+    const mx = Math.min(3, Math.max(0, ...Object.values(v).map(x => Number(x) || 0)));
+    return { ...grados[mx], label: `Grado máximo ${grados[mx].label.toLowerCase()}` };
   };
 
   const handleSave = async () => {
@@ -236,10 +252,12 @@ export default function EscalasModule({ pacienteId }: Props) {
       fd.append('tme_o', String(scores.TME.TME_O || ''));
       fd.append('tme_s', String(scores.TME.TME_S || ''));
       fd.append('observaciones', observaciones);
-      const f0conv = clinical.data.acustica?.f0_mean;
-      fd.append('f0_conversacional_hz', f0conv != null ? String(f0conv) : '');
-      const autoVoz = clinical.data.anamnesis?.autopercepcion_voz;
-      fd.append('autopercepcion_vocal', autoVoz != null ? String(autoVoz) : '');
+      const ap = autoEval.trim() === '' ? null : Number(autoEval);
+      if (ap != null && (!Number.isInteger(ap) || ap < 0 || ap > 10)) {
+        throw new Error('La autopercepción va de 0 a 10 (número entero).');
+      }
+      fd.append('f0_conversacional_hz', f0Conv.trim());
+      fd.append('autopercepcion_vocal', ap != null ? String(ap) : '');
       const r = await fetch(`${BACKEND_URL}/api/evaluaciones`, { method: 'POST', body: fd });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -533,7 +551,7 @@ export default function EscalasModule({ pacienteId }: Props) {
       ...(a.VHI10 ? { VHI10: { ...prev.VHI10, ...a.VHI10 } } : {}),
       ...(a.RiesgoVocal ? { RiesgoVocal: { ...prev.RiesgoVocal, ...a.RiesgoVocal } } : {}),
     }));
-    if (a.autopercepcion != null) clinical.setAnamnesis({ autopercepcion_voz: a.autopercepcion });
+    if (a.autopercepcion != null) setAutoEval(String(a.autopercepcion));
     setSaved(false);
     setActiveScale(a.VHI10 ? 'VHI10' : a.RiesgoVocal ? 'RiesgoVocal' : activeScale);
   };
@@ -585,9 +603,9 @@ export default function EscalasModule({ pacienteId }: Props) {
             <h3 className="font-semibold text-gray-800 dark:text-white">{(SCALES as any)[activeScale].name}</h3>
             {activeScale !== 'TME' && (
               <span className={`text-sm font-medium px-3 py-1 rounded-full ${
-                getSeverity(getTotal(activeScale), ((SCALES as any)[activeScale].items.length) * (activeScale === 'VHI10' ? 4 : 3)).color
+                lecturaEscala(activeScale).color
               }`}>
-                {getSeverity(getTotal(activeScale), ((SCALES as any)[activeScale].items.length) * (activeScale === 'VHI10' ? 4 : 3)).label}
+                {lecturaEscala(activeScale).label}
                 ({getTotal(activeScale)}/{((SCALES as any)[activeScale].items.length) * (activeScale === 'VHI10' ? 4 : 3)})
               </span>
             )}
@@ -651,6 +669,25 @@ export default function EscalasModule({ pacienteId }: Props) {
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0b0f19] text-gray-800 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           placeholder="Escriba aquí cualquier observación pertinente..."
         />
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="text-xs text-gray-600 dark:text-gray-300">
+            <span className="font-bold block mb-1">Autopercepción de esta evaluación (0 = muy mala · 10 = excelente)</span>
+            <input type="number" min={0} max={10} step={1} value={autoEval} onChange={e => setAutoEval(e.target.value)}
+              placeholder="vacío = no registrar"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0b0f19] rounded-lg text-sm" />
+            {clinical.data.anamnesis?.autopercepcion_voz != null && autoEval === '' && (
+              <button type="button" onClick={() => setAutoEval(String(clinical.data.anamnesis.autopercepcion_voz))} className="mt-1 text-indigo-600">
+                Usar la de la anamnesis ({clinical.data.anamnesis.autopercepcion_voz}/10)
+              </button>
+            )}
+          </label>
+          <label className="text-xs text-gray-600 dark:text-gray-300">
+            <span className="font-bold block mb-1">F0 conversacional medida hoy (Hz)</span>
+            <input type="number" min={50} max={600} step={1} value={f0Conv} onChange={e => setF0Conv(e.target.value)}
+              placeholder="solo habla espontánea, no vocal sostenida"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0b0f19] rounded-lg text-sm" />
+          </label>
+        </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             onClick={handleSave}

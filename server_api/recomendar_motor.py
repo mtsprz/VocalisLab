@@ -10,6 +10,14 @@ EXERCISE_BANK_PATH = os.path.join(os.path.dirname(__file__), "exercise_bank.json
 
 
 def _load_bank():
+    # Mismo banco que el cuadernillo, con los ejercicios que aprobó el profesional.
+    try:
+        from api_clinica import banco_ejercicios_completo
+        bank = banco_ejercicios_completo()
+        if bank.get("sections"):
+            return bank
+    except Exception as e:
+        print(f"[recomendar_motor] banco completo no disponible, uso el base: {e}")
     try:
         with open(EXERCISE_BANK_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -196,8 +204,21 @@ def _recomendacion_base(
     demanda = paciente.get("demanda_vocal_horas", "N/D")
 
     # Riesgo Vocal
-    riesgo_total = riesgo_vocal.get("puntaje_total", 0)
-    riesgo_grupo = riesgo_vocal.get("grupo", "Grupo 1")
+    # Sin dato = "sin dato" (antes 0 / "Grupo 1": un faltante se leía como bajo riesgo).
+    riesgo_total = riesgo_vocal.get("puntaje_total")
+    if riesgo_total in (None, ""):
+        riesgo_total, riesgo_grupo = "sin dato", "sin ficha de riesgo cargada"
+    else:
+        try:
+            _rt = float(riesgo_total)
+            riesgo_grupo = riesgo_vocal.get("grupo") or (
+                "Grupo 1 (Bajo Riesgo)" if _rt <= 69 else "Grupo 2 (Riesgo Moderado)" if _rt <= 138 else "Grupo 3 (Alto Riesgo)")
+        except (TypeError, ValueError):
+            riesgo_grupo = riesgo_vocal.get("grupo") or "sin grupo"
+    try:
+        riesgo_num = float(riesgo_total)  # solo para reglas de respaldo
+    except (TypeError, ValueError):
+        riesgo_num = 0.0
     riesgo_alertas = riesgo_vocal.get("alertas_conductas_3", [])
     subtotales = riesgo_vocal.get("subtotales_dimensiones", {})
     # Factores prioritarios: ítems con 2 o 3 → ejes del plan terapéutico
@@ -209,7 +230,9 @@ def _recomendacion_base(
     # Escalas
     grbas = escalas.get("grbas", {})
     rasati = escalas.get("rasati", {})
-    vhi10 = escalas.get("vhi10_score", 0)
+    vhi10 = escalas.get("vhi10_score")
+    if vhi10 in (None, ""):
+        vhi10 = "sin dato"
     tme_s = escalas.get("tme_s")
     tme_o = escalas.get("tme_o")
     indice_so = escalas.get("indice_so")
@@ -292,7 +315,29 @@ def _recomendacion_base(
                     f"TME-O {_n(_basal.get('tme_o'))}→{_n(_actual.get('tme_o'))}s."
                 )
 
+            # Lectura por los mismos criterios fijos que la ficha integral,
+            # para que el plan no reinterprete números (ni invierta escalas).
+            try:
+                from criterios_clinicos import hallazgos as _hallazgos
+                _ev = dict(escalas or {})
+                _ev["riesgo_vocal_score"] = riesgo_vocal.get("puntaje_total")
+                _ev.setdefault("autopercepcion_vocal", anamnesis.get("autopercepcion_voz"))
+                _lect = _hallazgos({"paciente": paciente or {}, "anamnesis": anamnesis or {},
+                                    "evaluaciones": [_ev], "analisis_acusticos": [acustica] if acustica else []})
+                _lect_txt = "\n".join(f"  * {h['parametro']}: {h['lectura']} [{h['nivel']}]" for h in _lect["hallazgos"])
+                _lect_txt += "".join(f"\n  * Patrón: {x['patron']} ({'; '.join(x['evidencia'])})" for x in _lect["patrones"])
+            except Exception as _e:
+                print(f"[recomendar_motor] lectura clínica no disponible: {_e}")
+                _lect_txt = "  (no disponible)"
+
             user_content = f"""
+ESCALAS Y DIRECCIÓN (no invertir): Autopercepción 0–10 (0 = muy mala, 10 = excelente).
+VHI-10 0–40 (más alto = más impacto; > 11 alterado). GRBAS y RASATI 0–3 por parámetro (0 normal, 3 severo).
+Riesgo vocal /207 (más alto = más riesgo). Usá los números exactamente como figuran.
+
+LECTURA CLÍNICA POR CRITERIOS FIJOS (respetala; no la contradigas):
+{_lect_txt}
+
 DATOS DEL CASO CLÍNICO:
 - Paciente: {nombre} ({edad} años, {sexo}), Ocupación: {ocupacion}, Demanda vocal: {demanda} h/día.
 - Anamnesis: Motivo: {anamnesis.get('motivo_consulta', 'N/D')}. Diagnóstico ORL: {anamnesis.get('diagnostico_orl', 'Sin informe laringoscópico previo')}.
@@ -307,7 +352,7 @@ DATOS DEL CASO CLÍNICO:
   * GRBAS: {json.dumps(grbas)}
   * RASATI: {json.dumps(rasati)}
   * VHI-10: {vhi10}/40
-  * TME sostenido: {tme_o} s | TME suave: {tme_s} s | Índice S/O: {indice_so}
+  * TMF vocal sostenida: {tme_o} s | TME /s/: {tme_s} s | Cociente /s/ ÷ vocal: {indice_so}
 - Biometría Acústica Praat:
   * F0 media: {f0} Hz | Jitter local: {jitter}% | Shimmer: {shimmer}%
   * HNR: {hnr} dB | CPPS: {cpps} dB | AVQI: {avqi}
@@ -336,7 +381,7 @@ Genera la recomendación terapéutica precisa.
     selected_exs = []
     
     # Si hay hiperfunción o tensión elevada
-    if tension_score >= 2 or (jitter and float(jitter) > 1.2) or riesgo_total > 60:
+    if tension_score >= 2 or (jitter and float(jitter) > 1.2) or riesgo_num > 60:
         selected_exs.append({
             "id": "le_huche",
             "name": "Técnica de Le Huche",
@@ -441,7 +486,7 @@ Genera la recomendación terapéutica precisa.
         alertas_seguridad.append(
             "Incompetencia glótica (índice S/O > 1.2): se prioriza aducción (empuje) + SOVTE de alta carga.")
 
-    total_ses = 12 if riesgo_total > 90 else (10 if riesgo_total > 60 else 8)
+    total_ses = 12 if riesgo_num > 90 else (10 if riesgo_num > 60 else 8)
 
     return {
         "alertas_seguridad": alertas_seguridad,

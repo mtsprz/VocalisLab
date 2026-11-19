@@ -393,6 +393,8 @@ from recomendaciones import router as recomendaciones_router
 app.include_router(recomendaciones_router)
 from ficha_integral import router as ficha_integral_router
 app.include_router(ficha_integral_router)
+from practica_guiada import router as practica_guiada_router
+app.include_router(practica_guiada_router)
 try:
     from companion import router as companion_router, start_companion_worker
     app.include_router(companion_router)
