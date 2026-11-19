@@ -374,3 +374,83 @@ def verificar_texto(texto: str, permitidos: set) -> tuple:
         if buenas or not linea.strip():
             limpio.append(" ".join(buenas))
     return "\n".join(limpio).strip(), quitadas
+
+
+# ------------------------------------------------------- situación quirúrgica
+ETAPAS = {
+    "postquirurgica": "Postquirúrgica",
+    "prequirurgica": "Prequirúrgica (cirugía indicada o programada)",
+    "a_definir": "Lesión que puede requerir cirugía: conducta a definir con el ORL",
+    "no_quirurgica": "Sin indicación quirúrgica registrada (tratamiento conservador)",
+    "sin_datos": "Sin datos suficientes",
+}
+_PAT_POST = (r"post\s*-?\s*(operatori|quir[uú]rg|cirug)|posoperatori|se (lo |la )?oper[oó]|fue operad|"
+             r"operad[oa] (de|el|en)|cirug[ií]a (realizada|previa|reciente)|microcirug[ií]a (realizada|el|en)|"
+             r"ex[ée]resis (realizada|de)|cordectom[ií]a|tiroidectom[ií]a|fonocirug[ií]a realizada|"
+             r"intervenid[oa] quir")
+_PAT_PRE = (r"pre\s*-?\s*quir|indicaci[oó]n quir[uú]rg|se indica (cirug|microcirug)|candidat[oa] a (cirug|microcirug)|"
+            r"cirug[ií]a (programada|indicada|pendiente)|microcirug[ií]a (programada|indicada|pendiente)|"
+            r"turno (de|para) cirug|evaluar (cirug|resoluci[oó]n quir)|resoluci[oó]n quir[uú]rg")
+_PAT_LESION = (r"p[oó]lipo|quiste|edema de reinke|reinke|papiloma|leucoplas|granuloma|sulcus|"
+               r"lesi[oó]n (de masa|exof[ií]tica)|exof[ií]tic|hemorragia (cordal|submucosa)|ectasia|varice")
+_PAT_NEG = r"\b(sin|no|descarta|descartad[oa]|niega)\b[^.;\n]{0,25}$"
+
+
+def _textos_clinicos(datos: dict) -> list:
+    an = datos.get("anamnesis") or {}
+    out = [("diagnóstico ORL", an.get("diagnostico_orl"), an.get("fecha")),
+           ("motivo de consulta", an.get("motivo_consulta"), an.get("fecha")),
+           ("antecedentes", an.get("antecedentes_salud"), an.get("fecha")),
+           ("resumen clínico", an.get("resumen_clinico"), an.get("fecha"))]
+    for i in datos.get("informes_orl") or []:
+        de = i.get("datos_estructurados") if isinstance(i.get("datos_estructurados"), dict) else {}
+        for k in ("diagnostico_principal", "texto_corregido", "hallazgos_estructurales", "hallazgos_funcionales",
+                  "recomendaciones", "conducta", "texto_transcrito_crudo"):
+            v = i.get(k) or de.get(k)
+            if v:
+                out.append((f"informe ORL {i.get('fecha_informe') or _fecha(i.get('fecha')) or ''}".strip(),
+                            v if isinstance(v, str) else str(v), i.get("fecha")))
+    for e in datos.get("evaluaciones") or []:
+        if e.get("observaciones"):
+            out.append((f"observaciones {_fecha(e.get('fecha'))}", e["observaciones"], e.get("fecha")))
+    for a in datos.get("archivos") or []:
+        t = " ".join(str(a.get(k) or "") for k in ("titulo", "notas"))
+        if t.strip():
+            out.append((f"archivo {_fecha(a.get('fecha'))}", t, a.get("fecha")))
+    return [(n, str(t), f) for n, t, f in out if t and str(t).strip()]
+
+
+def _buscar(pat, texto):
+    for m in re.finditer(pat, texto, flags=re.IGNORECASE):
+        antes = texto[max(0, m.start() - 40):m.start()]
+        if re.search(_PAT_NEG, antes, flags=re.IGNORECASE):
+            continue  # "sin indicación quirúrgica", "no se operó"…
+        ini, fin = max(0, m.start() - 60), min(len(texto), m.end() + 60)
+        return "…" + texto[ini:fin].replace("\n", " ").strip() + "…"
+    return None
+
+
+def situacion_quirurgica(datos: dict, manual: str = None) -> dict:
+    """Etapa quirúrgica deducida de TODOS los textos, con la frase que la
+    sostiene. El profesional puede fijarla a mano (manual manda)."""
+    evid = {"postquirurgica": [], "prequirurgica": [], "a_definir": []}
+    for nombre, texto, fecha in _textos_clinicos(datos):
+        for etapa, pat in (("postquirurgica", _PAT_POST), ("prequirurgica", _PAT_PRE), ("a_definir", _PAT_LESION)):
+            frag = _buscar(pat, texto)
+            if frag:
+                evid[etapa].append({"fuente": nombre, "fecha": _fecha(fecha), "texto": frag})
+    if manual in ETAPAS:
+        etapa, origen = manual, "indicada por el profesional"
+    elif evid["postquirurgica"]:
+        etapa, origen = "postquirurgica", "deducida de los registros"
+    elif evid["prequirurgica"]:
+        etapa, origen = "prequirurgica", "deducida de los registros"
+    elif evid["a_definir"]:
+        etapa, origen = "a_definir", "deducida de los registros"
+    elif (datos.get("anamnesis") or {}).get("diagnostico_orl") or datos.get("informes_orl"):
+        etapa, origen = "no_quirurgica", "deducida de los registros"
+    else:
+        etapa, origen = "sin_datos", "sin diagnóstico ORL cargado"
+    return {"etapa": etapa, "etiqueta": ETAPAS[etapa], "origen": origen,
+            "evidencia": evid.get(etapa, []) if etapa in evid else [],
+            "otras": {k: v for k, v in evid.items() if k != etapa and v}}

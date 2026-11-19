@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Send, Copy, Pause, Play } from 'lucide-react';
+import { Loader2, Send, Copy, Pause, Play, Eye } from 'lucide-react';
+import PracticaPaciente from './PracticaPaciente';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 const GUIA_TXT: Record<string, string> = { sostenida: 'Nota sostenida', escalera: 'Escalera', rampa: 'Rampa (glissando)', patron: 'Patrón' };
@@ -18,6 +19,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   const [nuevo, setNuevo] = useState<any>(null);
   const [error, setError] = useState('');
   const [creando, setCreando] = useState(false);
+  const [previa, setPrevia] = useState<any>(null);
 
   const cargar = () => {
     fetch(`${BACKEND_URL}/api/practicas?paciente_id=${pacienteId}`).then(r => r.json()).then(setLista).catch(() => {});
@@ -68,6 +70,17 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
 
   return (
     <div className="space-y-3 text-xs">
+      {previa && (
+        <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) setPrevia(null); }}>
+          <div className="max-w-md mx-auto my-6 rounded-2xl overflow-hidden text-sm">
+            <PracticaPaciente onCerrar={() => setPrevia(null)} vistaPrevia={{
+              nombre: previa.nombre || '', estado: 'activa', consentimiento: true, profesional: 'Matías Pérez · Fonoaudiólogo',
+              indicaciones: previa.indicaciones || '',
+              ejercicios: previa.ejercicios.map((e: any) => ({ repeticiones: 3, tolerancia_cents: 100, ...e })),
+            }} />
+          </div>
+        </div>
+      )}
       {error && <p className="text-red-600">{error}</p>}
       {lista.aviso && <p className="text-amber-600">{lista.aviso}</p>}
       {!sug ? (!error && <p className="text-slate-500 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Buscando ejercicios…</p>) : (
@@ -107,6 +120,10 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
               <button onClick={crear} disabled={creando} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:opacity-50 flex items-center gap-1.5">
                 {creando ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Crear enlace de práctica
               </button>
+              <button onClick={() => setPrevia({ ejercicios: elegidos, indicaciones })}
+                className="px-4 py-2 rounded-xl border border-indigo-300 text-indigo-700 dark:text-indigo-300 font-bold flex items-center gap-1.5">
+                <Eye size={13} /> Ver como el paciente
+              </button>
             </div>
           )}
         </>
@@ -132,6 +149,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
               <span>{fecha(p.creada_at)} · {p.ejercicios.length} ejercicios · {p.consentimiento_at ? 'consentimiento dado' : 'sin abrir todavía'} · {p.activa ? 'activa' : 'pausada'}</span>
               <button onClick={() => pausar(p)} className="text-indigo-600 flex items-center gap-0.5">{p.activa ? <><Pause size={11} /> Pausar</> : <><Play size={11} /> Reactivar</>}</button>
               <button onClick={() => navigator.clipboard?.writeText(p.enlace)} className="text-indigo-600 flex items-center gap-0.5"><Copy size={11} /> Enlace</button>
+              <button onClick={() => setPrevia({ ejercicios: p.ejercicios, indicaciones: p.indicaciones, nombre: p.saludo })} className="text-indigo-600 flex items-center gap-0.5"><Eye size={11} /> Ver</button>
             </div>
           ))}
         </div>

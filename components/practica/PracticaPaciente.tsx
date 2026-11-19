@@ -14,8 +14,23 @@ type Fase = 'lista' | 'ambiente' | 'practica' | 'fin';
  * Práctica guiada del paciente (?practica=<token>): sin login. La voz se
  * analiza en el celular; al servidor solo viajan números del resultado.
  */
-export default function PracticaPaciente({ token }: { token: string }) {
-  const [info, setInfo] = useState<any>(null);
+export const DEMO = {
+  nombre: 'León', estado: 'activa', consentimiento: true, profesional: 'Matías Pérez · Fonoaudiólogo',
+  indicaciones: 'Dos veces por día, mañana y tarde.',
+  ejercicios: [
+    { nombre: 'Glissandos ascendentes y descendentes', guia: 'rampa', base_hz: 110, amplitud: 7, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: 'Sirena suave sobre /u/: subí y bajá siguiendo la rampa.' },
+    { nombre: 'Escala de cinco notas', guia: 'escalera', base_hz: 110, semitonos: [0, 2, 4, 5, 7, 5, 4, 2, 0], nota_s: 1.2, repeticiones: 2, tolerancia_cents: 100, consigna: 'Subí y bajá los escalones, cómodo.' },
+    { nombre: '/m/ sostenida', guia: 'sostenida', base_hz: 110, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: '/m/ en tu tono cómodo, pareja y sin esfuerzo.' },
+  ],
+};
+
+type Props = { token?: string; vistaPrevia?: any; onCerrar?: () => void };
+
+export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: Props) {
+  // Vista previa (desde la ficha) o demo (?practica=demo): no guarda nada.
+  const previa = vistaPrevia || (token === 'demo' ? DEMO : null);
+  const [simular, setSimular] = useState(!!previa);
+  const [info, setInfo] = useState<any>(previa);
   const [error, setError] = useState('');
   const [acepto, setAcepto] = useState(false);
   const [fase, setFase] = useState<Fase>('lista');
@@ -30,6 +45,7 @@ export default function PracticaPaciente({ token }: { token: string }) {
   const corriendo = useRef(false);
 
   useEffect(() => {
+    if (previa) return () => detenerAudio();
     fetch(`${BACKEND_URL}/api/practica/${token}`)
       .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.detail || 'No se pudo abrir'); return j; })
       .then(setInfo).catch(e => setError(e.message));
@@ -82,6 +98,7 @@ export default function PracticaPaciente({ token }: { token: string }) {
   /** 3 segundos en silencio para medir el ruido del ambiente. */
   const medirAmbiente = async () => {
     setFase('ambiente'); setAviso('');
+    if (simular) { setAmbiente({ db: -60, ok: true }); return; }
     try {
       const { an } = await abrirMicrofono();
       const buf = new Float32Array(an.fftSize);
@@ -104,10 +121,12 @@ export default function PracticaPaciente({ token }: { token: string }) {
 
   const practicar = async () => {
     if (!ej) return;
-    const { ctx, an } = await abrirMicrofono();
+    const mic = simular ? null : await abrirMicrofono().catch(() => null);
+    if (!simular && !mic) { setError('No se pudo usar el micrófono. Revisá el permiso del navegador.'); return; }
+    const sr = mic ? mic.ctx.sampleRate : 48000;
     setFase('practica'); setResumen(null);
     corriendo.current = true;
-    const buf = new Float32Array(an.fftSize);
+    const buf = new Float32Array(2048);
     const med = new Medidor();
     const d = duracion(ej), ciclo = d + PAUSA_S, total = ciclo * ej.repeticiones;
     const [lo, hi] = rangoSemis(ej);
@@ -145,9 +164,16 @@ export default function PracticaPaciente({ token }: { token: string }) {
         if (ahora >= total) return res();
         const r = Math.floor(ahora / ciclo), t = ahora - r * ciclo;
         setRep(r + 1);
-        an.getFloatTimeDomainData(buf);
-        const db = dbfs(buf);
-        const hz = db > UMBRAL_VOZ_DB ? yin(buf, ctx.sampleRate, minHz, maxHz) : null;
+        let db: number, hz: number | null;
+        if (mic) {
+          mic.an.getFloatTimeDomainData(buf);
+          db = dbfs(buf);
+          hz = db > UMBRAL_VOZ_DB ? yin(buf, sr, minHz, maxHz) : null;
+        } else {                           // voz simulada (vista previa)
+          db = -25;
+          const tt = Math.min(t, d);
+          hz = t > d ? null : hzDe(objetivoSemis(ej, tt) + Math.sin(ahora * 2.3) * 0.6 + (Math.random() - 0.5) * 0.4, ej.base_hz);
+        }
         if (t > d) {                       // pausa para respirar
           setAviso('Respirá…'); rastro.length = 0; dibujar(d, null, false);
         } else {
@@ -167,6 +193,7 @@ export default function PracticaPaciente({ token }: { token: string }) {
     corriendo.current = false;
     const res = med.resumen(Math.min(total, (performance.now() - inicio) / 1000), ej.repeticiones);
     setResumen(res); setFase('fin');
+    if (previa) { setHechos(h => [...new Set([...h, idx])]); return; }
     if (fueCompleto || (res.voz_pct || 0) > 0) {
       fetch(`${BACKEND_URL}/api/practica/${token}/sesion`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -202,6 +229,14 @@ export default function PracticaPaciente({ token }: { token: string }) {
 
   return (
     <Marco>
+      {previa && (
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 text-xs space-y-1.5">
+          <p className="font-bold text-amber-800 dark:text-amber-200">Vista previa: así lo ve el paciente (no se guarda nada)</p>
+          <label className="flex items-center gap-1.5"><input type="checkbox" checked={simular} onChange={e => { detenerAudio(); setSimular(e.target.checked); }} />
+            Simular la voz (sin micrófono). Desmarcalo para probar con tu voz.</label>
+          {onCerrar && <button onClick={() => { detenerAudio(); onCerrar(); }} className="text-indigo-600 font-semibold">Cerrar vista previa</button>}
+        </div>
+      )}
       {fase === 'lista' && (
         <div className="space-y-3">
           <div className={caja}>

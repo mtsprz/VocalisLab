@@ -148,3 +148,40 @@ async def gemini_generate_async(parts, generation_config=None, tipo="texto",
                 errores.append(f"{model}: {str(e)[:150]}")
                 print(f"[llm_client] Gemini {model} falló ({str(e)[:120]}). Probando siguiente...")
     raise RuntimeError("Ningún modelo Gemini respondió: " + " | ".join(errores))
+
+
+def gemini_texto_completo(prompt: str, temperature: float = 0.2, max_tokens: int = 16000,
+                          timeout: float = 150.0, continuaciones: int = 2) -> tuple:
+    """Texto largo SIN cortes. Los modelos que "piensan" gastan parte del
+    límite razonando y la respuesta quedaba a mitad de frase: se usa un
+    límite amplio y, si igual corta (finishReason MAX_TOKENS), se le pide que
+    siga exactamente donde quedó. Devuelve (texto, modelo, completo)."""
+    import httpx
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY no configurada")
+    errores = []
+    for model in gemini_models("texto"):
+        try:
+            contents = [{"role": "user", "parts": [{"text": prompt}]}]
+            texto, completo = "", False
+            for _ in range(continuaciones + 1):
+                r = httpx.post(_GEMINI_URL.format(model=model), params={"key": key}, timeout=timeout,
+                               json={"contents": contents,
+                                     "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}})
+                data = _gemini_respuesta_util(r)
+                parte = gemini_texto(data)
+                texto += parte
+                motivo = (data["candidates"][0].get("finishReason") or "").upper()
+                if motivo != "MAX_TOKENS":
+                    completo = motivo in ("STOP", "")
+                    break
+                contents += [{"role": "model", "parts": [{"text": parte}]},
+                             {"role": "user", "parts": [{"text": "Seguí exactamente desde donde quedaste, sin repetir nada."}]}]
+            if texto.strip():
+                return texto.strip(), model, completo
+            errores.append(f"{model}: respuesta vacía")
+        except Exception as e:
+            errores.append(f"{model}: {str(e)[:150]}")
+            print(f"[llm_client] Gemini {model} falló ({str(e)[:120]}). Probando siguiente...")
+    raise RuntimeError("Ningún modelo Gemini respondió: " + " | ".join(errores))

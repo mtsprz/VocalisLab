@@ -88,68 +88,9 @@ async def ficha(paciente_id: str):
     from criterios_clinicos import hallazgos, autopercepciones
     datos["autopercepciones"] = autopercepciones(datos)
     datos["lectura"] = hallazgos(datos)
+    from criterios_clinicos import situacion_quirurgica
+    datos["situacion_quirurgica"] = situacion_quirurgica(datos)
     return datos
-
-
-PROMPT_SINTESIS = """Sos un fonoaudiólogo especialista en voz (Argentina). Con los HALLAZGOS ya
-interpretados por reglas clínicas (abajo, en JSON), redactá una indicación general del cuadro del
-paciente para la historia clínica.
-
-Marco: rehabilitación vocal según Farías (Ejercicios que restauran la función vocal), Le Huche y
-Allali (La voz) y Cobeta, Núñez y Fernández (Patología de la voz). Usá su marco conceptual
-(hiperfunción/hipofunción, coordinación fonorrespiratoria, higiene y economía vocal, SOVT,
-resonancia) SIN inventar citas textuales, páginas ni autores.
-
-Reglas estrictas:
-- Usá SOLO los números que figuran en los hallazgos, escritos exactamente igual. No calcules
-  valores nuevos, no redondees, no conviertas escalas. Autopercepción: 0 = muy mala, 10 = excelente.
-- No cambies la lectura de ningún hallazgo (si dice "dentro de lo esperado", es normal).
-- No diagnostiques patología orgánica: eso es del ORL. Hablá de "compatible con", "sugiere".
-- Si faltan datos, decilo y sugerí cuáles conviene registrar.
-- Considerá la ocupación y las horas de uso de la voz en el contexto.
-
-Formato (texto plano, títulos cortos):
-Síntesis del cuadro
-Correlación de los datos
-Implicancias para la terapia (áreas a priorizar y qué evitar)
-Datos a completar o confirmar
-
-HALLAZGOS:
-{lectura}
-
-PACIENTE: {paciente}
-DIAGNÓSTICO ORL / MOTIVO: {diag}
-PLAN VIGENTE: {plan}"""
-
-
-@router.post("/api/ficha/{paciente_id}/sintesis")
-async def sintesis(paciente_id: str):
-    from criterios_clinicos import numeros_permitidos, verificar_texto
-    datos = await ficha(paciente_id)
-    lectura = datos["lectura"]
-    if len(lectura["hallazgos"]) < 2:
-        raise HTTPException(status_code=400, detail="Hay muy pocos datos cargados para una indicación general.")
-    p = datos["paciente"]
-    an = datos.get("anamnesis") or {}
-    plan = (datos.get("plan_vigente") or {}).get("recomendacion") or {}
-    prompt = PROMPT_SINTESIS.format(
-        lectura=json.dumps({k: lectura[k] for k in ("hallazgos", "patrones", "alertas", "faltan")},
-                           ensure_ascii=False, default=str),
-        paciente=json.dumps({k: p.get(k) for k in ("sexo", "ocupacion", "demanda_vocal_horas", "tipo_atencion")},
-                            ensure_ascii=False),
-        diag=f"{an.get('diagnostico_orl') or '—'} / {an.get('motivo_consulta') or '—'}",
-        plan=plan.get("diagnostico_funcional_fonoaudiologico") or "—")
-    try:
-        from llm_client import gemini_generate, gemini_texto
-        resp, modelo = gemini_generate([{"text": prompt}], {"temperature": 0.1, "maxOutputTokens": 2500}, timeout=120)
-        texto = gemini_texto(resp).strip()
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=502, detail=f"No se pudo redactar la síntesis: {str(e)[:200]}")
-    if not texto:
-        raise HTTPException(status_code=502, detail="La síntesis volvió vacía; probá de nuevo.")
-    texto, quitadas = verificar_texto(texto, numeros_permitidos(lectura, datos))
-    return {"ok": True, "texto": texto, "quitadas": quitadas, "modelo": modelo}
 
 
 async def _descargar_drive(token: str, fid: str) -> tuple:

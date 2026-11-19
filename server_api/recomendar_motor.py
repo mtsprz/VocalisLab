@@ -326,6 +326,19 @@ def _recomendacion_base(
                                     "evaluaciones": [_ev], "analisis_acusticos": [acustica] if acustica else []})
                 _lect_txt = "\n".join(f"  * {h['parametro']}: {h['lectura']} [{h['nivel']}]" for h in _lect["hallazgos"])
                 _lect_txt += "".join(f"\n  * Patrón: {x['patron']} ({'; '.join(x['evidencia'])})" for x in _lect["patrones"])
+                from criterios_clinicos import situacion_quirurgica, ETAPAS
+                _orl_x = (_extras.get("informe_orl") or {}) if isinstance(_extras, dict) else {}
+                _sq = situacion_quirurgica({"anamnesis": anamnesis or {}, "informes_orl": [{
+                    "diagnostico_principal": _orl_x.get("diagnostico"), "texto_corregido": _orl_x.get("texto"),
+                    "datos_estructurados": {"hallazgos_estructurales": _orl_x.get("estructurales"),
+                                            "hallazgos_funcionales": _orl_x.get("funcionales")}}] if _orl_x else []})
+                _lect_txt += f"\n  * Situación quirúrgica: {_sq['etiqueta']}" + (
+                    f" (registro: {_sq['evidencia'][0]['texto']})" if _sq["evidencia"] else "")
+                if _sq["etapa"] == "postquirurgica":
+                    _lect_txt += ("\n  * POSTQUIRÚRGICO: respetar el reposo indicado por el cirujano; reintroducción gradual, "
+                                  "solo ejercicios de mínimo impacto al inicio (SOVT suaves, flujo), sin empuje.")
+                elif _sq["etapa"] == "prequirurgica":
+                    _lect_txt += "\n  * PREQUIRÚRGICO: terapia prequirúrgica (higiene, eliminar abuso, coordinación, SOVT) y línea de base."
             except Exception as _e:
                 print(f"[recomendar_motor] lectura clínica no disponible: {_e}")
                 _lect_txt = "  (no disponible)"
@@ -359,17 +372,32 @@ DATOS DEL CASO CLÍNICO:
 
 Genera la recomendación terapéutica precisa.
 """
-            raw, _model = groq_chat(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
-                ],
-                temperature=0.25,
-                max_tokens=2200,
-                response_format={"type": "json_object"}
-            )
-            raw = raw.strip()
-            return json.loads(raw)
+            # Los modelos que razonan gastan parte del límite pensando: con
+            # 2200 el JSON llegaba cortado y se caía al motor de reglas.
+            from externo_ocr import _extract_json
+            raw = ""
+            try:
+                raw, _model = groq_chat(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content}
+                    ],
+                    temperature=0.25,
+                    max_tokens=8000,
+                    response_format={"type": "json_object"},
+                    timeout=90.0,
+                )
+                rec = _extract_json(raw)
+                if isinstance(rec, dict) and rec.get("ejercicios_recomendados") is not None:
+                    return rec
+            except Exception as e:
+                print(f"[recomendar_motor] Groq sin JSON completo ({str(e)[:120]}); pruebo Gemini")
+            from llm_client import gemini_generate, gemini_texto
+            resp, _model = gemini_generate(
+                [{"text": system_prompt + "\n\n" + user_content}],
+                {"temperature": 0.25, "maxOutputTokens": 16000, "responseMimeType": "application/json"},
+                timeout=150)
+            return _extract_json(gemini_texto(resp))
         except Exception as e:
             traceback.print_exc()
 

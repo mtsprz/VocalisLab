@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Loader2, Image as ImageIcon, Film, Columns2, Eye, EyeOff, Sparkles, AlertTriangle, ExternalLink } from 'lucide-react';
 import { nombreCentro } from '../centros';
 import PanelPractica from '../practica/PanelPractica';
+import OrientacionClinica from './OrientacionClinica';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -49,11 +50,10 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
   const [abiertos, setAbiertos] = useState<string[]>([]);
   const [comparar, setComparar] = useState<string[]>([]);
   const [analisis, setAnalisis] = useState<{ texto?: string; cargando?: boolean; error?: string }>({});
-  const [sintesis, setSintesis] = useState<{ texto?: string; quitadas?: string[]; cargando?: boolean; error?: string }>({});
 
   useEffect(() => {
     if (!pacienteId) return;
-    setCargando(true); setError(''); setD(null); setComparar([]); setAnalisis({}); setSintesis({});
+    setCargando(true); setError(''); setD(null); setComparar([]); setAnalisis({});
     fetch(`${BACKEND_URL}/api/ficha/${pacienteId}`)
       .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.detail || `Error ${r.status}`); return j; })
       .then(setD).catch(e => setError(e.message)).finally(() => setCargando(false));
@@ -74,18 +74,6 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
       setAnalisis({ texto: j.texto });
     } catch (e: any) {
       setAnalisis({ error: e?.message || 'No se pudo analizar' });
-    }
-  };
-
-  const redactar = async () => {
-    setSintesis({ cargando: true });
-    try {
-      const r = await fetch(`${BACKEND_URL}/api/ficha/${pacienteId}/sintesis`, { method: 'POST' });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.detail || `Error ${r.status}`);
-      setSintesis({ texto: j.texto, quitadas: j.quitadas });
-    } catch (e: any) {
-      setSintesis({ error: e?.message || 'No se pudo redactar' });
     }
   };
 
@@ -283,7 +271,11 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
         <PanelPractica pacienteId={pacienteId} />
       </Tarjeta>
 
-      {d.lectura && <LecturaClinica l={d.lectura} aps={d.autopercepciones || []} sintesis={sintesis} redactar={redactar} />}
+      {d.lectura && <LecturaClinica l={d.lectura} aps={d.autopercepciones || []} />}
+
+      <Tarjeta titulo="Orientación clínica integral">
+        <OrientacionClinica pacienteId={pacienteId} situacion={d.situacion_quirurgica} paciente={p} />
+      </Tarjeta>
     </div>
   );
 }
@@ -298,7 +290,7 @@ const NIVEL: Record<string, string> = {
 const NIVEL_TXT: Record<string, string> = { normal: 'Normal', leve: 'Leve', moderado: 'Moderado', alterado: 'Alterado', sin_dato: 'Sin referencia' };
 
 /** Lectura por reglas clínicas fijas + indicación general redactada (verificada). */
-function LecturaClinica({ l, aps, sintesis, redactar }: { l: any; aps: any[]; sintesis: any; redactar: () => void }) {
+function LecturaClinica({ l, aps }: { l: any; aps: any[] }) {
   const [refs, setRefs] = useState(false);
   return (
     <Tarjeta titulo="Lectura clínica integrada">
@@ -346,24 +338,6 @@ function LecturaClinica({ l, aps, sintesis, redactar }: { l: any; aps: any[]; si
           {Object.values(l.referencias).map((r: any, i: number) => <li key={i}>{r}</li>)}
         </ul>
       )}
-      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
-        <button onClick={redactar} disabled={sintesis.cargando}
-          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
-          {sintesis.cargando ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-          Redactar indicación general (orientativa)
-        </button>
-        {sintesis.error && <p className="mt-2 text-xs text-red-600 flex gap-1.5"><AlertTriangle size={13} />{sintesis.error}</p>}
-        {sintesis.texto && (
-          <div className="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
-            {sintesis.texto}
-            {sintesis.quitadas?.length > 0 && (
-              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">
-                Se quitaron {sintesis.quitadas.length} frase(s) con valores que no coinciden con los datos cargados.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
     </Tarjeta>
   );
 }

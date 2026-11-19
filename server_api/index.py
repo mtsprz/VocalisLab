@@ -395,6 +395,8 @@ from ficha_integral import router as ficha_integral_router
 app.include_router(ficha_integral_router)
 from practica_guiada import router as practica_guiada_router
 app.include_router(practica_guiada_router)
+from orientacion_clinica import router as orientacion_clinica_router
+app.include_router(orientacion_clinica_router)
 try:
     from companion import router as companion_router, start_companion_worker
     app.include_router(companion_router)
