@@ -1,29 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { yin, dbfs, nombreNota, hzAMidi } from '../../utils/pitch';
+import { yin, dbfs, nombreNota, hzAMidi, SuavizadorF0 } from '../../utils/pitch';
 import {
   Ejercicio, duracion, objetivoSemis, rangoSemis, semisDe, hzDe, Medidor,
   tocarCamino, tocarNota, clic, compararTono,
 } from '../../utils/guiaPractica';
+import { Locutor } from '../../utils/locutor';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 const UMBRAL_VOZ_DB = -50;    // por debajo: silencio
 const RUIDO_ALTO_DB = -45;    // ambiente ruidoso
 const MUY_FUERTE_DB = -8;     // volumen muy alto
-const ESCUCHA_PRE = 1.2;      // "Escuchá" antes del modelo
-const CUENTA = 1.8;           // "Ahora vos" + 2 clics
-const PAUSA = 2.5;            // respiro
+const PAUSA_MS = 2500;        // respiro entre repeticiones
 
 type Fase = 'lista' | 'preparar' | 'practica' | 'fin';
 type Etapa = 'escucha' | 'cuenta' | 'canto' | 'pausa';
 const nota = (hz: number) => nombreNota(hzAMidi(hz));
+const dormir = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export const DEMO = {
   nombre: 'León', estado: 'activa', consentimiento: true, profesional: 'Matías Pérez · Fonoaudiólogo',
-  indicaciones: 'Dos veces por día, mañana y tarde.', veces_por_dia: 2, practicas_hoy: 1,
+  indicaciones: 'Dos veces por día, mañana y tarde.', veces_por_dia: 2, practicas_hoy: 1, voz: [],
   ejercicios: [
-    { nombre: 'Glissandos ascendentes y descendentes', guia: 'rampa', base_hz: 118, amplitud: 5, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: 'Sirena suave sobre /u/: subí y bajá siguiendo la rampa.', rango_min_hz: 98, rango_max_hz: 175 },
-    { nombre: 'Escala de cinco notas', guia: 'escalera', base_hz: 118, semitonos: [0, 2, 4, 5, 7, 5, 4, 2, 0], nota_s: 1.2, repeticiones: 2, tolerancia_cents: 100, consigna: 'Subí y bajá los escalones, cómodo.', rango_min_hz: 98, rango_max_hz: 175 },
-    { nombre: '/m/ sostenida', guia: 'sostenida', base_hz: 118, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: '/m/ en tu tono cómodo, pareja y sin esfuerzo.', rango_min_hz: 98, rango_max_hz: 175 },
+    { bank_id: 'glissandos', nombre: 'Glissandos ascendentes y descendentes', guia: 'rampa', base_hz: 118, amplitud: 5, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: 'Sirena suave sobre /u/: subí y bajá siguiendo la rampa.', rango_min_hz: 98, rango_max_hz: 175 },
+    { bank_id: 'popote_aire', nombre: 'Escala de cinco notas', guia: 'escalera', base_hz: 118, semitonos: [0, 2, 4, 5, 7, 5, 4, 2, 0], nota_s: 1.2, repeticiones: 2, tolerancia_cents: 100, consigna: 'Subí y bajá los escalones, cómodo.', rango_min_hz: 98, rango_max_hz: 175 },
+    { bank_id: 'oclusion_nasal', nombre: '/m/ sostenida', guia: 'sostenida', base_hz: 118, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: '/m/ en tu tono cómodo, pareja y sin esfuerzo.', rango_min_hz: 98, rango_max_hz: 175 },
   ],
 };
 
@@ -31,9 +31,10 @@ type Props = { token?: string; vistaPrevia?: any; onCerrar?: () => void };
 
 /**
  * Práctica guiada del paciente (?practica=<token>): sin login. Cada
- * repetición: ESCUCHÁ el modelo (sonido + pelota) → cuenta → AHORA VOS (se
- * mide, sin sonido para que no se mezcle) → respirá. La voz se analiza en el
- * celular; al servidor solo viajan números.
+ * repetición: ESCUCHÁ el modelo (sonido + pelota) → AHORA VOS (se mide sin
+ * ningún sonido: el micrófono solo escucha al paciente) → RESPIRÁ. Las
+ * indicaciones suenan con la voz grabada del fonoaudiólogo (o la del
+ * celular). La voz se analiza en el celular; al servidor solo viajan números.
  */
 export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: Props) {
   const previa = vistaPrevia || (token === 'demo' ? DEMO : null);
@@ -55,10 +56,12 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const mic = useRef<{ stream: MediaStream; an: AnalyserNode } | null>(null);
+  const loc = useRef<Locutor | null>(null);
   const corriendo = useRef(false);
   const tanda = useRef(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
   const preparado = useRef(false);
   const calibRef = useRef<any>(null);
+  const ruidoRef = useRef<any>(null);
   const tandaContada = useRef(false);
 
   useEffect(() => {
@@ -77,6 +80,21 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
     ctxRef.current.resume().catch(() => {});
     return ctxRef.current;
   };
+  /** Locutor con la voz grabada del profesional (se crea y precarga una vez). */
+  const locutor = async () => {
+    if (!loc.current) {
+      const claves: string[] = info?.voz || [];
+      const fuente = previa
+        ? (vistaPrevia?.fuenteVoz || null)
+        : async (c: string) => { const r = await fetch(`${BACKEND_URL}/api/practica/${token}/voz/${encodeURIComponent(c)}`); return r.ok ? r.arrayBuffer() : null; };
+      loc.current = new Locutor(audio, fuente, claves);
+      await loc.current.precargar();
+    }
+    loc.current.activo = hablar;
+    return loc.current;
+  };
+  const decir = async (clave: string, texto: string, margen = 250) => (await locutor()).decir(clave, texto, margen);
+
   const abrirMic = async () => {
     if (mic.current) return mic.current;
     const ctx = audio();
@@ -91,43 +109,34 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
   };
   function detener() {
     corriendo.current = false;
-    try { window.speechSynthesis?.cancel(); } catch {}
+    loc.current?.callar();
     mic.current?.stream.getTracks().forEach(t => t.stop());
     mic.current = null;
     ctxRef.current?.close().catch(() => {});
     ctxRef.current = null;
+    loc.current = null;
   }
-  const decir = (t: string) => {
-    if (!hablar || !('speechSynthesis' in window)) return;
-    try {
-      const u = new SpeechSynthesisUtterance(t);
-      u.lang = 'es-AR'; u.rate = 1.05;
-      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
-    } catch {}
-  };
 
-  /** Mide F0 (mediana) durante `seg` segundos. Simulado en la vista previa. */
+  /** F0 mediana durante `seg` segundos, sin el ataque y sin saltos aislados. */
   const medir = async (seg: number, objetivo: number) => {
-    if (simular) {
-      await new Promise(r => setTimeout(r, seg * 1000));
-      return { hz: objetivo * Math.pow(2, 0.1 / 12), db: -60 };
-    }
+    if (simular) { await dormir(seg * 1000); return { hz: objetivo * Math.pow(2, 0.1 / 12), db: -60 }; }
     const { an } = await abrirMic();
     const ctx = audio();
     const buf = new Float32Array(an.fftSize);
+    const suav = new SuavizadorF0();
     const f0: number[] = [], dbs: number[] = [];
     const fin = Date.now() + seg * 1000;
     await new Promise<void>(res => {
       const t = setInterval(() => {
         an.getFloatTimeDomainData(buf);
         const db = dbfs(buf); dbs.push(db);
-        const hz = db > UMBRAL_VOZ_DB ? yin(buf, ctx.sampleRate, 60, 1000) : null;
+        const hz = suav.agregar(db > UMBRAL_VOZ_DB ? yin(buf, ctx.sampleRate, 55, 1000) : null);
         if (hz) f0.push(hz);
         if (Date.now() > fin) { clearInterval(t); res(); }
-      }, 50);
+      }, 40);
     });
     const ord = [...f0].sort((a, b) => a - b), od = [...dbs].sort((a, b) => a - b);
-    return { hz: ord.length >= 8 ? ord[Math.floor(ord.length / 2)] : null, db: Math.round(od[Math.floor(od.length / 2)]) };
+    return { hz: ord.length >= 10 ? ord[Math.floor(ord.length / 2)] : null, db: Math.round(od[Math.floor(od.length / 2)]) };
   };
 
   const aceptar = async () => {
@@ -148,10 +157,13 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
   const prepararSilencio = async () => {
     try {
       if (!simular) await abrirMic();
+      setPrep({ paso: 'hablando' });
+      await decir('bienvenida', 'Hola, vamos a hacer tu práctica de voz.');
+      await decir('silencio', 'Quedate en silencio unos segundos.', 400);
       setPrep({ paso: 'silencio' });
-      decir('Quedate en silencio');
       const r = await medir(3, ej!.base_hz);
-      setPrep({ paso: 'nota', ruido: { db: r.db, ok: r.db < RUIDO_ALTO_DB } });
+      ruidoRef.current = { db: r.db, ok: r.db < RUIDO_ALTO_DB };
+      setPrep({ paso: 'nota', ruido: ruidoRef.current });
     } catch {
       setError('No se pudo usar el micrófono. Revisá el permiso del navegador y volvé a intentar.');
     }
@@ -159,13 +171,12 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
   const afinar = async () => {
     const base = ej!.base_hz;
     setPrep(p => ({ ...p, paso: 'escuchando' }));
-    decir('Escuchá tu nota');
-    await new Promise(r => setTimeout(r, 1100));
+    await decir('escucha_nota', 'Escuchá tu nota.');
     tocarNota(audio(), base, 2.2);
-    await new Promise(r => setTimeout(r, 2500));
+    await dormir(2500);
+    setPrep(p => ({ ...p, paso: 'instruccion' }));
+    await decir('hace_mmm', 'Ahora hacé mmm en esa misma nota.', 300);   // se mide recién cuando terminó de hablar
     setPrep(p => ({ ...p, paso: 'cantando' }));
-    decir('Ahora hacé mmm en esa nota');
-    await new Promise(r => setTimeout(r, 1500));
     const r = await medir(3, base);
     let calib: any = { hz: r.hz, st: null, texto: 'No te escuchamos: acercá el celular y probá de nuevo.', ok: false };
     if (r.hz) {
@@ -179,7 +190,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
     }
     calibRef.current = calib;
     setPrep(p => ({ ...p, paso: 'resultado', calib }));
-    decir(calib.ok ? 'Muy bien' : 'Probemos de nuevo');
+    await decir(calib.ok ? 'afinado' : 'de_nuevo', calib.ok ? 'Muy bien, estás en tu nota.' : 'Probemos de nuevo.');
   };
   const empezar = () => { preparado.current = true; setFase('practica'); setTimeout(() => practicar(idx), 50); };
 
@@ -191,6 +202,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
     corriendo.current = true;
     const buf = new Float32Array(2048);
     const med = new Medidor();
+    const suav = new SuavizadorF0();
     const d = duracion(e);
     const [lo, hi] = rangoSemis(e);
     const minHz = Math.max(55, hzDe(lo - 8, e.base_hz)), maxHz = Math.min(1200, hzDe(hi + 14, e.base_hz));
@@ -222,81 +234,88 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       }
     };
 
-    const tramos: { etapa: Etapa; dur: number; rep: number }[] = [];
-    for (let r = 0; r < e.repeticiones; r++) {
-      if (modeloSiempre || r === 0) tramos.push({ etapa: 'escucha', dur: ESCUCHA_PRE + d, rep: r });
-      tramos.push({ etapa: 'cuenta', dur: CUENTA, rep: r });
-      tramos.push({ etapa: 'canto', dur: d, rep: r });
-      if (r < e.repeticiones - 1) tramos.push({ etapa: 'pausa', dur: PAUSA, rep: r });
-    }
-    const t0 = performance.now();
-    let cantado = 0;
-    for (const tr of tramos) {
-      if (!corriendo.current) break;
-      setEtapa(tr.etapa); setRep(tr.rep + 1); rastro.length = 0;
+    /** Corre `seg` segundos llamando a `cuadro(t)` cada 40 ms. */
+    const durante = (seg: number, cuadro: (t: number) => void) => new Promise<void>(res => {
       const ini = performance.now();
-      if (tr.etapa === 'escucha') {
-        setAviso('Escuchá y mirá la pelota'); decir('Escuchá');
-        tocarCamino(ctx, e, ctx.currentTime + ESCUCHA_PRE);
-      } else if (tr.etapa === 'cuenta') {
-        setAviso('Preparate…'); decir('Ahora vos');
-        clic(ctx, ctx.currentTime + 1.0); clic(ctx, ctx.currentTime + 1.4, true);
-      } else if (tr.etapa === 'pausa') {
-        setAviso('Respirá tranquilo'); decir('Respirá');
-      } else {
-        setAviso('');
+      const tick = () => {
+        if (!corriendo.current) return res();
+        const t = (performance.now() - ini) / 1000;
+        if (t >= seg) return res();
+        cuadro(t);
+        setTimeout(tick, 40);
+      };
+      tick();
+    });
+
+    let cantado = 0;
+    for (let r = 0; r < e.repeticiones && corriendo.current; r++) {
+      setRep(r + 1);
+      // 1) ESCUCHÁ: consigna (la primera vez) + modelo sonando con la pelota.
+      if (modeloSiempre || r === 0) {
+        setEtapa('escucha'); rastro.length = 0; dibujar(0, null, 'nada');
+        if (r === 0) { setAviso(e.consigna || ''); await decir(`ej:${e.bank_id || ''}`, e.consigna || '', 300); }
+        if (!corriendo.current) break;
+        setAviso('Escuchá y mirá la pelota');
+        await decir('escucha', 'Escuchá.', 150);
+        tocarCamino(ctx, e, ctx.currentTime + 0.05);
+        await durante(d + 0.1, t => dibujar(t, objetivoSemis(e, Math.min(t, d)), 'modelo'));
+        await dormir(250);   // que termine de sonar
       }
-      await new Promise<void>(res => {
-        const tick = () => {
-          if (!corriendo.current) return res();
-          const t = (performance.now() - ini) / 1000;
-          if (t >= tr.dur) return res();
-          if (tr.etapa === 'escucha') {
-            const tm = t - ESCUCHA_PRE;
-            dibujar(Math.max(0, tm), tm >= 0 ? objetivoSemis(e, tm) : null, 'modelo');
-          } else if (tr.etapa === 'canto') {
-            let db: number, hz: number | null;
-            if (m) {
-              m.an.getFloatTimeDomainData(buf);
-              db = dbfs(buf);
-              hz = db > UMBRAL_VOZ_DB ? yin(buf, ctx.sampleRate, minHz, maxHz) : null;
-            } else {
-              db = -25;
-              hz = hzDe(objetivoSemis(e, t) + Math.sin(t * 2.3) * 0.6 + (Math.random() - 0.5) * 0.4, e.base_hz);
-            }
-            const objetivo = hzDe(objetivoSemis(e, t), e.base_hz);
-            med.agregar(hz, objetivo, e.tolerancia_cents);
-            const semis = hz ? semisDe(hz, e.base_hz) : null;
-            const cents = hz ? 1200 * Math.log2(hz / objetivo) : 0;
-            const dentro = hz != null && Math.abs(cents) <= e.tolerancia_cents;
-            const octava = hz != null && !dentro && Math.abs(Math.abs(cents) - 1200) <= e.tolerancia_cents;
-            rastro.push({ x: 52 + (t / d) * ((canvas.current?.width || 640) - 52), s: semis });
-            setAviso(db > MUY_FUERTE_DB ? 'Más suave: no hace falta fuerza'
-              : hz == null ? 'Te escucho…'
-              : dentro ? 'Muy bien'
-              : octava ? `Estás una octava más ${cents > 0 ? 'aguda' : 'grave'}`
-              : cents > 0 ? 'Un poco más grave' : 'Un poco más agudo');
-            dibujar(t, semis, hz == null ? 'nada' : dentro ? 'dentro' : 'fuera');
-          } else {
-            dibujar(0, null, 'nada');
-          }
-          setTimeout(tick, 50);
-        };
-        tick();
+      if (!corriendo.current) break;
+      // 2) CUENTA: "Ahora vos" (se espera que termine) + dos clics.
+      setEtapa('cuenta'); setAviso('Preparate…'); rastro.length = 0; dibujar(0, null, 'nada');
+      await decir('ahora_vos', 'Ahora vos.', 100);
+      clic(ctx, ctx.currentTime + 0.05); clic(ctx, ctx.currentTime + 0.5, true);
+      await dormir(800);
+      if (!corriendo.current) break;
+      // 3) AHORA VOS: se mide sin ningún sonido de la app.
+      setEtapa('canto'); setAviso(''); suav.reset();
+      const ini = performance.now();
+      await durante(d, t => {
+        let db: number, hzCrudo: number | null;
+        if (m) {
+          m.an.getFloatTimeDomainData(buf);
+          db = dbfs(buf);
+          hzCrudo = db > UMBRAL_VOZ_DB ? yin(buf, ctx.sampleRate, minHz, maxHz) : null;
+        } else {
+          db = -25;
+          hzCrudo = hzDe(objetivoSemis(e, t) + Math.sin(t * 2.3) * 0.6 + (Math.random() - 0.5) * 0.4, e.base_hz);
+        }
+        const hz = suav.agregar(hzCrudo);
+        const objetivo = hzDe(objetivoSemis(e, t), e.base_hz);
+        if (hzCrudo == null || hz != null) med.agregar(hz, objetivo, e.tolerancia_cents);  // el ataque no se cuenta
+        const semis = hz ? semisDe(hz, e.base_hz) : null;
+        const cents = hz ? 1200 * Math.log2(hz / objetivo) : 0;
+        const dentro = hz != null && Math.abs(cents) <= e.tolerancia_cents;
+        const octava = hz != null && !dentro && Math.abs(Math.abs(cents) - 1200) <= e.tolerancia_cents;
+        rastro.push({ x: 52 + (t / d) * ((canvas.current?.width || 640) - 52), s: semis });
+        setAviso(db > MUY_FUERTE_DB ? 'Más suave: no hace falta fuerza'
+          : hzCrudo == null ? 'Te escucho…'
+          : hz == null ? ''
+          : dentro ? 'Muy bien'
+          : octava ? `Estás una octava más ${cents > 0 ? 'aguda' : 'grave'}`
+          : cents > 0 ? 'Un poco más grave' : 'Un poco más agudo');
+        dibujar(t, semis, hz == null ? 'nada' : dentro ? 'dentro' : 'fuera');
       });
-      if (tr.etapa === 'canto') cantado += Math.min(tr.dur, (performance.now() - ini) / 1000);
+      cantado += Math.min(d, (performance.now() - ini) / 1000);
+      // 4) RESPIRÁ.
+      if (r < e.repeticiones - 1 && corriendo.current) {
+        setEtapa('pausa'); setAviso('Respirá tranquilo'); dibujar(0, null, 'nada');
+        const p0 = performance.now();
+        await decir('respira', 'Respirá.', 0);
+        await dormir(Math.max(0, PAUSA_MS - (performance.now() - p0)));
+      }
     }
     const completo = corriendo.current;
     corriendo.current = false;
-    window.speechSynthesis?.cancel();
     const res = med.resumen(cantado, e.repeticiones);
     setResumen(res); setFase('fin');
-    decir(res.dentro_pct != null && res.dentro_pct >= 70 ? 'Muy bien, terminaste' : 'Terminaste, bien hecho');
-    void t0;
+    const bien = res.dentro_pct != null && res.dentro_pct >= 70;
+    decir(bien ? 'fin_bien' : 'fin', bien ? 'Muy bien, terminaste el ejercicio.' : 'Terminaste. Buen trabajo.');
     if (previa) { setHechos(h => [...new Set([...h, i])]); if (!tandaContada.current) { tandaContada.current = true; setHoy(x => x + 1); } return; }
     if (completo || (res.voz_pct || 0) > 0) {
       const amb: any = { tanda: tanda.current };
-      if (prep.ruido) { amb.ruido_dbfs = prep.ruido.db; amb.silencioso = prep.ruido.ok; }
+      if (ruidoRef.current) { amb.ruido_dbfs = ruidoRef.current.db; amb.silencioso = ruidoRef.current.ok; }
       if (calibRef.current?.hz) { amb.calibracion_hz = calibRef.current.hz; amb.calibracion_st = calibRef.current.st; }
       fetch(`${BACKEND_URL}/api/practica/${token}/sesion`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -384,11 +403,12 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
         <div className={caja + ' space-y-3 text-sm'}>
           <p className="font-bold">Antes de empezar</p>
           {prep.paso === 'inicio' && (<>
-            <p>1. Vamos a escuchar el lugar 3 segundos: quedate en silencio.</p>
-            <button onClick={prepararSilencio} className={boton}>Escuchar el lugar</button>
+            <p>1. Vamos a escuchar el lugar unos segundos: quedate en silencio.</p>
+            <button onClick={prepararSilencio} className={boton}>Empezar</button>
           </>)}
+          {prep.paso === 'hablando' && <p className="text-center py-4">Escuchá la indicación… 🔊</p>}
           {prep.paso === 'silencio' && <p className="text-center py-4">Silencio… 🤫</p>}
-          {['nota', 'escuchando', 'cantando', 'resultado'].includes(prep.paso) && prep.ruido && (
+          {['nota', 'escuchando', 'instruccion', 'cantando', 'resultado'].includes(prep.paso) && prep.ruido && (
             <p className={prep.ruido.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}>
               {prep.ruido.ok ? 'El lugar está tranquilo.' : 'Hay bastante ruido: si podés, buscá un lugar más silencioso.'}
             </p>
@@ -398,7 +418,8 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
             <button onClick={afinar} className={boton}>Escuchar y afinar</button>
           </>)}
           {prep.paso === 'escuchando' && <p className="text-center py-4">Escuchá la nota… 🎵</p>}
-          {prep.paso === 'cantando' && <p className="text-center py-4">Ahora vos: «mmm»… 🎙️</p>}
+          {prep.paso === 'instruccion' && <p className="text-center py-4">Escuchá la indicación… 🔊</p>}
+          {prep.paso === 'cantando' && <p className="text-center py-4 font-bold text-emerald-600">Ahora vos: «mmm»… 🎙️</p>}
           {prep.paso === 'resultado' && prep.calib && (<>
             <p className={prep.calib.ok ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : 'text-amber-700 dark:text-amber-300 font-semibold'}>{prep.calib.texto}</p>
             {!prep.calib.ok && <button onClick={afinar} className={secundario}>Probar de nuevo</button>}
@@ -415,8 +436,8 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
             {etapa === 'escucha' ? '🎧 Escuchá' : etapa === 'cuenta' ? 'Preparate…' : etapa === 'canto' ? '🎙️ Ahora vos' : '🌬️ Respirá'}
           </p>
           <canvas ref={canvas} width={640} height={300} className="w-full rounded-xl bg-slate-50 dark:bg-black/30" />
-          <p className="text-center font-semibold h-6">{aviso}</p>
-          <button onClick={() => { corriendo.current = false; }} className="w-full py-2 rounded-xl border border-slate-300 dark:border-white/20 text-sm">Terminar</button>
+          <p className="text-center font-semibold min-h-6">{aviso}</p>
+          <button onClick={() => { corriendo.current = false; loc.current?.callar(); }} className="w-full py-2 rounded-xl border border-slate-300 dark:border-white/20 text-sm">Terminar</button>
         </div>
       )}
 

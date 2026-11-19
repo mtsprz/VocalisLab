@@ -78,3 +78,25 @@ export function urlWs(backend: string, ruta: string): string {
   const base = backend || window.location.origin;
   return base.replace(/^http/, 'ws').replace(/\/$/, '') + ruta;
 }
+
+/**
+ * Filtro de continuidad para la F0 en vivo: descarta saltos aislados (un
+ * cuadro que "salta" una octava y vuelve) y entrega la mediana de los
+ * últimos cuadros. Al empezar a sonar, ignora los primeros cuadros del
+ * ataque (todavía no hay periodicidad estable).
+ */
+export class SuavizadorF0 {
+  private hist: number[] = [];
+  private conVoz = 0;
+  constructor(private ataque = 3, private ventana = 5) {}
+  reset() { this.hist = []; this.conVoz = 0; }
+  agregar(hz: number | null): number | null {
+    if (hz == null) { this.conVoz = 0; this.hist = []; return null; }
+    this.conVoz++;
+    if (this.conVoz <= this.ataque) return null;
+    this.hist.push(hz);
+    if (this.hist.length > this.ventana) this.hist.shift();
+    const ord = [...this.hist].sort((a, b) => a - b);
+    return ord[Math.floor(ord.length / 2)];
+  }
+}

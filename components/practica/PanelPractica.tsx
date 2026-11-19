@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Send, Copy, Pause, Play, Eye, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import PracticaPaciente from './PracticaPaciente';
+import VozGuia from './VozGuia';
 import { nombreNota, hzAMidi } from '../../utils/pitch';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -36,6 +37,8 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   const [error, setError] = useState('');
   const [creando, setCreando] = useState(false);
   const [previa, setPrevia] = useState<any>(null);
+  const [vozClaves, setVozClaves] = useState<string[]>([]);
+  const [verVoz, setVerVoz] = useState(false);
 
   const cargar = () => {
     fetch(`${BACKEND_URL}/api/practicas?paciente_id=${pacienteId}`).then(r => r.json()).then(setLista).catch(() => {});
@@ -118,13 +121,20 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
           <div className="max-w-md mx-auto my-6 rounded-2xl overflow-hidden text-sm">
             <PracticaPaciente onCerrar={() => setPrevia(null)} vistaPrevia={{
               nombre: previa.nombre || '', estado: 'activa', consentimiento: true, profesional: 'Matías Pérez · Fonoaudiólogo',
-              indicaciones: previa.indicaciones || '', veces_por_dia: previa.veces || 2, practicas_hoy: 0,
+              indicaciones: previa.indicaciones || '', veces_por_dia: previa.veces || 2, practicas_hoy: 0, voz: vozClaves,
+              fuenteVoz: async (c: string) => { const r = await fetch(`${BACKEND_URL}/api/voz-guia/${encodeURIComponent(c)}/audio`); return r.ok ? r.arrayBuffer() : null; },
               ejercicios: previa.ejercicios.map((e: any) => ({ repeticiones: 3, tolerancia_cents: 100, ...e })),
             }} />
           </div>
         </div>
       )}
       {error && <p className="text-red-600 flex gap-1.5"><AlertTriangle size={13} className="shrink-0" />{error}</p>}
+      <div className="p-3 rounded-xl border border-slate-200 dark:border-white/10">
+        <button onClick={() => setVerVoz(v => !v)} className="font-bold text-indigo-700 dark:text-indigo-300">
+          {verVoz ? '▾' : '▸'} Tu voz guía ({vozClaves.length} grabaciones) — las indicaciones con tu voz
+        </button>
+        <div className={verVoz ? 'mt-2' : 'hidden'}><VozGuia onCambio={setVozClaves} /></div>
+      </div>
       {lista.aviso && <p className="text-amber-600">{lista.aviso}</p>}
 
       {!sug ? (!error && <p className="text-slate-500 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Buscando datos y ejercicios…</p>) : (

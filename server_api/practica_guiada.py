@@ -419,6 +419,7 @@ async def ver(token: str):
     ad = adherencia(ses, veces, 7)
     return {"ok": True, "nombre": r.get("saludo") or "", "estado": _disponible(r),
             "veces_por_dia": veces, "practicas_hoy": ad["hoy"], "semana": ad["serie"],
+            "voz": __import__("voz_guia").claves_grabadas(sb),
             "ejercicios": r.get("ejercicios") or [], "indicaciones": r.get("indicaciones") or "",
             "consentimiento": bool(r.get("consentimiento_at")),
             "version_consentimiento": VERSION_CONSENTIMIENTO,
