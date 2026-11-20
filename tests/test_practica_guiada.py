@@ -262,3 +262,43 @@ def test_nombres_sin_numeracion_y_guia_segun_la_ficha():
     banco = json.load(open(os.path.join(os.path.dirname(__file__), "..", "server_api", "exercise_bank.json"), encoding="utf-8"))
     nombres = [e["name"] for s in banco["sections"] for e in s["exercises"]] + [s["name"] for s in banco["sections"]]
     assert all(PG.nombre_limpio(n) == n for n in nombres)
+
+
+def test_practica_sigue_el_cuadernillo_del_paciente(cliente):
+    c, base = cliente
+    base.t["cuadernillos_paciente"] = [{"id": "cu1", "paciente_id": "p1", "titulo": "Cuadernillo de León",
+                                        "fecha_creacion": "2026-11-18T23:30:00+00:00",
+                                        "ejercicios_seleccionados": [
+                                            {"id": "descenso_laringeo", "name": "Descenso activo por bostezo", "orden": 1},
+                                            {"id": "laxvox_agua", "name": "Tubo en agua (LaxVox/TRA)", "orden": 2},
+                                            {"id": "tubo_agua", "name": "Glissandos sobre /m/ o /u/", "orden": 3}]}]
+    r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
+    assert r["origen_auto"] == "cuadernillo" and r["origen"] == "cuadernillo"
+    assert [e["bank_id"] for e in r["ejercicios"]] == ["laxvox_agua", "tubo_agua"]  # en el orden del cuadernillo
+    assert r["ejercicios"][0]["ref_cuadernillo"] == "Tu cuadernillo · ejercicio 2"
+    assert r["cuadernillo"]["total"] == 3 and r["cuadernillo"]["con_guia"] == 2
+    assert r["cuadernillo"]["fecha"] == "2026-11-18"  # día argentino, no UTC
+    assert r["sin_guia"][0]["orden"] == 1
+    # Práctica suelta: todos los ejercicios con guía.
+    sueltos = c.get("/api/practicas/sugerencias?paciente_id=p1&origen=sueltos").json()
+    assert sueltos["origen"] == "sueltos" and len(sueltos["ejercicios"]) > 2
+    assert all("ref_cuadernillo" not in e for e in sueltos["ejercicios"])
+
+
+def test_paciente_de_fonoar_va_a_su_cuadernillo(cliente, monkeypatch):
+    c, base = cliente
+    base.t["pacientes"][0]["centro"] = "fonoar_la_plata"
+    monkeypatch.setattr(PG, "catalogo_fonoar", lambda: None)
+    r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
+    assert r["origen"] == "fonoar" and "Fonoar" in r["aviso_origen"] and r["ejercicios"]
+    monkeypatch.setattr(PG, "catalogo_fonoar", lambda: {"ejercicios": [
+        {"numero": "10.1", "nombre": "Glissandos", "bank_id": "tubo_agua"}]})
+    r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
+    assert [e["bank_id"] for e in r["ejercicios"]] == ["tubo_agua"]
+    assert r["ejercicios"][0]["ref_cuadernillo"] == "Cuadernillo Fonoar · 10.1 Glissandos"
+
+
+def test_la_rutina_guarda_el_origen_del_ejercicio():
+    e = PG.normalizar_ejercicio({"medida": "flujo", "nombre": "Tubo en agua", "origen": "cuadernillo",
+                                 "ref_cuadernillo": "Tu cuadernillo · ejercicio 2"}, 118)
+    assert e["origen"] == "cuadernillo" and e["ref_cuadernillo"] == "Tu cuadernillo · ejercicio 2"

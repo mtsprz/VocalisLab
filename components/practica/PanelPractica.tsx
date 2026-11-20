@@ -56,13 +56,16 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   const [previa, setPrevia] = useState<any>(null);
   const [vozClaves, setVozClaves] = useState<string[]>([]);
   const [verVoz, setVerVoz] = useState(false);
+  // De dónde salen los ejercicios: 'auto' = según el centro y si tiene cuadernillo.
+  const [origen, setOrigen] = useState('auto');
 
   const cargar = () => {
     fetch(`${BACKEND_URL}/api/practicas?paciente_id=${pacienteId}`).then(r => r.json()).then(setLista).catch(() => {});
   };
+  useEffect(() => { setOrigen('auto'); }, [pacienteId]);
   useEffect(() => {
     setSug(null); setElegidos([]); setNuevo(null); setError(''); setConfirmado(false);
-    fetch(`${BACKEND_URL}/api/practicas/sugerencias?paciente_id=${pacienteId}`)
+    fetch(`${BACKEND_URL}/api/practicas/sugerencias?paciente_id=${pacienteId}&origen=${origen}`)
       .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.detail || `Error ${r.status}`); return j; })
       .then(j => {
         setSug(j);
@@ -72,7 +75,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
       }).catch(e => setError(e.message));
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pacienteId]);
+  }, [pacienteId, origen]);
 
   const b = Number(base), lo = Number(rmin), hi = Number(rmax);
   const tonoOk = b >= 60 && b <= 1000;
@@ -207,13 +210,30 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
               {sug.tolerancia_sugerida?.cents > OIDO[oido].cents ? ` (${sug.tolerancia_sugerida.motivo})` : ` (${OIDO[oido].texto.toLowerCase()})`}</span>
           </div>
 
-          {/* 2. Ejercicios */}
-          <p className="font-bold">2. Ejercicios (del cuadernillo; los del plan vigente primero)</p>
+          {/* 2. Ejercicios: coherentes con el cuadernillo que tiene el paciente */}
+          <div className="p-3 rounded-xl border border-slate-200 dark:border-white/10 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-bold">2. Ejercicios de</p>
+              <select value={origen} onChange={e => setOrigen(e.target.value)} className={inp}>
+                <option value="auto">Automático: {sug.origenes?.[sug.origen_auto] || '—'}</option>
+                {Object.entries(sug.origenes || {}).map(([k, v]: any) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            {sug.origen === 'cuadernillo' && sug.cuadernillo && (
+              <p className="text-slate-600 dark:text-slate-300">«{sug.cuadernillo.titulo}» del {sug.cuadernillo.fecha}: {sug.cuadernillo.con_guia} de {sug.cuadernillo.total} ejercicios
+                tienen práctica guiada. Se muestran en el orden del cuadernillo, con su número.</p>
+            )}
+            {sug.sin_guia?.length > 0 && (
+              <p className="text-slate-500">Del cuadernillo, sin práctica guiada todavía: {sug.sin_guia.map((x: any) => `${x.orden}. ${x.nombre}`).join(' · ')}.</p>
+            )}
+            {sug.origen === 'sueltos' && <p className="text-slate-500">Práctica fuera del cuadernillo: todos los ejercicios con guía (los del plan vigente primero).</p>}
+            {sug.aviso_origen && <p className="text-amber-700 dark:text-amber-300">{sug.aviso_origen}</p>}
+          </div>
           <div className="grid sm:grid-cols-2 gap-1.5">
             {sug.ejercicios.map((e: any) => (
               <label key={e.bank_id} className={`flex gap-2 p-2 rounded-lg border cursor-pointer ${elegidos.some(x => x.bank_id === e.bank_id) ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'border-slate-200 dark:border-white/10'}`}>
                 <input type="checkbox" checked={elegidos.some(x => x.bank_id === e.bank_id)} onChange={() => alternar(e)} />
-                <span><b>{nombreLimpio(e.nombre)}</b> · {MEDIDAS[e.medida || 'tono']?.split(' (')[0].split(':')[0]}{e.medida === 'tono' || !e.medida ? ` (${GUIA_TXT[e.guia]})` : ''}{e.en_plan && <span className="ml-1 text-emerald-600 font-bold">en el plan</span>}</span>
+                <span>{e.ref_cuadernillo && <span className="block text-[10px] font-bold text-indigo-600 dark:text-indigo-300">{e.ref_cuadernillo}</span>}<b>{nombreLimpio(e.nombre)}</b> · {MEDIDAS[e.medida || 'tono']?.split(' (')[0].split(':')[0]}{e.medida === 'tono' || !e.medida ? ` (${GUIA_TXT[e.guia]})` : ''}{e.en_plan && <span className="ml-1 text-emerald-600 font-bold">en el plan</span>}</span>
               </label>
             ))}
           </div>

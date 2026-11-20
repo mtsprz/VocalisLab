@@ -16,6 +16,7 @@ Rutas:
 - POST /api/practica/{token}/consentimiento     (público)
 - POST /api/practica/{token}/sesion             (público) resultados (solo números)
 """
+import json
 import math
 from fechas import dia_ar
 import re
@@ -268,6 +269,10 @@ def normalizar_ejercicio(e: dict, base_defecto) -> dict:
            "consigna": str(e.get("consigna") or "")[:300],
            "repeticiones": max(1, min(20, int(e.get("repeticiones") or 3))),
            "tolerancia_cents": max(25, min(400, int(e.get("tolerancia_cents") or 100)))}
+    if e.get("origen") in ORIGENES_PRACTICA:
+        out["origen"] = e["origen"]
+    if e.get("ref_cuadernillo"):
+        out["ref_cuadernillo"] = str(e["ref_cuadernillo"])[:60]
     if medida == "sostenido":
         out["con_tono"] = bool(e.get("con_tono"))
     necesita_tono = usa_tono(out)
@@ -309,8 +314,54 @@ def normalizar_ejercicio(e: dict, base_defecto) -> dict:
     return out
 
 
+# ─── Origen de la práctica: coherencia con el cuadernillo del paciente ─────
+
+ORIGENES_PRACTICA = {"cuadernillo": "Cuadernillo de la app", "fonoar": "Cuadernillo de Fonoar",
+                     "sueltos": "Ejercicios sueltos"}
+CATALOGO_FONOAR = os.path.join(os.path.dirname(__file__), "cuadernillo_fonoar.json")
+
+
+def cuadernillo_vigente(sb, pid: str):
+    """Último cuadernillo generado en la app para el paciente: ejercicios en orden."""
+    try:
+        filas = (sb.table("cuadernillos_paciente").select("id, titulo, fecha_creacion, ejercicios_seleccionados")
+                 .eq("paciente_id", pid).order("fecha_creacion", desc=True).limit(1).execute().data or [])
+    except Exception:
+        return None
+    if not filas:
+        return None
+    f = filas[0]
+    ejercicios = []
+    for i, e in enumerate(f.get("ejercicios_seleccionados") or []):
+        eid = e.get("id") if isinstance(e, dict) else e
+        if eid:
+            ejercicios.append({"id": eid, "nombre": nombre_limpio((e.get("name") or e.get("nombre")) if isinstance(e, dict) else eid),
+                               "orden": (e.get("orden") if isinstance(e, dict) else None) or i + 1})
+    return {"id": f.get("id"), "titulo": f.get("titulo") or "Cuadernillo", "fecha": dia_ar(f.get("fecha_creacion")),
+            "ejercicios": ejercicios}
+
+
+def catalogo_fonoar():
+    """Cuadernillo de Fonoar cargado (server_api/cuadernillo_fonoar.json), o None.
+    Formato: {"ejercicios": [{"numero": "10.1", "nombre": "...", "bank_id": "tubo_agua"}]}"""
+    try:
+        with open(CATALOGO_FONOAR, encoding="utf-8") as fh:
+            datos = json.load(fh)
+        return datos if datos.get("ejercicios") else None
+    except Exception:
+        return None
+
+
+def origen_automatico(paciente: dict, cuad) -> str:
+    from agenda_fonoar import CENTROS
+    propio = {c["id"] for c in CENTROS if c.get("cuadernillo_propio")}
+    if (paciente.get("centro") or "") in propio:
+        return "fonoar"
+    return "cuadernillo" if cuad and cuad["ejercicios"] else "sueltos"
+
+
 @router.get("/api/practicas/sugerencias")
-async def sugerencias(paciente_id: str):
+async def sugerencias(paciente_id: str, origen: str = "auto"):
     sb = _sb()
     p = (sb.table("pacientes").select("*").eq("id", paciente_id).execute().data or [{}])[0]
     if not p:
@@ -336,16 +387,51 @@ async def sugerencias(paciente_id: str):
         diag = " ".join(str((an[0] if an else {}).get(k) or "") for k in ("diagnostico_orl", "motivo_consulta"))
     except Exception:
         pass
+    # De dónde salen los ejercicios: cuadernillo de la app, de Fonoar o sueltos.
+    cuad = cuadernillo_vigente(sb, paciente_id)
+    auto = origen_automatico(p, cuad)
+    elegido = origen if origen in ORIGENES_PRACTICA else auto
+    aviso = ""
+    # referencia por bank_id: (orden, texto que ve el paciente)
+    refs: dict = {}
+    if elegido == "fonoar":
+        cat = catalogo_fonoar()
+        if cat:
+            for i, e in enumerate(cat["ejercicios"]):
+                if e.get("bank_id"):
+                    refs.setdefault(e["bank_id"], (i, f"Cuadernillo Fonoar · {e.get('numero') or i + 1} {e.get('nombre') or ''}".strip()))
+        else:
+            aviso = ("Todavía no está cargado el cuadernillo de Fonoar: se muestran todos los ejercicios. "
+                     "Cuando se cargue, la práctica sigue su numeración.")
+    elif elegido == "cuadernillo":
+        if cuad and cuad["ejercicios"]:
+            for e in cuad["ejercicios"]:
+                refs.setdefault(e["id"], (e["orden"], f"Tu cuadernillo · ejercicio {e['orden']}"))
+        else:
+            aviso = "El paciente no tiene un cuadernillo generado en la app: se muestran todos los ejercicios."
+    candidatos = [i for i in GUIA_POR_EJERCICIO if i in banco and (not refs or i in refs)]
     from recomendar_motor import verificar_contraindicaciones
-    seguros, excluidos = verificar_contraindicaciones([i for i in GUIA_POR_EJERCICIO if i in banco], diag)
+    seguros, excluidos = verificar_contraindicaciones(candidatos, diag)
     lista = []
     for bid in seguros:
         g = GUIA_POR_EJERCICIO[bid]
         if usa_tono(g):
             g = ajustar_a_rango(g, base["hz"], rango.get("min_hz"), rango.get("max_hz"))
-        lista.append(dict(g, bank_id=bid, nombre=nombre_limpio(banco[bid].get("name", bid)), base_hz=base["hz"],
-                          en_plan=bid in plan_ids))
-    lista.sort(key=lambda x: (not x["en_plan"], x["nombre"]))
+        item = dict(g, bank_id=bid, nombre=nombre_limpio(banco[bid].get("name", bid)), base_hz=base["hz"],
+                    en_plan=bid in plan_ids, origen=elegido if refs else "sueltos")
+        if bid in refs:
+            item["ref_cuadernillo"] = refs[bid][1]
+            item["orden_cuadernillo"] = refs[bid][0]
+        lista.append(item)
+    if refs:
+        lista.sort(key=lambda x: x.get("orden_cuadernillo", 999))
+    else:
+        lista.sort(key=lambda x: (not x["en_plan"], x["nombre"]))
+    # Ejercicios del cuadernillo que todavía no tienen práctica guiada (coherencia visible).
+    sin_guia = []
+    if elegido == "cuadernillo" and refs:
+        sin_guia = [{"orden": e["orden"], "nombre": nombre_limpio(banco.get(e["id"], {}).get("name") or e["nombre"])}
+                    for e in cuad["ejercicios"] if e["id"] not in GUIA_POR_EJERCICIO]
     sug_tol = {"cents": 100, "motivo": "margen normal (1 semitono)"}
     try:
         ev = (sb.table("evaluaciones_clinicas").select("*").eq("paciente_id", paciente_id)
@@ -356,7 +442,13 @@ async def sugerencias(paciente_id: str):
     except Exception:
         pass
     return {"tono_base": base, "rango": rango, "mediciones": perfil["mediciones"], "tolerancia_sugerida": sug_tol,
-            "ejercicios": lista, "excluidos": excluidos}
+            "ejercicios": lista, "excluidos": excluidos,
+            "origen": elegido, "origen_auto": auto, "origenes": ORIGENES_PRACTICA, "aviso_origen": aviso,
+            "cuadernillo": ({"id": cuad["id"], "titulo": cuad["titulo"], "fecha": cuad["fecha"],
+                             "total": len(cuad["ejercicios"]),
+                             "con_guia": len([e for e in cuad["ejercicios"] if e["id"] in GUIA_POR_EJERCICIO])}
+                            if cuad else None),
+            "sin_guia": sin_guia, "fonoar_cargado": bool(catalogo_fonoar())}
 
 
 @router.post("/api/practicas")

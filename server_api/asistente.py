@@ -317,7 +317,8 @@ def h_practica_paciente(paciente_id: str) -> dict:
     ultima = sesiones[0].get("creada_at") if sesiones else None
     return {"tiene_rutina": True, "activa": bool(r.get("activa")), "creada": _fecha_txt(r.get("creada_at")),
             "vence": _fecha_txt(r.get("vence_at")), "veces_por_dia": veces,
-            "ejercicios": [e.get("nombre") for e in (r.get("ejercicios") or []) if isinstance(e, dict)],
+            "ejercicios": [(f"{e['ref_cuadernillo']}: " if e.get("ref_cuadernillo") else "") + str(e.get("nombre"))
+                           for e in (r.get("ejercicios") or []) if isinstance(e, dict)],
             "enlace": f"{_frontend()}/?practica={r.get('token', '')}",
             "adherencia_14_dias": {"hoy": ad["hoy"], "dias_cumplidos": ad["dias_cumplidos"],
                                    "dias_con_practica": ad["dias_con_practica"]},

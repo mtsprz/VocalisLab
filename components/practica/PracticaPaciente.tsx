@@ -498,6 +498,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
           </div>
           {info.ejercicios.map((e: Ejercicio, i: number) => (
             <button key={i} onClick={() => elegir(i)} className={caja + ' w-full text-left hover:border-indigo-400'}>
+              {(e as any).ref_cuadernillo && <p className="text-[11px] font-bold text-[#b39cff]">{(e as any).ref_cuadernillo}</p>}
               <p className="font-bold">{nombreLimpio(e.nombre)} {hechos.includes(i) && <span className="text-emerald-600 text-sm">✓ hecho</span>}</p>
               {e.consigna && <p className="text-sm text-slate-600 dark:text-slate-300">{e.consigna}</p>}
               <p className="text-xs text-slate-500 mt-1">{e.repeticiones} repeticiones · {usaTono(e) && e.base_hz ? `empieza en ${nota(e.base_hz)}`

@@ -1246,6 +1246,7 @@ async def generar_cuadernillo_endpoint(
     advertencias_json: str = Form("[]"),
     paciente_nombre: str = Form(""),
     fecha_inicio: str = Form(""),
+    paciente_id: str = Form(""),
 ):
     try:
         ejercicios = json.loads(ejercicios_json) if ejercicios_json.startswith("[") else []
@@ -1327,8 +1328,28 @@ async def generar_cuadernillo_endpoint(
     import base64
     pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
+    # Registro del cuadernillo entregado (qué ejercicios lleva y en qué orden):
+    # la práctica guiada del paciente se arma a partir de él.
+    cuadernillo_id = None
+    if paciente_id.strip():
+        try:
+            from api_clinica import supabase as _sbc
+            if _sbc:
+                lista = [{"id": e.get("id"), "name": e.get("name") or e.get("nombre"),
+                          "seccion_id": e.get("seccion_id") or e.get("section_id"), "orden": i + 1}
+                         for i, e in enumerate(ejercicios) if isinstance(e, dict) and e.get("id")]
+                fila = (_sbc.table("cuadernillos_paciente").insert({
+                    "paciente_id": paciente_id.strip(), "titulo": titulo, "cantidad_sesiones": sesiones,
+                    "ejercicios_seleccionados": lista, "preset_usado": "generado",
+                    "contrato_terapeutico": contrato, "notas_profesional": notas,
+                }).execute().data or [{}])[0]
+                cuadernillo_id = fila.get("id")
+        except Exception as e:
+            print(f"[cuadernillo] no se registró el cuadernillo del paciente: {str(e)[:150]}")
+
     return JSONResponse(content={
         "ok": True,
+        "cuadernillo_id": cuadernillo_id,
         "pdf_base64": pdf_b64,
         "filename": f"{titulo.replace(' ', '_')}.pdf",
         "size_bytes": len(pdf_bytes),
