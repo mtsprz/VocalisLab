@@ -12,6 +12,8 @@ export type Ejercicio = {
   pulsos?: number; tempo_bpm?: number;
 };
 
+/** Nombre sin la numeración del cuadernillo («10.1 Glissandos» → «Glissandos»). */
+export const nombreLimpio = (n?: string) => String(n || '').replace(/^\s*\d+(?:\.\d+)*\.?\s+/, '').trim();
 export const medidaDe = (e: Ejercicio): Medida => e.medida || 'tono';
 /** El ejercicio tiene altura objetivo (camino de notas). */
 export const usaTono = (e: Ejercicio) => medidaDe(e) === 'tono' || (medidaDe(e) === 'sostenido' && !!e.con_tono);

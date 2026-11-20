@@ -3,6 +3,7 @@ import { Loader2, Send, Copy, Pause, Play, Eye, AlertTriangle, CheckCircle2 } fr
 import PracticaPaciente from './PracticaPaciente';
 import VozGuia from './VozGuia';
 import { MedidorIndice, lecturaSZ } from './visuales';
+import { nombreLimpio } from '../../utils/guiaPractica';
 import { nombreNota, hzAMidi } from '../../utils/pitch';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -135,7 +136,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
     `Hola ${n.nombre}, te dejo tu práctica de voz para hacer en casa (${veces} vez${veces === 1 ? '' : 'es'} por día): ${n.enlace}\n` +
     `Buscá un lugar tranquilo (mejor con auriculares): primero escuchás cada ejercicio y después lo hacés vos siguiendo la pelotita. Tu voz no se graba. Matías Pérez · Fonoaudiólogo`);
   const tel = (t: string) => (t || '').replace(/\D/g, '');
-  const nombreEj = (s: any, i: number) => lista.practicas.find((x: any) => x.id === s.practica_id)?.ejercicios?.[i]?.nombre || `Ejercicio ${i + 1}`;
+  const nombreEj = (s: any, i: number) => lista.practicas.find((x: any) => x.id === s.practica_id)?.ejercicios?.[i]?.nombre ? nombreLimpio(lista.practicas.find((x: any) => x.id === s.practica_id).ejercicios[i].nombre) : `Ejercicio ${i + 1}`;
   const inp = 'px-2 py-1 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-black/20 text-xs';
   const ad = lista.adherencia;
   // Mediciones s/z (la más reciente primero).
@@ -212,7 +213,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
             {sug.ejercicios.map((e: any) => (
               <label key={e.bank_id} className={`flex gap-2 p-2 rounded-lg border cursor-pointer ${elegidos.some(x => x.bank_id === e.bank_id) ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'border-slate-200 dark:border-white/10'}`}>
                 <input type="checkbox" checked={elegidos.some(x => x.bank_id === e.bank_id)} onChange={() => alternar(e)} />
-                <span><b>{e.nombre}</b> · {MEDIDAS[e.medida || 'tono']?.split(' (')[0].split(':')[0]}{e.medida === 'tono' || !e.medida ? ` (${GUIA_TXT[e.guia]})` : ''}{e.en_plan && <span className="ml-1 text-emerald-600 font-bold">en el plan</span>}</span>
+                <span><b>{nombreLimpio(e.nombre)}</b> · {MEDIDAS[e.medida || 'tono']?.split(' (')[0].split(':')[0]}{e.medida === 'tono' || !e.medida ? ` (${GUIA_TXT[e.guia]})` : ''}{e.en_plan && <span className="ml-1 text-emerald-600 font-bold">en el plan</span>}</span>
               </label>
             ))}
           </div>
@@ -224,7 +225,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
             <div className="space-y-2 p-3 rounded-xl bg-slate-50 dark:bg-white/5">
               {revisados.map(e => (
                 <div key={e.bank_id} className="space-y-1">
-                  <p className="font-bold">{e.nombre}
+                  <p className="font-bold">{nombreLimpio(e.nombre)}
                     {!e._tono && <span className="ml-2 font-normal text-slate-500">sin altura objetivo: no se evalúa la afinación</span>}
                     {tonoOk && e._tono && <span className={`ml-2 font-semibold ${e._fuera ? 'text-red-600' : 'text-emerald-600'}`}>
                       {nota(e._g)}{e._a > e._g * 1.01 ? ` → ${nota(e._a)}` : ''} ({hz1(e._g)}{e._a > e._g * 1.01 ? `–${hz1(e._a)}` : ''} Hz){e._fuera ? ' · fuera del rango' : ' · dentro del rango'}

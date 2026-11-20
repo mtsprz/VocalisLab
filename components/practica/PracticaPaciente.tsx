@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { yin, dbfs, nombreNota, hzAMidi, SuavizadorF0 } from '../../utils/pitch';
 import {
   Ejercicio, duracion, objetivoSemis, rangoSemis, semisDe, hzDe, Analizador,
-  tocarCamino, tocarNota, clic, compararTono, medidaDe, usaTono, objetivoDb, tiemposPulsos, crearTimbre,
+  tocarCamino, tocarNota, clic, nombreLimpio, compararTono, medidaDe, usaTono, objetivoDb, tiemposPulsos, crearTimbre,
 } from '../../utils/guiaPractica';
 import { Locutor } from '../../utils/locutor';
 import { Escenario, MedicionSZ, NOCHE } from './visuales';
@@ -498,7 +498,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
           </div>
           {info.ejercicios.map((e: Ejercicio, i: number) => (
             <button key={i} onClick={() => elegir(i)} className={caja + ' w-full text-left hover:border-indigo-400'}>
-              <p className="font-bold">{i + 1}. {e.nombre} {hechos.includes(i) && <span className="text-emerald-600 text-sm">✓ hecho</span>}</p>
+              <p className="font-bold">{nombreLimpio(e.nombre)} {hechos.includes(i) && <span className="text-emerald-600 text-sm">✓ hecho</span>}</p>
               {e.consigna && <p className="text-sm text-slate-600 dark:text-slate-300">{e.consigna}</p>}
               <p className="text-xs text-slate-500 mt-1">{e.repeticiones} repeticiones · {usaTono(e) && e.base_hz ? `empieza en ${nota(e.base_hz)}`
                 : ({ flujo: 'sonido parejo y continuo', sostenido: 'sostenido y parejo', intensidad: 'suave–fuerte–suave', pulsos: 'impulsos con el pulso', libre: 'libre, cómodo' } as any)[medidaDe(e)] || ''}</p>
@@ -551,7 +551,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
 
       {fase === 'practica' && ej && (
         <div className={caja + ' space-y-2'}>
-          <div className="flex justify-between text-sm"><b>{ej.nombre}</b><span className="text-slate-500">Repetición {rep} de {ej.repeticiones}</span></div>
+          <div className="flex justify-between text-sm"><b>{nombreLimpio(ej.nombre)}</b><span className="text-slate-500">Repetición {rep} de {ej.repeticiones}</span></div>
           <div className="flex items-center gap-4">
             <Escenario color={VISUAL[etapa].color} escala={VISUAL[etapa].escala} nivel={nivel}
               fraccion={etapa === 'cuenta' ? cuentaNum / 3 : (etapa === 'canto' || etapa === 'pausa') && reloj ? reloj.restante / reloj.total : null}

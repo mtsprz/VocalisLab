@@ -593,6 +593,199 @@ def e_sala(paciente_id: str, modo: str = "habla") -> dict:
                         [{"text": "Abrir la app", "url": _frontend()}]]}
 
 
+# ─── Adjuntos: fotos, PDF, audios y videos que llegan por Telegram ─────
+#
+# El adjunto queda "en mano" 30 minutos; el modelo decide qué hacer (archivarlo
+# en la ficha o analizar la voz) y la acción se confirma con botón.
+
+_ADJUNTOS: dict = {}           # chat_id → {file_id, clase, mime, nombre, vence}
+TIPO_ARCHIVO = {"foto": "foto", "documento": "documento", "audio": "audio", "video": "video"}
+
+
+def adjunto_de(msg: dict):
+    """Describe el adjunto de un mensaje, o None. Las notas de voz propias son
+    órdenes (se transcriben); las reenviadas son audios de pacientes."""
+    if msg.get("photo"):
+        f = msg["photo"][-1]
+        return {"file_id": f["file_id"], "clase": "foto", "mime": "image/jpeg", "nombre": "foto.jpg"}
+    if msg.get("document"):
+        d = msg["document"]
+        mime = d.get("mime_type") or "application/octet-stream"
+        clase = "audio" if mime.startswith("audio/") else "video" if mime.startswith("video/") else \
+            "foto" if mime.startswith("image/") else "documento"
+        return {"file_id": d["file_id"], "clase": clase, "mime": mime, "nombre": d.get("file_name") or "archivo"}
+    if msg.get("audio"):
+        a = msg["audio"]
+        return {"file_id": a["file_id"], "clase": "audio", "mime": a.get("mime_type") or "audio/mpeg",
+                "nombre": a.get("file_name") or "audio.mp3"}
+    if msg.get("video"):
+        v = msg["video"]
+        return {"file_id": v["file_id"], "clase": "video", "mime": v.get("mime_type") or "video/mp4",
+                "nombre": v.get("file_name") or "video.mp4"}
+    if msg.get("voice") and (msg.get("forward_origin") or msg.get("forward_date")):
+        v = msg["voice"]
+        return {"file_id": v["file_id"], "clase": "audio", "mime": v.get("mime_type") or "audio/ogg",
+                "nombre": "nota_de_voz.ogg"}
+    return None
+
+
+def _adjunto(chat_id: str) -> dict:
+    a = _ADJUNTOS.get(chat_id)
+    if not a or a["vence"] < time.time():
+        raise ValueError("No hay ningún archivo pendiente: mandalo de nuevo.")
+    return a
+
+
+def _descargar_a_temporal(a: dict) -> str:
+    import tempfile
+    datos, _n = _descargar_archivo(a["file_id"])
+    ext = os.path.splitext(a.get("nombre") or "")[1][:10] or {"foto": ".jpg", "audio": ".ogg"}.get(a["clase"], "")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+    tmp.write(datos)
+    tmp.close()
+    return tmp.name
+
+
+def p_archivar(paciente_id: str, tipo: str = "", titulo: str = "", origen: str = "otro", chat_id: str = "") -> dict:
+    from archivos_drive import ORIGENES, TIPOS
+    a = _adjunto(chat_id)
+    nombre = _nombre_paciente(paciente_id)
+    if not nombre:
+        return {"error": "Paciente inexistente: buscalo primero con buscar_paciente."}
+    if not _google_id():
+        return {"error": "Para archivar en Drive falta PROFESIONAL_GOOGLE_ID en Render; por ahora subilo desde la app."}
+    tipo = tipo if tipo in TIPOS else TIPO_ARCHIVO.get(a["clase"], "documento")
+    origen = origen if origen in ORIGENES else "otro"
+    return {"resumen": f"Guardar {a['clase']} «{a['nombre']}» en la ficha de {nombre} como {TIPOS[tipo]}"
+                       f"{f' ({titulo})' if titulo else ''}. Queda en su carpeta de Drive."}
+
+
+def e_archivar(paciente_id: str, tipo: str = "", titulo: str = "", origen: str = "otro", chat_id: str = "") -> dict:
+    from archivos_drive import ORIGENES, TIPOS, subir_archivo
+    from starlette.datastructures import Headers, UploadFile
+    a = _adjunto(chat_id)
+    ruta = _descargar_a_temporal(a)
+    try:
+        with open(ruta, "rb") as fh:
+            up = UploadFile(file=fh, filename=a["nombre"], headers=Headers({"content-type": a["mime"]}))
+            pedido = _PedidoFalso({}, {"sub": _google_id()})
+            r = _llamar(subir_archivo(paciente_id, pedido, up,
+                                      tipo if tipo in TIPOS else TIPO_ARCHIVO.get(a["clase"], "documento"),
+                                      origen if origen in ORIGENES else "otro", titulo or "",
+                                      _ahora().date().isoformat(), "Recibido por Telegram"))
+    finally:
+        try:
+            os.unlink(ruta)
+        except Exception:
+            pass
+    _ADJUNTOS.pop(chat_id, None)
+    if isinstance(r, dict) and r.get("ok"):
+        url = (r.get("archivo") or {}).get("drive_url")
+        extra = f" Sumé {r['imagenes_extraidas']} imágenes a la galería." if r.get("imagenes_extraidas") else ""
+        return {"texto": f"✅ Archivado en la ficha.{extra}",
+                "botones": [[{"text": "Abrir en Drive", "url": url}]] if url else None}
+    detalle = getattr(r, "body", b"")
+    return {"texto": f"No se pudo archivar: {detalle[:200] if detalle else r}"}
+
+
+def _resumen_acustico(m: dict) -> str:
+    def v(k, unidad, dec=1):
+        x = m.get(k)
+        return f"{round(float(x), dec)} {unidad}".strip() if isinstance(x, (int, float)) else "—"
+    return ("• F0 media: " + v("f0_mean", "Hz") + f" (rango {v('f0_min', '')}–{v('f0_max', 'Hz')})\n"
+            "• Jitter: " + v("jitter_pct", "%", 2) + " · Shimmer: " + v("shimmer_pct", "%", 2) + "\n"
+            "• HNR: " + v("hnr_db", "dB") + " · CPPS: " + v("cpps_db", "dB") + "\n"
+            "• AVQI: " + (v("avqi", "", 2) if m.get("avqi_calculable") else "no calculable con esta muestra"))
+
+
+def p_analizar(paciente_id: str, chat_id: str = "") -> dict:
+    a = _adjunto(chat_id)
+    if a["clase"] not in ("audio", "video"):
+        return {"error": "El archivo pendiente no es un audio."}
+    nombre = _nombre_paciente(paciente_id)
+    if not nombre:
+        return {"error": "Paciente inexistente: buscalo primero con buscar_paciente."}
+    return {"resumen": f"Analizar la voz del audio «{a['nombre']}» (ideal: /a/ sostenida 3-5 s) y guardar el "
+                       f"análisis acústico en la ficha de {nombre}."}
+
+
+def e_analizar(paciente_id: str, chat_id: str = "") -> dict:
+    from engine_bioacustico import procesar_muestras_acusticas
+    from voicelab_analysis import asegurar_wav_compatible
+    a = _adjunto(chat_id)
+    ruta = _descargar_a_temporal(a)
+    wav = ruta
+    try:
+        wav = asegurar_wav_compatible(ruta)
+        m = procesar_muestras_acusticas(wav)
+    except Exception as e:
+        return {"texto": f"No pude analizar ese audio ({str(e)[:150]}). Probá con una /a/ sostenida de 3-5 s, "
+                         "sin ruido de fondo."}
+    finally:
+        for r in {ruta, wav}:
+            try:
+                os.unlink(r)
+            except Exception:
+                pass
+    metricas = {"f0_mean": m.get("f0_mean"), "f0_min": m.get("f0_min"), "f0_max": m.get("f0_max"),
+                "f0_sd": m.get("f0_sd"), "jitter_local_pct": m.get("jitter_pct"),
+                "shimmer_local_pct": m.get("shimmer_pct"), "hnr_db": m.get("hnr_db"),
+                "cpps_db": m.get("cpps_db"), "avqi": m.get("avqi") if m.get("avqi_calculable") else None}
+    from api_clinica import guardar_analisis
+    _llamar(guardar_analisis(paciente_id=paciente_id, evaluacion_id="", metrics_json=json.dumps(metricas),
+                             cross_check_json="{}", charts_json="{}", modo="telegram"))
+    _ADJUNTOS.pop(chat_id, None)
+    audio = m.get("audio") or {}
+    aviso = ""
+    if audio.get("issues"):
+        aviso = "\n⚠️ Calidad de la muestra: " + "; ".join(audio["issues"][:3]) + ". Tomalo como orientativo."
+    return {"texto": f"✅ Análisis guardado en la ficha de {_nombre_paciente(paciente_id)}:\n"
+                     f"{_resumen_acustico(m)}{aviso}\nGrabado con celular por Telegram: orientativo, "
+                     "no reemplaza la toma en consultorio."}
+
+
+def p_crear_paciente(nombre_completo: str, sexo: str = "", centro: str = "", obra_social: str = "",
+                     ocupacion: str = "", derivador: str = "", notas: str = "") -> dict:
+    nombre_completo = re.sub(r"\s+", " ", str(nombre_completo or "")).strip()
+    if len(nombre_completo.split()) < 2:
+        return {"error": "Necesito nombre y apellido."}
+    parecidos = h_buscar_paciente(nombre_completo)["pacientes"]
+    if centro and centro not in NOMBRE_CENTRO:
+        return {"error": f"centro debe ser uno de {list(NOMBRE_CENTRO)}"}
+    aviso = f"\n⚠️ Ya existe alguien parecido: {', '.join(p['nombre'] for p in parecidos)}" if parecidos else ""
+    detalle = ", ".join(x for x in (sexo, NOMBRE_CENTRO.get(centro, ""), obra_social, ocupacion,
+                                    f"derivado por {derivador}" if derivador else "") if x)
+    return {"resumen": f"Cargar paciente nuevo: {nombre_completo}{f' ({detalle})' if detalle else ''}.{aviso}"}
+
+
+def e_crear_paciente(nombre_completo: str, sexo: str = "", centro: str = "", obra_social: str = "",
+                     ocupacion: str = "", derivador: str = "", notas: str = "") -> dict:
+    from api_clinica import crear_paciente
+    _llamar(crear_paciente(nombre_completo=re.sub(r"\s+", " ", nombre_completo).strip(), dni="",
+                           fecha_nacimiento="", sexo=sexo, telefono="", email="", ocupacion=ocupacion,
+                           demanda_vocal_horas=0, derivador=derivador, notas_iniciales=notas,
+                           centro=centro, obra_social=obra_social))
+    return {"texto": f"✅ {nombre_completo} quedó cargado. El DNI, el teléfono y la fecha de nacimiento "
+                     "completalos desde la app."}
+
+
+def h_orientacion(paciente_id: str) -> dict:
+    """Última orientación clínica integral guardada (texto revisado por Matías)."""
+    try:
+        filas = (_sb().table("orientaciones_clinicas").select("creada_at, texto, etapa_quirurgica, editado")
+                 .eq("paciente_id", paciente_id).order("creada_at", desc=True).limit(1).execute().data or [])
+    except Exception as e:
+        return {"error": f"Orientaciones no disponibles ({str(e)[:100]})"}
+    if not filas:
+        return {"tiene": False, "nota": "No hay orientación guardada; se genera desde la ficha integral en la app."}
+    f = filas[0]
+    return {"tiene": True, "fecha": _fecha_txt(f["creada_at"]), "revisada_por_matias": f.get("editado"),
+            "etapa_quirurgica": f.get("etapa_quirurgica"), "texto": (f.get("texto") or "")[:3500]}
+
+
+HERRAMIENTAS["orientacion_clinica"] = (h_orientacion, "Última orientación clínica integral guardada del paciente "
+                                                      "(lectura integrada de toda la ficha). args: {paciente_id}")
+
 ACCIONES = {
     "agendar_turno": (p_agendar, e_agendar,
                       "Agenda un turno. args: {paciente_id, fecha: 'AAAA-MM-DD', hora: 'HH:MM', duracion_min?: 45, "
@@ -605,6 +798,16 @@ ACCIONES = {
     "enviar_autoevaluacion": (p_autoevaluacion, e_autoevaluacion,
                               "Genera el enlace de autoevaluación para el paciente. args: {paciente_id, "
                               "instrumentos?: lista de 'autopercepcion','vhi10','riesgo'}"),
+    "archivar_adjunto": (p_archivar, e_archivar,
+                         "Guarda el archivo que mandó Matías (foto, PDF, audio, video) en la ficha del paciente "
+                         "(Drive). args: {paciente_id, tipo?: 'informe_orl'|'estudio'|'foto'|'video'|'audio'|"
+                         "'documento', titulo?, origen?: 'whatsapp_paciente'|'whatsapp_orl'|'orl'|'consultorio'|'otro'}"),
+    "analizar_audio": (p_analizar, e_analizar,
+                       "Analiza la voz del audio que mandó Matías (F0, jitter, shimmer, HNR, CPPS, AVQI) y lo "
+                       "guarda como análisis acústico del paciente. args: {paciente_id}"),
+    "crear_paciente": (p_crear_paciente, e_crear_paciente,
+                       "Carga un paciente nuevo. args: {nombre_completo, sexo?: 'masculino'|'femenino', centro?: "
+                       "'fonoar_la_plata'|'due_brandsen'|'virtual', obra_social?, ocupacion?, derivador?, notas?}"),
     "abrir_sala": (p_sala, e_sala, "Abre una sala virtual en vivo para el paciente. args: {paciente_id, "
                                    "modo?: 'habla'|'nota'|'canto'|'tmf'}"),
 }
@@ -629,6 +832,9 @@ def _sistema() -> str:
         f"Ahora es {DIAS[ahora.weekday()]} {ahora.strftime('%d/%m/%Y %H:%M')} (hora de Argentina).\n"
         f"Próximos días: {calendario}.\n"
         "Centros: Fonoar La Plata (entrega su propio cuadernillo), DUE Brandsen y Atención virtual.\n"
+        "Si un mensaje empieza con «(adjunto pendiente: …)», Matías mandó un archivo: preguntá de qué "
+        "paciente es si no lo dice, y proponé archivar_adjunto (fotos, PDF, informes) o analizar_audio "
+        "(audio de la voz del paciente; si es una /a/ sostenida sirve para el análisis acústico).\n"
         "Los mensajes que empiezan con «(nota de voz)» son transcripciones automáticas: pueden traer "
         "errores en nombres propios; si un nombre no aparece, buscá por partes o preguntá.\n\n"
         "Reglas:\n"
@@ -674,7 +880,7 @@ def _resultado_texto(datos) -> str:
     return texto if len(texto) <= 7000 else texto[:7000] + "…(recortado)"
 
 
-def pensar(pregunta: str, historial: list = None, llm=None, propuestas: list = None) -> str:
+def pensar(pregunta: str, historial: list = None, llm=None, propuestas: list = None, chat_id: str = "") -> str:
     """Bucle del asistente: decide herramientas hasta poder responder.
     Las acciones no se ejecutan: se validan y se agregan a `propuestas`."""
     llm = llm or _llm_json
@@ -695,6 +901,10 @@ def pensar(pregunta: str, historial: list = None, llm=None, propuestas: list = N
                 elif propuestas:
                     resultado = {"error": "Ya hay una acción propuesta en este mensaje; respondé."}
                 else:
+                    import inspect
+                    args = {k: v for k, v in args.items() if k != "chat_id"}
+                    if "chat_id" in inspect.signature(ACCIONES[nombre][0]).parameters:
+                        args["chat_id"] = chat_id
                     try:
                         resultado = ACCIONES[nombre][0](**args)
                     except Exception as e:
@@ -724,7 +934,7 @@ def conversar(chat_id: str, texto: str) -> dict:
     hist = _HISTORIAL.setdefault(chat_id, deque(maxlen=12))
     propuestas: list = []
     try:
-        respuesta = pensar(texto, list(hist), propuestas=propuestas)
+        respuesta = pensar(texto, list(hist), propuestas=propuestas, chat_id=chat_id)
     except Exception as e:
         traceback.print_exc()
         respuesta = f"Ahora no puedo consultar el modelo ({str(e)[:120]}). Probá en un rato."
@@ -842,6 +1052,10 @@ AYUDA = (
     "• Pacientes: «¿cómo viene la F0 de Javier?», «¿practica en casa Laura?»\n"
     "• Autoevaluaciones: «¿quién respondió el VHI-10?»\n"
     "• Pendientes: «¿qué me falta completar esta semana?»\n"
+    "• Archivos: mandame una foto, PDF o informe ORL y lo guardo en la ficha (Drive).\n"
+    "• Voz: reenviame el audio de un paciente (una /a/ sostenida) y te devuelvo F0, jitter, shimmer, "
+    "HNR, CPPS y AVQI, guardado en su ficha.\n"
+    "• Pacientes nuevos: «cargá a Ana Gómez, IOMA, docente, viene por Fonoar».\n"
     "• Acciones (con confirmación): agendar, reprogramar, cancelar o marcar turnos realizados, "
     "anotar en un turno, mandar la autoevaluación, abrir una sala virtual.\n\n"
     "Comandos: /hoy /manana /semana /pendientes /repaso /ayuda"
@@ -1022,7 +1236,8 @@ def _responder(chat_id: str, res: dict) -> None:
     if res.get("propuesta"):
         proponer(chat_id, res["propuesta"], res.get("texto", ""))
         return
-    if res.get("botones"):
+    if res.get("botones") and all(fila and all(b.get("url") or b.get("callback_data") for b in fila)
+                                  for fila in res["botones"]):
         _tg("sendMessage", {"chat_id": chat_id, "text": res["texto"][:3900], "disable_web_page_preview": True,
                             "reply_markup": {"inline_keyboard": res["botones"]}})
         return
@@ -1069,8 +1284,20 @@ def _procesar_update(update: dict) -> None:
     if chat_id != chat_vinculado():
         return  # Solo atiende al chat del profesional.
 
-    # Notas de voz, audios y videomensajes: se transcriben y siguen como texto.
-    audio = msg.get("voice") or msg.get("audio") or msg.get("video_note")
+    # Archivos (fotos, PDF, audios de pacientes, videos): quedan en mano y se pregunta qué hacer.
+    adj = adjunto_de(msg)
+    if adj:
+        _ADJUNTOS[chat_id] = dict(adj, vence=time.time() + 1800)
+        leyenda = (msg.get("caption") or "").strip()
+        if not leyenda:
+            que = ("archivarlo en su ficha o analizar la voz (si es una /a/ sostenida)" if adj["clase"] == "audio"
+                   else "archivarlo en su ficha")
+            enviar(f"Recibí {('la ' if adj['clase'] == 'foto' else 'el ')}{adj['clase']} «{adj['nombre']}». "
+                   f"¿De qué paciente es? Puedo {que}.", chat_id)
+            return
+        texto = leyenda
+    # Notas de voz propias y videomensajes: se transcriben y siguen como texto.
+    audio = None if adj else (msg.get("voice") or msg.get("video_note"))
     de_voz = False
     if audio and not texto:
         _tg("sendChatAction", {"chat_id": chat_id, "action": "typing"})
@@ -1086,9 +1313,6 @@ def _procesar_update(update: dict) -> None:
         enviar(f"🎙️ «{texto[:900]}»", chat_id)
         de_voz = True
     if not texto:
-        if msg.get("photo") or msg.get("document"):
-            enviar("Por ahora no proceso fotos ni archivos: subilos desde la app (ficha del paciente → "
-                   "Archivos). Texto y audios sí.", chat_id)
         return
 
     # Confirmación escrita o hablada de una acción pendiente.
@@ -1102,7 +1326,10 @@ def _procesar_update(update: dict) -> None:
         enviar(rapido, chat_id)
         return
     _tg("sendChatAction", {"chat_id": chat_id, "action": "typing"})
-    _responder(chat_id, conversar(chat_id, ("(nota de voz) " if de_voz else "") + texto))
+    pend = _ADJUNTOS.get(chat_id)
+    prefijo = (f"(adjunto pendiente: {pend['clase']} «{pend['nombre']}») "
+               if pend and pend["vence"] > time.time() else "")
+    _responder(chat_id, conversar(chat_id, prefijo + ("(nota de voz) " if de_voz else "") + texto))
 
 
 @router.post("/api/asistente/telegram")

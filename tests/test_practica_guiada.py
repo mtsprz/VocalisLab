@@ -226,7 +226,7 @@ def test_resultados_guardan_todas_las_medidas(cliente):
 
 
 def test_catalogo_cubre_sovt_y_ritmo():
-    assert PG.GUIA_POR_EJERCICIO["tubo_agua"]["medida"] == "flujo"
+    assert PG.GUIA_POR_EJERCICIO["laxvox_agua"]["medida"] == "flujo"  # el tubo en agua real
     assert PG.GUIA_POR_EJERCICIO["messa_di_voce"]["medida"] == "intensidad"
     assert PG.GUIA_POR_EJERCICIO["metodo_acento"]["medida"] == "pulsos"
     for g in PG.GUIA_POR_EJERCICIO.values():
@@ -249,3 +249,16 @@ def test_medicion_sz_sola_no_cuenta_como_practica():
     ses = [{"creada_at": hoy, "ambiente": {"tanda": "sz-a"}, "resultados": [{"medida": "sz"}]},
            {"creada_at": hoy, "ambiente": {"tanda": "b"}, "resultados": [{"medida": "flujo"}]}]
     assert PG.adherencia(ses, 2, 7)["hoy"] == 1
+
+
+def test_nombres_sin_numeracion_y_guia_segun_la_ficha():
+    assert PG.nombre_limpio("10.1 Glissandos ascendentes") == "Glissandos ascendentes"
+    assert PG.nombre_limpio("7. Acondicionamiento") == "Acondicionamiento"
+    assert PG.nombre_limpio("Tubo en agua (LaxVox)") == "Tubo en agua (LaxVox)"
+    # tubo_agua es la ficha de glissandos: se guía y mide la altura.
+    assert PG.GUIA_POR_EJERCICIO["tubo_agua"]["medida"] == "tono"
+    assert PG.GUIA_POR_EJERCICIO["laxvox_agua"]["medida"] == "flujo"
+    import json
+    banco = json.load(open(os.path.join(os.path.dirname(__file__), "..", "server_api", "exercise_bank.json"), encoding="utf-8"))
+    nombres = [e["name"] for s in banco["sections"] for e in s["exercises"]] + [s["name"] for s in banco["sections"]]
+    assert all(PG.nombre_limpio(n) == n for n in nombres)

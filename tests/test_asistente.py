@@ -280,3 +280,64 @@ def test_fecha_hora_valida():
 def test_sistema_lista_acciones_y_calendario():
     s = A._sistema()
     assert "agendar_turno" in s and "Próximos días:" in s and "(nota de voz)" in s
+
+
+# ─── Fase 3: adjuntos, análisis de voz y pacientes nuevos ───────────────
+
+def test_adjunto_sin_texto_pregunta_y_queda_en_mano(cliente, entorno, monkeypatch):
+    config, enviados = entorno
+    config["chat_id"] = "555"
+    monkeypatch.setattr(A, "transcribir", lambda *a, **k: pytest.fail("un audio reenviado no es una orden"))
+    upd = {"update_id": 50, "message": {"chat": {"id": 555}, "forward_date": 1,
+                                        "voice": {"file_id": "V9", "mime_type": "audio/ogg"}}}
+    cliente.post("/api/asistente/telegram", json=upd, headers=_h())
+    assert "¿De qué paciente es?" in enviados[-1][1] and "analizar la voz" in enviados[-1][1]
+    assert A._ADJUNTOS["555"]["file_id"] == "V9" and A._ADJUNTOS["555"]["clase"] == "audio"
+    # El mensaje siguiente lleva el contexto del adjunto al modelo.
+    vistos = []
+    monkeypatch.setattr(A, "pensar", lambda texto, hist=None, llm=None, **kw: vistos.append(texto) or "ok")
+    cliente.post("/api/asistente/telegram", json=_update("es de Laura", uid=51), headers=_h())
+    assert vistos[-1].startswith("(adjunto pendiente: audio")
+
+
+def test_foto_con_leyenda_va_directo_al_modelo(cliente, entorno, monkeypatch):
+    config, enviados = entorno
+    config["chat_id"] = "555"
+    vistos = []
+    monkeypatch.setattr(A, "pensar", lambda texto, hist=None, llm=None, **kw: vistos.append(texto) or "ok")
+    upd = {"update_id": 52, "message": {"chat": {"id": 555}, "caption": "informe ORL de Yesica",
+                                        "photo": [{"file_id": "chica"}, {"file_id": "grande"}]}}
+    cliente.post("/api/asistente/telegram", json=upd, headers=_h())
+    assert A._ADJUNTOS["555"]["file_id"] == "grande"
+    assert vistos[-1] == "(adjunto pendiente: foto «foto.jpg») informe ORL de Yesica"
+
+
+def test_las_acciones_con_adjunto_reciben_el_chat_y_no_del_modelo(monkeypatch):
+    recibidos = []
+    monkeypatch.setitem(A.ACCIONES, "analizar_audio", (
+        lambda paciente_id, chat_id="": recibidos.append(chat_id) or {"resumen": "Analizar"}, None, "x"))
+    pasos = iter([{"accion": "herramienta", "nombre": "analizar_audio",
+                   "args": {"paciente_id": "p1", "chat_id": "999"}},
+                  {"accion": "responder", "texto": "Listo"}])
+    props = []
+    A.pensar("analizalo", llm=lambda m: next(pasos), propuestas=props, chat_id="555")
+    assert recibidos == ["555"] and props[0]["args"]["chat_id"] == "555"
+
+
+def test_analizar_audio_sin_adjunto_avisa():
+    A._ADJUNTOS.clear()
+    with pytest.raises(ValueError):
+        A.p_analizar("p1", chat_id="555")
+
+
+def test_crear_paciente_pide_nombre_y_apellido_y_avisa_parecidos(monkeypatch):
+    assert "nombre y apellido" in A.p_crear_paciente("Ana")["error"]
+    monkeypatch.setattr(A, "h_buscar_paciente", lambda t: {"pacientes": [{"nombre": "Gómez Ana"}]})
+    r = A.p_crear_paciente("Ana Gómez", obra_social="IOMA", centro="fonoar_la_plata")
+    assert "Ana Gómez" in r["resumen"] and "Fonoar La Plata" in r["resumen"] and "parecido" in r["resumen"]
+
+
+def test_resumen_acustico_legible():
+    t = A._resumen_acustico({"f0_mean": 201.44, "f0_min": 180, "f0_max": 220, "jitter_pct": 0.412,
+                             "shimmer_pct": 3.1, "hnr_db": 21.3, "cpps_db": 12.04, "avqi_calculable": False})
+    assert "F0 media: 201.4 Hz" in t and "Jitter: 0.41 %" in t and "AVQI: no calculable" in t

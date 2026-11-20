@@ -17,6 +17,7 @@ Rutas:
 - POST /api/practica/{token}/sesion             (público) resultados (solo números)
 """
 import math
+import re
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -44,16 +45,23 @@ VERSION_CONSENTIMIENTO = "2026-11"
 GUIA_POR_EJERCICIO = {
     "glissandos": {"medida": "tono", "guia": "rampa", "amplitud": 7, "modelo": "sonoro",
                    "consigna": "Sirena suave sobre /u/ o /m/: subí y bajá siguiendo la rampa."},
-    "popote_aire": {"medida": "tono", "guia": "escalera", "semitonos": [0, 2, 4, 5, 7, 5, 4, 2, 0], "modelo": "sonoro",
-                    "consigna": "Escala de cinco notas, subiendo y bajando, cómoda."},
+    # OJO: algunos ids del banco son históricos y no coinciden con su ficha
+    # (tubo_agua = glissandos sobre /m/ o /u/; popote_aire = escalas de 3.ª-5.ª-8.ª;
+    # vibracion_labial = /m/ a vocales; humming_m = lectura). La guía sigue a la ficha.
+    "tubo_agua": {"medida": "tono", "guia": "rampa", "amplitud": 7, "modelo": "sonoro",
+                  "consigna": "Sirena suave sobre /m/ o /u/: subí y bajá siguiendo la rampa, sin quiebres."},
+    "popote_aire": {"medida": "tono", "guia": "escalera", "semitonos": [0, 4, 7, 4, 0], "modelo": "sonoro",
+                    "consigna": "Escala de 3.ª y 5.ª sobre /a/ o /m+a/: subí y bajá por los escalones, cómodo."},
+    "vibracion_labial": {"medida": "sostenido", "guia": "sostenida", "duracion_objetivo_s": 6, "modelo": "sin_modelo",
+                         "con_tono": False, "consigna": "/m/ sostenida y abrí a vocal (mmm-u, mmm-i…) con la misma calidad."},
+    "humming_m": {"medida": "libre", "guia": "sostenida", "duracion_objetivo_s": 30, "modelo": "sin_modelo",
+                  "consigna": "Leé en voz alta tus oraciones, claro y cómodo."},
     "trino_labial": {"medida": "tono", "guia": "escalera", "semitonos": [0, 2, 4, 2, 0], "modelo": "sonoro", "tolerancia_cents": 200,
                      "consigna": "Trino de labios /br/ siguiendo los escalones."},
     "trino_lingual": {"medida": "tono", "guia": "escalera", "semitonos": [0, 2, 4, 2, 0], "modelo": "sonoro", "tolerancia_cents": 200,
                       "consigna": "Trino de lengua /rr/ siguiendo los escalones."},
     "finger_kazoo": {"medida": "tono", "guia": "rampa", "amplitud": 5, "modelo": "sonoro", "tolerancia_cents": 200,
                      "consigna": "Dedo en los labios: sirena suave siguiendo la rampa."},
-    "tubo_agua": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo",
-                  "consigna": "Tubo en el agua: burbujeo parejo y sonido continuo, sin empujar."},
     "laxvox_agua": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo",
                     "consigna": "Tubo en agua: burbujeo parejo mientras sostenés el sonido."},
     "tubo_aire_libre": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo",
@@ -235,6 +243,11 @@ def ajustar_a_rango(e: dict, base: float, lo, hi) -> dict:
     return e
 
 
+def nombre_limpio(nombre) -> str:
+    """Saca la numeración del cuadernillo («10.1 Glissandos…» → «Glissandos…»)."""
+    return re.sub(r"^\s*\d+(?:\.\d+)*\.?\s+", "", str(nombre or "")).strip()
+
+
 def usa_tono(e: dict) -> bool:
     """El ejercicio tiene una altura objetivo (se valida contra el rango)."""
     return e.get("medida", "tono") == "tono" or (e.get("medida") == "sostenido" and bool(e.get("con_tono")))
@@ -248,7 +261,7 @@ def normalizar_ejercicio(e: dict, base_defecto) -> dict:
     guia = str(e.get("guia") or ("sostenida" if medida != "tono" else ""))
     if guia not in GUIAS:
         raise HTTPException(status_code=400, detail=f"Tipo de guía inválido: {guia or 'vacío'}")
-    out = {"bank_id": e.get("bank_id") or None, "nombre": str(e.get("nombre") or "Ejercicio")[:80],
+    out = {"bank_id": e.get("bank_id") or None, "nombre": (nombre_limpio(e.get("nombre")) or "Ejercicio")[:80],
            "medida": medida, "guia": guia,
            "modelo": "sin_modelo" if e.get("modelo") == "sin_modelo" else "sonoro",
            "consigna": str(e.get("consigna") or "")[:300],
@@ -329,7 +342,7 @@ async def sugerencias(paciente_id: str):
         g = GUIA_POR_EJERCICIO[bid]
         if usa_tono(g):
             g = ajustar_a_rango(g, base["hz"], rango.get("min_hz"), rango.get("max_hz"))
-        lista.append(dict(g, bank_id=bid, nombre=banco[bid].get("name", bid), base_hz=base["hz"],
+        lista.append(dict(g, bank_id=bid, nombre=nombre_limpio(banco[bid].get("name", bid)), base_hz=base["hz"],
                           en_plan=bid in plan_ids))
     lista.sort(key=lambda x: (not x["en_plan"], x["nombre"]))
     sug_tol = {"cents": 100, "motivo": "margen normal (1 semitono)"}
@@ -606,4 +619,14 @@ async def guardar_sesion(token: str, request: Request):
             "modo": "vivo" if body.get("modo") == "vivo" else "casa",
             "comentario": str(body.get("comentario") or "")[:500]}
     sb.table("practica_sesiones").insert(fila).execute()
+    for x in resultados:
+        if x.get("medida") == "sz" and x.get("indice_sz") is not None:
+            try:
+                from asistente import avisar
+                p = sb.table("pacientes").select("nombre_completo").eq("id", r["paciente_id"]).execute().data or []
+                nombre = (p[0].get("nombre_completo") if p else "") or "Un paciente"
+                avisar(f"{nombre} midió su índice s/z en casa: {x['indice_sz']} "
+                       f"(/s/ {x['s_max_s']} s · /z/ {x['z_max_s']} s).")
+            except Exception:
+                pass
     return {"ok": True}
