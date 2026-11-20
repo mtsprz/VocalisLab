@@ -440,10 +440,13 @@ def keepalive():
 @app.get("/api/health")
 def health_check():
     import subprocess
-    try:
-        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=os.path.dirname(__file__), text=True).strip()
-    except Exception:
-        commit = "unknown"
+    # Render informa el commit publicado; sirve para verificar que el deploy terminó.
+    commit = (os.environ.get("RENDER_GIT_COMMIT") or "")[:7]
+    if not commit:
+        try:
+            commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=os.path.dirname(__file__), text=True).strip()
+        except Exception:
+            commit = "unknown"
     from sesion_web import acceso_configurado
     return {"status": "ok", "engine": "Praat/Parselmouth + VoiceLab", "version": "1.0.0", "commit": commit,
             # Solo sí/no (sin emails): si es false, falta EMAILS_PERMITIDOS en Render.

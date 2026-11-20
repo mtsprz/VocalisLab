@@ -397,11 +397,16 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds, onAr
   const centroPaciente = centroPorId(clinical.data.paciente?.centro);
   // Cuadernillo propio del centro (Fonoar): se muestra tal cual está cargado.
   const [cuadFonoar, setCuadFonoar] = useState<any>(null);
+  const [errorFonoar, setErrorFonoar] = useState('');
   const [verFonoar, setVerFonoar] = useState(false);
   useEffect(() => {
     if (!centroPaciente?.cuadernilloPropio && !verFonoar) return;
     if (cuadFonoar) return;
-    fetch(`${BACKEND_URL}/api/cuadernillos/fonoar`).then(r => (r.ok ? r.json() : null)).then(setCuadFonoar).catch(() => {});
+    setErrorFonoar('');
+    fetch(`${BACKEND_URL}/api/cuadernillos/fonoar`)
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `el servidor respondió ${r.status}`); return j; })
+      .then(setCuadFonoar)
+      .catch(e => setErrorFonoar(`No se pudo cargar el cuadernillo de Fonoar: ${e.message}. Si recién se publicó una versión nueva, esperá unos minutos y recargá.`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centroPaciente?.cuadernilloPropio, verFonoar]);
   // El nombre del PDF: editable, pre-cargado desde la ficha clínica.
@@ -977,7 +982,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds, onAr
               <button onClick={() => setVerFonoar(false)} className="text-xs text-slate-500 underline">Cerrar</button>
             )}
           </div>
-          {!cuadFonoar ? <p className="text-xs text-slate-500">Cargando el cuadernillo…</p> : (
+          {errorFonoar ? <p className="text-xs text-red-600">{errorFonoar}</p> : !cuadFonoar ? <p className="text-xs text-slate-500">Cargando el cuadernillo…</p> : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {cuadFonoar.areas.map((a: any) => (
                 <div key={a.area} className="rounded-xl border border-slate-200 dark:border-white/10 p-3">

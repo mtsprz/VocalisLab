@@ -299,10 +299,10 @@ def test_paciente_de_fonoar_va_a_su_cuadernillo(cliente, monkeypatch):
     refs = {e["ref_cuadernillo"]: e for e in r["ejercicios"]}
     assert "Cuadernillo Fonoar · 11. Glissandos ascendentes" in refs
     # 12, 13 y 14 son escalas distintas aunque compartan el ejercicio base.
-    e12, e14 = refs["Cuadernillo Fonoar · 12. M y vocales en escala de 3.ª"], refs["Cuadernillo Fonoar · 14. Escala de 8.ª"]
+    e12, e14 = refs["Cuadernillo Fonoar · 12. Ejercicios con M y vocales proyectadas en escala de 3ra."], refs["Cuadernillo Fonoar · 14. Ejercicios en escala de 8va."]
     assert e12["bank_id"] != e14["bank_id"] and max(e12["semitonos"]) < max(e14["semitonos"])
     assert r["sin_guia"] == []  # todos los números tienen guía (los sin voz, con tiempo)
-    assert refs["Cuadernillo Fonoar · 4b. Descenso laríngeo: bostezo o succión"]["medida"] == "pasos"
+    assert refs["Cuadernillo Fonoar · 4b. Ejercicios de descenso laríngeo: bostezo o succión"]["medida"] == "pasos"
     assert r["fonoar"]["total"] == 23  # 19 números (el 4 en a, b, c) + 2 rutinas
     # La clave única de cada número se guarda bien en la rutina.
     assert PG.normalizar_ejercicio(dict(e14, nombre=e14["nombre"]), 118)["bank_id"] == e14["bank_id"]
@@ -348,7 +348,7 @@ def test_apartado_tracto_vocal_semiocluido(cliente):
 def test_pantalla_cuadernillo_fonoar(cliente):
     c, _ = cliente
     r = c.get("/api/cuadernillos/fonoar").json()
-    assert r["total"] == 23 and r["areas"][0]["area"] == "Trabajo corporal"
+    assert r["total"] == 23 and r["areas"][0]["area"] == "El trabajo corporal"
     todos = [e for a in r["areas"] for e in a["ejercicios"]]
     assert all(e["guia"] != "sin guía" for e in todos)
     assert next(e for e in todos if e["numero"] == "4b")["guia"] == "con tiempo"
@@ -359,9 +359,9 @@ def test_fonoar_trae_bloques_y_rutina_sin_rango(cliente):
     base.t["pacientes"][0]["centro"] = "fonoar_la_plata"
     r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
     bloques = {e["bloque"] for e in r["ejercicios"]}
-    assert {"Trabajo corporal", "Descenso laríngeo", "Vocalizaciones"} <= bloques
+    assert {"El trabajo corporal", "El trabajo respiratorio", "Ejercicios de vocalizaciones"} <= bloques
     # Rutina solo de cuerpo y respiración: no exige rango tonal.
-    cuerpo = [e for e in r["ejercicios"] if e["bloque"] in ("Trabajo corporal", "Trabajo respiratorio")]
+    cuerpo = [e for e in r["ejercicios"] if e["bloque"] in ("El trabajo respiratorio",)]
     resp = c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": cuerpo, "confirmado": True})
     assert resp.status_code == 200, resp.text
     # Con altura, el rango sigue siendo obligatorio.
@@ -380,3 +380,21 @@ def test_paciente_solo_ve_el_numero(cliente):
     e = next(x for x in r["ejercicios"] if x.get("numero_cuadernillo") == "4b")
     assert PG.normalizar_ejercicio(e, 118)["numero_cuadernillo"] == "4b"
     assert not any(x.get("numero_cuadernillo") == "Rutina" for x in r["ejercicios"])
+
+
+def test_contraindicaciones_con_todo_el_cuadro_y_su_motivo(cliente):
+    c, base = cliente
+    # La anamnesis no menciona lesión; el informe ORL sí.
+    base.t["anamnesis"] = [{"paciente_id": "p1", "fecha": "2026-11-01", "diagnostico_orl": "Disfonía", "motivo_consulta": "Ronquera"}]
+    base.t["informes_orl"] = [{"paciente_id": "p1", "fecha": "2026-11-12", "fecha_informe": "12/11/2026",
+                               "diagnostico_principal": "Nódulos bilaterales"}]
+    r = c.get("/api/practicas/sugerencias?paciente_id=p1&origen=sueltos").json()
+    mdv = next(x for x in r["excluidos"] if x["id"] == "messa_di_voce")
+    assert mdv["fuente"] == "el informe ORL del 12/11/2026" and mdv["termino"] == "nódulo"
+    assert "informe ORL" in mdv["motivo"]
+
+
+def test_negacion_no_excluye():
+    from recomendar_motor import verificar_contraindicaciones as v
+    assert v(["messa_di_voce"], fuentes={"la anamnesis": "Disfonía. Sin nódulos ni pólipos."})[1] == []
+    assert v(["messa_di_voce"], fuentes={"la anamnesis": "No se observan nódulos; edema leve"})[1][0]["termino"] == "edema"

@@ -280,7 +280,10 @@ export default function PanelPractica({ pacienteId, origenInicial }: { pacienteI
             ))}
           </div>
           {sug.excluidos?.length > 0 && (
-            <p className="text-amber-700 dark:text-amber-300">No se ofrecen por el diagnóstico: {sug.excluidos.map((x: any) => x.name).join(', ')}.</p>
+            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 space-y-0.5">
+              <p className="font-bold">No se ofrecen por el cuadro clínico del paciente:</p>
+              {sug.excluidos.map((x: any) => <p key={x.id}>• {nombreLimpio(x.name)}: {x.motivo}</p>)}
+            </div>
           )}
 
           {revisados.length > 0 && (

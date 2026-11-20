@@ -411,6 +411,30 @@ def origen_automatico(paciente: dict, cuad) -> str:
     return "cuadernillo" if cuad and cuad["ejercicios"] else "sueltos"
 
 
+def cuadro_clinico(sb, pid: str, paciente: dict) -> dict:
+    """Textos clínicos del paciente por fuente, para verificar contraindicaciones."""
+    fuentes = {}
+    try:
+        an = (sb.table("anamnesis").select("*").eq("paciente_id", pid).order("fecha", desc=True)
+              .limit(1).execute().data or [])
+        if an:
+            fuentes["la anamnesis"] = " ".join(str(an[0].get(k) or "") for k in ("diagnostico_orl", "motivo_consulta"))
+    except Exception:
+        pass
+    try:
+        inf = (sb.table("informes_orl").select("*").eq("paciente_id", pid).order("fecha", desc=True)
+               .limit(3).execute().data or [])
+        for i in inf:
+            cuando = i.get("fecha_informe") or dia_ar(i.get("fecha"))
+            fuentes[f"el informe ORL del {cuando}"] = " ".join(
+                str(i.get(k) or "") for k in ("diagnostico_principal",))
+    except Exception:
+        pass
+    if paciente.get("notas_iniciales"):
+        fuentes["las notas iniciales"] = str(paciente["notas_iniciales"])
+    return {k: v for k, v in fuentes.items() if v.strip()}
+
+
 @router.get("/api/practicas/sugerencias")
 async def sugerencias(paciente_id: str, origen: str = "auto"):
     sb = _sb()
@@ -432,14 +456,9 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
             plan_ids = [x.get("id") for x in (rec[0].get("recomendacion") or {}).get("ejercicios_recomendados") or []]
     except Exception:
         pass
-    # Contraindicaciones del cuadernillo con el diagnóstico del paciente.
-    diag = ""
-    try:
-        an = (sb.table("anamnesis").select("*").eq("paciente_id", paciente_id).order("fecha", desc=True)
-              .limit(1).execute().data or [])
-        diag = " ".join(str((an[0] if an else {}).get(k) or "") for k in ("diagnostico_orl", "motivo_consulta"))
-    except Exception:
-        pass
+    # Contraindicaciones con TODO el cuadro clínico: anamnesis, informes ORL y notas iniciales.
+    fuentes = cuadro_clinico(sb, paciente_id, p)
+    diag = " ".join(fuentes.values())
     # De dónde salen los ejercicios: cuadernillo de la app, de Fonoar o sueltos.
     cuad = cuadernillo_vigente(sb, paciente_id)
     auto = origen_automatico(p, cuad)
@@ -485,7 +504,7 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
     if not con_ref:
         entradas = [(i, i, None, None, {}, None) for i in GUIA_POR_EJERCICIO if i in banco]
     from recomendar_motor import verificar_contraindicaciones
-    seguros, excluidos = verificar_contraindicaciones(sorted({e[1] for e in entradas}), diag)
+    seguros, excluidos = verificar_contraindicaciones(sorted({e[1] for e in entradas}), fuentes=fuentes)
     seguros = set(seguros)
     lista = []
     for clave, bid, orden, ref, ajuste, nombre_ref in entradas:
@@ -809,9 +828,8 @@ async def guardar_sesion(token: str, request: Request):
 
 # ─── Cuadernillo de Fonoar (consulta para la pantalla de cuadernillos) ─────
 
-AREAS_FONOAR = {"corporal": "Trabajo corporal", "laringeo": "Descenso laríngeo", "orofaringeo": "Apertura de la boca",
-                "respiratorio": "Trabajo respiratorio", "vocalizaciones": "Vocalizaciones",
-                "transferencia": "Transferencia al habla", "rutinas": "Rutinas"}
+AREAS_FONOAR = {"corporal": "El trabajo corporal", "respiratorio": "El trabajo respiratorio",
+                "vocalizaciones": "Ejercicios de vocalizaciones", "rutinas": "Rutinas de calentamiento y enfriamiento"}
 
 
 @router.get("/api/cuadernillos/fonoar")

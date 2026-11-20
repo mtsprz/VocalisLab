@@ -92,30 +92,47 @@ def _exercise_index():
     return _EXERCISE_INDEX
 
 
-def verificar_contraindicaciones(exercise_ids, diagnostico_texto=""):
+TAG_LEGIBLE = {"nodulo": "lesión de masa (nódulos, pólipos, quiste, edema)", "hiperfuncion": "hiperfunción",
+               "dmt": "disfonía por tensión muscular", "laringitis_aguda": "laringitis aguda"}
+
+
+def verificar_contraindicaciones(exercise_ids, diagnostico_texto="", fuentes=None):
     """
-    Retorna (seguros, excluidos). excluidos = [{id, name, motivo}].
+    Retorna (seguros, excluidos). excluidos = [{id, name, motivo, fuente, termino}].
+    `fuentes` = {"anamnesis": texto, "informe ORL 12/11": texto, ...}: se busca en
+    todo el cuadro clínico y el motivo dice qué dato y de dónde salió.
     Sin diagnóstico no se excluye nada (se informa como no verificado).
     """
     import re as _re
     idx = _exercise_index()
-    diag = (diagnostico_texto or "").lower()
+    textos = {k: (v or "").lower() for k, v in (fuentes or {}).items() if (v or "").strip()}
+    if diagnostico_texto:
+        textos.setdefault("diagnóstico", diagnostico_texto.lower())
     seguros, excluidos = [], []
     for eid in (exercise_ids or []):
         info = idx.get(eid, {"name": eid, "contraindications": []})
-        motivo = None
+        hallado = None
         for tag in info["contraindications"]:
             for pat in CONTRA_MAP.get(tag, []):
-                if _re.search(pat, diag):
-                    motivo = (
-                        f"Contraindicado con este cuadro ('{tag}'): "
-                        f"el diagnóstico menciona un patrón compatible."
-                    )
+                for fuente, texto in textos.items():
+                    for m in _re.finditer(pat, texto):
+                        # "sin nódulos", "no se observan pólipos", "descarta edema": no cuenta.
+                        antes = texto[max(0, m.start() - 30):m.start()]
+                        if _re.search(r"\b(sin|no|niega|descart\w*|ausencia de|libre de)\b[^.;,]*$", antes):
+                            continue
+                        hallado = (tag, fuente, m.group(0))
+                        break
+                    if hallado:
+                        break
+                if hallado:
                     break
-            if motivo:
+            if hallado:
                 break
-        if motivo:
-            excluidos.append({"id": eid, "name": info["name"], "motivo": motivo})
+        if hallado:
+            tag, fuente, termino = hallado
+            excluidos.append({"id": eid, "name": info["name"], "fuente": fuente, "termino": termino,
+                              "motivo": (f"Contraindicado por {TAG_LEGIBLE.get(tag, tag)}: "
+                                         f"{fuente} menciona «{termino}».")})
         else:
             seguros.append(eid)
     return seguros, excluidos
