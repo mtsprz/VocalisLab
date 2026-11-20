@@ -93,7 +93,27 @@ GUIA_POR_EJERCICIO = {
     "consonantes_fricativas": {"medida": "libre", "guia": "sostenida", "duracion_objetivo_s": 20, "modelo": "sin_modelo",
                                "consigna": "Voz salmodiada con versos o refranes, cómoda."},
 }
-MEDIDAS = ("tono", "sostenido", "flujo", "intensidad", "pulsos", "libre")
+
+# Guías con tiempo para los ejercicios sin medición de voz (redacción propia).
+GUIA_POR_EJERCICIO.setdefault('le_huche', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 5, "consigna": 'Disociá: respirá suave y contraé solo la zona indicada; después soltá.', "pasos": [{'tipo': 'inhala', 'segundos': 4, 'texto': 'Inspirá suave por la boca, como diciendo «f»'}, {'tipo': 'accion', 'segundos': 3, 'texto': 'Sin respirar, apretá solo hombros y brazos'}, {'tipo': 'exhala', 'segundos': 6, 'texto': 'Soltá todo y sacá el aire con «sh» suave'}, {'tipo': 'descanso', 'segundos': 3, 'texto': 'Quedate flojo'}]})
+GUIA_POR_EJERCICIO.setdefault('shiatsu_cabeza', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 1, "consigna": 'Presión suave y pequeños círculos con los dedos mayor e índice. Nunca debe doler.', "pasos": [{'tipo': 'accion', 'segundos': 15, 'texto': 'Coronilla (vértex)'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Sienes'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Entrecejo'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Articulación de la mandíbula (delante de la oreja)'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Maseteros (mejillas, al apretar los dientes)'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Alrededor de los labios'}, {'tipo': 'accion', 'segundos': 20, 'texto': 'Cuello, a los costados'}, {'tipo': 'descanso', 'segundos': 5, 'texto': 'Soltá la mandíbula'}]})
+GUIA_POR_EJERCICIO.setdefault('rotacion_hombros', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 1, "consigna": 'Sentado derecho sobre los isquiones. Movimientos lentos, sin dolor.', "pasos": [{'tipo': 'accion', 'segundos': 15, 'texto': 'Rotá los dos hombros hacia atrás'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Ahora alternados, uno y otro'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Rotá la cabeza lentamente por delante'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Llevá el mentón hacia cada hombro'}, {'tipo': 'accion', 'segundos': 15, 'texto': 'Llevá la oreja hacia cada hombro'}, {'tipo': 'descanso', 'segundos': 5, 'texto': 'Volvé al centro y respirá'}]})
+GUIA_POR_EJERCICIO.setdefault('masaje_laringeo', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 3, "consigna": 'Masaje suave de los costados de la laringe, de arriba hacia abajo. Sin presionar fuerte.', "pasos": [{'tipo': 'accion', 'segundos': 20, 'texto': 'Masajeá los costados de la laringe hacia abajo'}, {'tipo': 'descanso', 'segundos': 5, 'texto': 'Tragá suave y soltá'}]})
+GUIA_POR_EJERCICIO.setdefault('descenso_laringeo', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 8, "consigna": 'Dedo apoyado suave sobre la nuez para sentir que baja. Sin forzar.', "pasos": [{'tipo': 'inhala', 'segundos': 4, 'texto': 'Bostezá lento por la boca (o succioná como con un sorbete)'}, {'tipo': 'accion', 'segundos': 5, 'texto': 'Mantené la laringe baja, sin tensión'}, {'tipo': 'descanso', 'segundos': 4, 'texto': 'Soltá despacio, sin movimientos bruscos'}]})
+GUIA_POR_EJERCICIO.setdefault('apertura_fondo_boca', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 10, "consigna": 'Frente al espejo, sentado derecho.', "pasos": [{'tipo': 'accion', 'segundos': 5, 'texto': 'Abrí la boca al máximo cómodo: lengua plana, paladar blando arriba'}, {'tipo': 'descanso', 'segundos': 3, 'texto': 'Cerrá suave, sin apretar'}]})
+GUIA_POR_EJERCICIO.setdefault('moldeado_vertical', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 3, "consigna": 'Boca bien abierta y mandíbula suelta; encadená las vocales despacio.', "pasos": [{'tipo': 'sonido', 'segundos': 12, 'texto': 'O – A – O – E – A, lento y cómodo'}, {'tipo': 'sonido', 'segundos': 6, 'texto': 'Decí «¿Hola, cómo estás?» con la misma apertura'}, {'tipo': 'descanso', 'segundos': 4, 'texto': 'Respirá'}]})
+GUIA_POR_EJERCICIO.setdefault('respiracion_abdominal', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 10, "consigna": 'Sentado cómodo; podés apoyar las manos en la panza.', "pasos": [{'tipo': 'inhala', 'segundos': 4, 'texto': 'Inspirá por la nariz llevando el aire a la panza'}, {'tipo': 'exhala', 'segundos': 6, 'texto': 'Sacalo por la boca con una «s» suave y pareja'}, {'tipo': 'descanso', 'segundos': 2, 'texto': 'Pausa'}]})
+GUIA_POR_EJERCICIO.setdefault('expansion_costo_lateral', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 5, "consigna": 'De pie, manos en las costillas de abajo. Sin subir hombros ni pecho; garganta suelta.', "pasos": [{'tipo': 'inhala', 'segundos': 4, 'texto': 'Inspirá por la nariz abriendo las costillas hacia los costados'}, {'tipo': 'retiene', 'segundos': 5, 'texto': 'Sostené las costillas abiertas, sin cerrar la garganta'}, {'tipo': 'exhala', 'segundos': 6, 'texto': 'Soltá el aire despacio'}, {'tipo': 'descanso', 'segundos': 3, 'texto': 'Pausa'}]})
+GUIA_POR_EJERCICIO.setdefault('soplo_escalonado', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 5, "consigna": 'Una mano en la panza y otra en la espalda baja: el aire se expande en todas las direcciones.', "pasos": [{'tipo': 'inhala', 'segundos': 5, 'texto': 'Inspirá por la nariz: panza, costillas y espalda'}, {'tipo': 'retiene', 'segundos': 2, 'texto': 'Sostené sin tensión'}, {'tipo': 'exhala', 'segundos': 8, 'texto': 'Soltá despacio y parejo'}, {'tipo': 'descanso', 'segundos': 3, 'texto': 'Pausa'}]})
+GUIA_POR_EJERCICIO.setdefault('calentamiento', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 1, "consigna": 'Antes de usar la voz. Volumen cómodo, sin esfuerzo.', "pasos": [{'tipo': 'sonido', 'segundos': 15, 'texto': 'Bostezo con un suspiro sonoro de agudo a grave'}, {'tipo': 'sonido', 'segundos': 20, 'texto': 'Trino de labios «brrr» suave'}, {'tipo': 'sonido', 'segundos': 20, 'texto': 'Sirena en «u», subiendo y bajando'}, {'tipo': 'sonido', 'segundos': 20, 'texto': '«Mmm» cómodo que se abre a vocales'}, {'tipo': 'descanso', 'segundos': 5, 'texto': 'Listo para usar la voz'}]})
+GUIA_POR_EJERCICIO.setdefault('enfriamiento', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 1, "consigna": 'Después de usar mucho la voz. Todo suave.', "pasos": [{'tipo': 'sonido', 'segundos': 15, 'texto': 'Suspiros sonoros de agudo a grave'}, {'tipo': 'sonido', 'segundos': 20, 'texto': '«Mmm» grave y suave'}, {'tipo': 'accion', 'segundos': 20, 'texto': 'Masaje suave de cuello y hombros'}, {'tipo': 'descanso', 'segundos': 30, 'texto': 'Silencio y respiración tranquila'}]})
+GUIA_POR_EJERCICIO.setdefault('mano_boca', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 5, "consigna": 'Mano tapando la boca, dejando un pequeño escape de aire entre los dedos.', "pasos": [{'tipo': 'inhala', 'segundos': 3, 'texto': 'Tomá aire'}, {'tipo': 'sonido', 'segundos': 8, 'texto': 'Sonido cómodo contra la mano, sintiendo la vibración'}, {'tipo': 'descanso', 'segundos': 3, 'texto': 'Soltá'}]})
+GUIA_POR_EJERCICIO.setdefault('b_prolongada', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 6, "consigna": 'Labios cerrados y mejillas que se inflan un poco; laringe cómoda.', "pasos": [{'tipo': 'inhala', 'segundos': 3, 'texto': 'Tomá aire'}, {'tipo': 'sonido', 'segundos': 5, 'texto': '«Bbbb» prolongada en tono cómodo'}, {'tipo': 'descanso', 'segundos': 3, 'texto': 'Soltá'}]})
+
+MEDIDAS = ("tono", "sostenido", "flujo", "intensidad", "pulsos", "libre", "pasos")
+# pasos: ejercicio sin medición de voz (cuerpo, masajes, respiración, descenso laríngeo):
+# una secuencia de pasos con cuenta regresiva; se registra que se hizo y cuánto duró.
+TIPOS_PASO = ("inhala", "retiene", "exhala", "sonido", "accion", "descanso")
 TONO_BASE_DEFECTO = {"varon": 110.0, "mujer": 196.0, "otro": 150.0}
 
 
@@ -295,6 +315,17 @@ def normalizar_ejercicio(e: dict, base_defecto) -> dict:
         out["duracion_s"] = max(3.0, min(30.0, float(e.get("duracion_s") or 8)))
         out["patron_intensidad"] = "arco" if e.get("patron_intensidad") == "arco" else "pareja"
         out["margen_db"] = max(2.0, min(15.0, float(e.get("margen_db") or 4)))
+    elif medida == "pasos":
+        pasos = []
+        for x in (e.get("pasos") or [])[:12]:
+            if not isinstance(x, dict) or not str(x.get("texto") or "").strip():
+                continue
+            pasos.append({"tipo": x.get("tipo") if x.get("tipo") in TIPOS_PASO else "accion",
+                          "segundos": max(1, min(120, int(float(x.get("segundos") or 5)))),
+                          "texto": str(x["texto"]).strip()[:120]})
+        if not pasos:
+            raise HTTPException(status_code=400, detail=f"«{out['nombre']}» no tiene pasos.")
+        out["pasos"] = pasos
     elif medida == "pulsos":
         out["pulsos"] = max(2, min(30, int(e.get("pulsos") or 6)))
         out["tempo_bpm"] = max(30, min(200, int(e.get("tempo_bpm") or 80)))
@@ -319,7 +350,22 @@ def normalizar_ejercicio(e: dict, base_defecto) -> dict:
 # ─── Origen de la práctica: coherencia con el cuadernillo del paciente ─────
 
 ORIGENES_PRACTICA = {"cuadernillo": "Cuadernillo de la app", "fonoar": "Cuadernillo de Fonoar",
+                     "tvso": "Tracto vocal semiocluido (tubos) y descenso laríngeo",
                      "sueltos": "Ejercicios sueltos"}
+# Secuencia clínica del apartado de tracto vocal semiocluido: preparación con
+# descenso laríngeo, tubos (de menor a mayor resistencia/variación) y transferencia.
+SECUENCIA_TVSO = [
+    ("descenso_laringeo", "Descenso laríngeo · bostezo o succión"),
+    ("oclusion_succion", "Descenso laríngeo · «hu hu hu»"),
+    ("laxvox_agua", "Tubos · tubo en agua"),
+    ("tubo_aire_libre", "Tubos · tubo en el aire"),
+    ("finger_kazoo", "Semioclusión · dedo en los labios"),
+    ("mano_boca", "Semioclusión · mano sobre la boca"),
+    ("trino_labial", "Semioclusión · trino de labios"),
+    ("b_prolongada", "Semioclusión · /b/ prolongada"),
+    ("fricativas_sonoras", "Semioclusión · /v/ /z/ sostenidas"),
+    ("oclusion_nasal", "Transferencia · /m/ a vocales"),
+]
 CATALOGO_FONOAR = os.path.join(os.path.dirname(__file__), "cuadernillo_fonoar.json")
 
 
@@ -412,6 +458,10 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
         else:
             aviso = ("Todavía no está cargado el cuadernillo de Fonoar: se muestran todos los ejercicios. "
                      "Cuando se cargue, la práctica sigue su numeración.")
+    elif elegido == "tvso":
+        for i, (bid, ref) in enumerate(SECUENCIA_TVSO):
+            if bid in GUIA_POR_EJERCICIO and bid in banco:
+                entradas.append((bid, bid, i + 1, ref, {}, None))
     elif elegido == "cuadernillo":
         if cuad and cuad["ejercicios"]:
             for e in cuad["ejercicios"]:

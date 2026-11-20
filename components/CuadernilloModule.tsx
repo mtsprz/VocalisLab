@@ -52,7 +52,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "dmt_1",
     name: "DMT Tipo I — Hiperfunción Isométrica",
     description: "Isometría laríngea con laringe elevada y tensión. Foco en Le Huche, descontracturación cervical y descenso laríngeo.",
-    exercise_ids: ["le_huche", "shiatsu_cabeza", "rotacion_hombros", "masaje_laringeo", "descenso_laringeo", "respiracion_abdominal", "tubo_agua", "calentamiento"],
+    exercise_ids: ["le_huche", "shiatsu_cabeza", "rotacion_hombros", "masaje_laringeo", "descenso_laringeo", "respiracion_abdominal", "laxvox_agua", "calentamiento"],
     sesiones_recomendadas: 10,
     frecuencia: "2 veces por semana"
   },
@@ -60,7 +60,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "dmt_2",
     name: "DMT Tipo II — Contracción Supraglótica",
     description: "Aproximación excesiva de bandas ventriculares. Foco en ensanchamiento faríngeo, SOVTE en tubo de agua y soplo aspirado.",
-    exercise_ids: ["le_huche", "descenso_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "vibracion_labial", "enfriamiento"],
+    exercise_ids: ["le_huche", "descenso_laringeo", "laxvox_agua", "soplo_escalonado", "oclusion_nasal", "trino_labial", "enfriamiento"],
     sesiones_recomendadas: 12,
     frecuencia: "2 a 3 veces por semana"
   },
@@ -68,7 +68,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "nodo_cordial",
     name: "Nódulos Cordales / Lesiones Exofíticas",
     description: "Edema en punto nodular por microtrauma. Foco en reeducación respiratoria, ataque suave, SOVTE y descontracturación.",
-    exercise_ids: ["le_huche", "masaje_laringeo", "respiracion_abdominal", "soplo_escalonado", "tubo_agua", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+    exercise_ids: ["le_huche", "masaje_laringeo", "respiracion_abdominal", "soplo_escalonado", "laxvox_agua", "oclusion_nasal", "frases_balanceadas", "calentamiento", "enfriamiento"],
     sesiones_recomendadas: 14,
     frecuencia: "2 a 3 veces por semana",
     advertencia: "STOP: suspender ante dolor, disfonía súbita/afonía, sangrado o disnea y derivar al ORL. Prohibidos empuje glótico, ataque duro, carraspeo/tos fuerte y susurro sostenido.",
@@ -77,7 +77,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "paralisis_cordal",
     name: "Parálisis Cordal / Incompetencia Glótica",
     description: "Déficit de cierre cordal. Foco en apoyo costodiafragmático, consonantes fricativas sonoras y resonancia anterior.",
-    exercise_ids: ["respiracion_abdominal", "expansion_costo_lateral", "consonantes_fricativas", "popote_aire", "escalas_vocalicas", "humming_m"],
+    exercise_ids: ["pushing_terapeutico", "respiracion_abdominal", "expansion_costo_lateral", "fricativas_sonoras", "tubo_aire_libre", "popote_aire", "oclusion_nasal"],
     sesiones_recomendadas: 16,
     frecuencia: "2 veces por semana",
     advertencia: "Empuje solo con supervisión y en días alternos, con incompetencia confirmada por ORL. STOP ante dolor cervical, mareo, disnea o disfagia."
@@ -86,7 +86,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "presbifonia",
     name: "Presbifonía / Atrofia Cordal",
     description: "Atrofia cordal senil con arqueamiento. Foco en incremento de tonicidad con popote estrecho y proyección vocal.",
-    exercise_ids: ["expansion_costo_lateral", "popote_aire", "vibracion_labial", "consonantes_fricativas", "escalas_vocalicas", "frases_balanceadas", "calentamiento"],
+    exercise_ids: ["expansion_costo_lateral", "tubo_aire_libre", "trino_labial", "fricativas_sonoras", "popote_aire", "frases_balanceadas", "calentamiento"],
     sesiones_recomendadas: 12,
     frecuencia: "2 veces por semana"
   },
@@ -94,7 +94,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "fonastenia",
     name: "Fonastenia / Fatiga Vocal Ocupacional",
     description: "Cansancio vocal en docentes y profesionales. Foco en economía vocal (SOVTE), resonancia y pausas vocales.",
-    exercise_ids: ["rotacion_hombros", "respiracion_abdominal", "tubo_agua", "popote_aire", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+    exercise_ids: ["rotacion_hombros", "respiracion_abdominal", "laxvox_agua", "tubo_aire_libre", "oclusion_nasal", "frases_balanceadas", "calentamiento", "enfriamiento"],
     sesiones_recomendadas: 8,
     frecuencia: "2 veces por semana"
   },
@@ -102,7 +102,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "rlf",
     name: "Reflujo Laringofaríngeo (RLF)",
     description: "Irritación interaritenoidea con carraspeo crónico. Foco en higiene digestiva estricta, hidratación y vibración suave.",
-    exercise_ids: ["pautas_rlf", "descenso_laringeo", "tubo_agua", "vibracion_labial", "humming_m", "enfriamiento"],
+    exercise_ids: ["pautas_rlf", "descenso_laringeo", "laxvox_agua", "trino_labial", "oclusion_nasal", "enfriamiento"],
     sesiones_recomendadas: 8,
     frecuencia: "1 a 2 veces por semana",
     advertencia: "No carraspear, toser ni susurrar: deglución consciente y sorbos de agua. No acostarse antes de 2.5 h post-cena, cabecera 10-15 cm.",
@@ -111,7 +111,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "edema_reinke",
     name: "Edema de Reinke / Degeneración Polipoidea",
     description: "Aumento de masa y laxitud en espacio de Reinke. Foco en disminución de impacto, resonancia y SOVTE.",
-    exercise_ids: ["le_huche", "masaje_laringeo", "tubo_agua", "soplo_escalonado", "humming_m", "calentamiento", "enfriamiento"],
+    exercise_ids: ["le_huche", "masaje_laringeo", "laxvox_agua", "soplo_escalonado", "oclusion_nasal", "calentamiento", "enfriamiento"],
     sesiones_recomendadas: 12,
     frecuencia: "2 veces por semana",
     advertencia: "STOP: suspender ante dolor, disfonía súbita, sangrado o disnea y derivar al ORL. SOVTE suave (inmersión máx. 2 cm).",
@@ -120,7 +120,7 @@ const DEFAULT_PRESETS: Preset[] = [
     id: "preparacion_vocal",
     name: "Acondicionamiento y Mantenimiento Vocal",
     description: "Rutina completa de preparación y cuidado para profesionales de la voz hablada y cantada.",
-    exercise_ids: ["rotacion_hombros", "le_huche", "respiracion_abdominal", "tubo_agua", "vibracion_labial", "humming_m", "frases_balanceadas", "calentamiento", "enfriamiento"],
+    exercise_ids: ["rotacion_hombros", "le_huche", "respiracion_abdominal", "laxvox_agua", "trino_labial", "oclusion_nasal", "frases_balanceadas", "calentamiento", "enfriamiento"],
     sesiones_recomendadas: 6,
     frecuencia: "diario o pre-jornada"
   }

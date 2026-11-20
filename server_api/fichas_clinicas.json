@@ -45,7 +45,7 @@
       "triggers": {"grbas": ["G1", "G2"], "rasati": ["A1", "T1"], "sz_min": 0, "sintomas": ["fatiga_vocal"], "patologias": ["Nódulos", "Esbozo Nodular"]}
     },
     {
-      "id": "EXO-SOVTE-004", "bank_id": "tubo_agua",
+      "id": "EXO-SOVTE-004", "bank_id": "laxvox_agua",
       "nombre": "Terapia de Resistencia al Agua (Lax Vox / Tubo Sumergido)",
       "categoria_terapeutica": "Resonancia / SOVTE",
       "indicaciones": ["Edema de Reinke", "Nódulos", "Pólipos sésiles", "Cicatrices postquirúrgicas"],
@@ -71,7 +71,7 @@
       "triggers": {"grbas": ["G1", "G2", "S1"], "rasati": ["T1", "T2"], "sz_min": 0, "sintomas": ["tension_mandibular", "ataque_duro"], "patologias": ["Nódulos", "Hiperfunción"]}
     },
     {
-      "id": "EXO-VIB-006", "bank_id": "vibracion_labial",
+      "id": "EXO-VIB-006", "bank_id": "trino_labial",
       "nombre": "Deslizamientos con Sonidos Vibrantes (/rr/ o Trino Labial)",
       "categoria_terapeutica": "Flexibilización Laríngea / Resonancia",
       "indicaciones": ["Postoperatorio de pólipos/quistes (tras reposo absoluto), prevención de adherencias"],
@@ -97,7 +97,7 @@
       "triggers": {"grbas": ["G1", "G2"], "rasati": ["T1"], "sz_min": 0, "sintomas": ["ataque_duro"], "patologias": ["Nódulos", "Esbozo Nodular", "Hiperfunción"]}
     },
     {
-      "id": "INC-COR-001", "bank_id": "empuje_glotico",
+      "id": "INC-COR-001", "bank_id": "pushing_terapeutico",
       "nombre": "Técnica de Empuje con Consonantes Explosivas (Pushing)",
       "categoria_terapeutica": "Corporal/Miofascial con acople fonatorio",
       "indicaciones": ["Parálisis recurrencial unilateral en abducción", "Hipotonía cordal", "Presbifonía", "Déficit severo de aproximación"],
@@ -137,7 +137,7 @@
       "triggers": {"grbas": ["G2", "B2"], "rasati": ["S2"], "sz_min": 1.2, "sintomas": ["voz_soplada"], "patologias": ["Parálisis Cordal", "Incompetencia Glótica"]}
     },
     {
-      "id": "INC-SOVTE-004", "bank_id": "tubo_agua",
+      "id": "INC-SOVTE-004", "bank_id": "laxvox_agua",
       "nombre": "Lax Vox de Alta Carga (Inmersión Profunda 5-7 cm)",
       "categoria_terapeutica": "Resonancia / SOVTE",
       "indicaciones": ["Parálisis unilateral en abducción", "Presbifonía severa", "Hiato oval/longitudinal marcado"],
@@ -215,7 +215,7 @@
       "triggers": {"grbas": ["G2"], "rasati": ["T2"], "sz_min": 0, "sintomas": ["bandas_ventriculares"], "patologias": ["DMT", "Disfonía ventricular"]}
     },
     {
-      "id": "HIP-NEU-005", "bank_id": "consonantes_fricativas",
+      "id": "HIP-NEU-005", "bank_id": "metodo_acento",
       "nombre": "Método del Acento (Smith): Secuencias Rítmicas Fricativa-Vocal",
       "categoria_terapeutica": "Coordinación Neumofónica / Resonancia",
       "indicaciones": ["DMT I y II con fonoastenia", "Incoordinación fonorrespiratoria", "Ataque duro sistemático"],
@@ -319,7 +319,7 @@
       "triggers": {"grbas": ["G1", "R1"], "rasati": ["I1"], "sz_min": 0, "sintomas": ["fatiga_vocal", "rango_reducido"], "patologias": ["Fonoastenia", "Fatiga vocal"]}
     },
     {
-      "id": "OPT-RES-003", "bank_id": "consonantes_fricativas",
+      "id": "OPT-RES-003", "bank_id": "metodo_acento",
       "nombre": "Terapia del Acento y 'Molm' de Smith",
       "categoria_terapeutica": "Coordinación Neumofónica / Resonancia",
       "indicaciones": ["Incoordinación fonorrespiratoria en docentes/locutores", "Fatiga al final del día"],

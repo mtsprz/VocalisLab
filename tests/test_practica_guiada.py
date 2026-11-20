@@ -274,11 +274,13 @@ def test_practica_sigue_el_cuadernillo_del_paciente(cliente):
                                             {"id": "tubo_agua", "name": "Glissandos sobre /m/ o /u/", "orden": 3}]}]
     r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
     assert r["origen_auto"] == "cuadernillo" and r["origen"] == "cuadernillo"
-    assert [e["bank_id"] for e in r["ejercicios"]] == ["laxvox_agua", "tubo_agua"]  # en el orden del cuadernillo
-    assert r["ejercicios"][0]["ref_cuadernillo"] == "Tu cuadernillo · ejercicio 2"
-    assert r["cuadernillo"]["total"] == 3 and r["cuadernillo"]["con_guia"] == 2
+    # En el orden del cuadernillo; el bostezo/succión va como ejercicio con tiempo.
+    assert [e["bank_id"] for e in r["ejercicios"]] == ["descenso_laringeo", "laxvox_agua", "tubo_agua"]
+    assert r["ejercicios"][0]["medida"] == "pasos"
+    assert r["ejercicios"][1]["ref_cuadernillo"] == "Tu cuadernillo · ejercicio 2"
+    assert r["cuadernillo"]["total"] == 3 and r["cuadernillo"]["con_guia"] == 3
     assert r["cuadernillo"]["fecha"] == "2026-11-18"  # día argentino, no UTC
-    assert r["sin_guia"][0]["orden"] == 1
+    assert r["sin_guia"] == []
     # Práctica suelta: todos los ejercicios con guía.
     sueltos = c.get("/api/practicas/sugerencias?paciente_id=p1&origen=sueltos").json()
     assert sueltos["origen"] == "sueltos" and len(sueltos["ejercicios"]) > 2
@@ -299,7 +301,8 @@ def test_paciente_de_fonoar_va_a_su_cuadernillo(cliente, monkeypatch):
     # 12, 13 y 14 son escalas distintas aunque compartan el ejercicio base.
     e12, e14 = refs["Cuadernillo Fonoar · 12. M y vocales en escala de 3.ª"], refs["Cuadernillo Fonoar · 14. Escala de 8.ª"]
     assert e12["bank_id"] != e14["bank_id"] and max(e12["semitonos"]) < max(e14["semitonos"])
-    assert any(x["orden"] == "4b" for x in r["sin_guia"])  # bostezo/succión: todavía sin guía
+    assert r["sin_guia"] == []  # todos los números tienen guía (los sin voz, con tiempo)
+    assert refs["Cuadernillo Fonoar · 4b. Descenso laríngeo: bostezo o succión"]["medida"] == "pasos"
     assert r["fonoar"]["total"] == 23  # 19 números (el 4 en a, b, c) + 2 rutinas
     # La clave única de cada número se guarda bien en la rutina.
     assert PG.normalizar_ejercicio(dict(e14, nombre=e14["nombre"]), 118)["bank_id"] == e14["bank_id"]
@@ -317,3 +320,26 @@ def test_la_rutina_guarda_el_origen_del_ejercicio():
     e = PG.normalizar_ejercicio({"medida": "flujo", "nombre": "Tubo en agua", "origen": "cuadernillo",
                                  "ref_cuadernillo": "Tu cuadernillo · ejercicio 2"}, 118)
     assert e["origen"] == "cuadernillo" and e["ref_cuadernillo"] == "Tu cuadernillo · ejercicio 2"
+
+
+def test_ejercicios_con_tiempo_sin_microfono():
+    e = PG.normalizar_ejercicio(dict(PG.GUIA_POR_EJERCICIO["descenso_laringeo"], nombre="Bostezo", repeticiones=8), None)
+    assert e["medida"] == "pasos" and "base_hz" not in e and len(e["pasos"]) == 3
+    assert e["pasos"][1]["tipo"] == "accion" and e["pasos"][1]["segundos"] == 5
+    with pytest.raises(HTTPException):
+        PG.normalizar_ejercicio({"medida": "pasos", "nombre": "Vacío", "pasos": []}, None)
+    r = PG.limpiar_resultado({"ejercicio": 0, "medida": "pasos", "repeticiones": 8, "duracion_s": 104, "logro_pct": 100}, 1)
+    assert r["medida"] == "pasos" and r["repeticiones"] == 8
+
+
+def test_todo_el_cuadernillo_de_fonoar_tiene_guia():
+    assert all(e["bank_id"] in PG.GUIA_POR_EJERCICIO for e in PG.catalogo_fonoar()["ejercicios"])
+
+
+def test_apartado_tracto_vocal_semiocluido(cliente):
+    c, base = cliente
+    r = c.get("/api/practicas/sugerencias?paciente_id=p1&origen=tvso").json()
+    ids = [e["bank_id"] for e in r["ejercicios"]]
+    assert r["origen"] == "tvso" and ids[0] == "descenso_laringeo"
+    assert ids.index("laxvox_agua") < ids.index("tubo_aire_libre") < ids.index("oclusion_nasal")
+    assert r["ejercicios"][2]["ref_cuadernillo"].startswith("Tubos")

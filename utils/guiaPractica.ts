@@ -2,14 +2,16 @@
  * Camino de cada ejercicio de práctica guiada y métricas de la sesión.
  * Todo en semitonos respecto del tono base del ejercicio.
  */
-export type Medida = 'tono' | 'sostenido' | 'flujo' | 'intensidad' | 'pulsos' | 'libre';
+export type Medida = 'tono' | 'sostenido' | 'flujo' | 'intensidad' | 'pulsos' | 'libre' | 'pasos';
+/** Paso de un ejercicio con tiempo (sin medición de voz). */
+export type Paso = { tipo: 'inhala' | 'retiene' | 'exhala' | 'sonido' | 'accion' | 'descanso'; segundos: number; texto: string };
 export type Ejercicio = {
   bank_id?: string | null; nombre: string; guia: 'sostenida' | 'escalera' | 'rampa' | 'patron';
   base_hz: number; consigna?: string; repeticiones: number; tolerancia_cents: number;
   duracion_s?: number; amplitud?: number; semitonos?: number[]; nota_s?: number;
   medida?: Medida; modelo?: 'sonoro' | 'sin_modelo'; con_tono?: boolean;
   duracion_objetivo_s?: number; margen_db?: number; patron_intensidad?: 'pareja' | 'arco';
-  pulsos?: number; tempo_bpm?: number;
+  pulsos?: number; tempo_bpm?: number; pasos?: Paso[];
 };
 
 /** Nombre sin la numeración del cuadernillo («10.1 Glissandos» → «Glissandos»). */
@@ -21,6 +23,7 @@ export const usaTono = (e: Ejercicio) => medidaDe(e) === 'tono' || (medidaDe(e) 
 /** Duración de una pasada del ejercicio, en segundos. */
 export function duracion(e: Ejercicio): number {
   const m = medidaDe(e);
+  if (m === 'pasos') return (e.pasos || []).reduce((a, p) => a + p.segundos, 0);
   if (m === 'pulsos') return (e.pulsos || 6) * 60 / (e.tempo_bpm || 80) + 0.6;
   if (m === 'sostenido' || m === 'flujo' || m === 'libre') return e.duracion_objetivo_s || e.duracion_s || (m === 'libre' ? 20 : 8);
   if (m === 'intensidad') return e.duracion_s || 8;

@@ -49,6 +49,16 @@ def precauciones_por_bank_id():
                     _PRECAUCIONES_CACHE[bid] = prec
         except Exception as e:
             print(f"[recomendar_motor] no se pudieron cargar precauciones: {e}")
+        # Respaldo: precaución escrita en la propia ficha del banco.
+        try:
+            with open(os.path.join(os.path.dirname(__file__), "exercise_bank.json"), encoding="utf-8") as f:
+                for sec in json.load(f).get("sections", []):
+                    for ex in sec.get("exercises", []):
+                        bid = str(ex.get("id", "")).strip().lower()
+                        if bid and ex.get("precaucion") and bid not in _PRECAUCIONES_CACHE:
+                            _PRECAUCIONES_CACHE[bid] = str(ex["precaucion"]).strip()
+        except Exception as e:
+            print(f"[recomendar_motor] no se pudieron cargar precauciones del banco: {e}")
     return _PRECAUCIONES_CACHE
 
 
@@ -493,7 +503,7 @@ Genera la recomendación terapéutica precisa.
         texto_diag))
     if hay_exofitica:
         antes = len(selected_exs)
-        selected_exs = [e for e in selected_exs if e.get("id") != "empuje_glotico"]
+        selected_exs = [e for e in selected_exs if e.get("id") not in ("empuje_glotico", "pushing_terapeutico")]
         if len(selected_exs) < antes:
             alertas_seguridad.append(
                 "EXCLUIDO POR SEGURIDAD: empuje glótico contraindicado con lesión "
@@ -503,9 +513,11 @@ Genera la recomendación terapéutica precisa.
     except Exception:
         so_val = 0
     if so_val > 1.2 and not hay_exofitica:
-        if not any(e.get("id") == "empuje_glotico" for e in selected_exs):
+        # pushing_terapeutico es la ficha de empuje del banco (empuje_glotico es un id
+        # histórico cuya ficha hoy es "ampliación orofaríngea").
+        if not any(e.get("id") in ("empuje_glotico", "pushing_terapeutico") for e in selected_exs):
             selected_exs.insert(0, {
-                "id": "empuje_glotico",
+                "id": "pushing_terapeutico",
                 "name": "Técnica de Empuje (Pushing)",
                 "justificacion": "Incompetencia glótica (S/O > 1.2): aducción refleja por esfuerzo para vencer el hiato aéreo.",
                 "dosificacion": "3 series de 10 emisiones ¡KIP!/¡TEP! en días alternos.",

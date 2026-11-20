@@ -15,6 +15,7 @@ const MEDIDAS: Record<string, string> = {
   intensidad: 'Intensidad (pareja o messa di voce)',
   pulsos: 'Pulsos / ataques rítmicos',
   libre: 'Libre: búsqueda o habla, sin objetivo tonal',
+  pasos: 'Con tiempo: pasos guiados, sin medir la voz',
 };
 const OIDO: Record<string, { cents: number; texto: string }> = {
   sin_experiencia: { cents: 200, texto: 'Sin experiencia musical' },
@@ -101,7 +102,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   };
 
   const alternar = (e: any) => { setConfirmado(false); setElegidos(v => v.some(x => x.bank_id === e.bank_id)
-    ? v.filter(x => x.bank_id !== e.bank_id) : [...v, { ...e, repeticiones: 3, tolerancia_cents: usaTonoE(e) ? Math.max(e.tolerancia_cents || 0, margenSugerido) : (e.tolerancia_cents || 100) }].slice(0, 8)); };
+    ? v.filter(x => x.bank_id !== e.bank_id) : [...v, { ...e, repeticiones: e.repeticiones_sugeridas || 3, tolerancia_cents: usaTonoE(e) ? Math.max(e.tolerancia_cents || 0, margenSugerido) : (e.tolerancia_cents || 100) }].slice(0, 8)); };
   const cambiar = (bid: string, k: string, val: any) => { setConfirmado(false); setElegidos(v => v.map(x => x.bank_id === bid ? { ...x, [k]: val } : x)); };
 
   /** Acota amplitud/escalera al rango de trabajo. */

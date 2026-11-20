@@ -6,6 +6,16 @@ import {
 } from '../../utils/guiaPractica';
 import { Locutor } from '../../utils/locutor';
 import { Escenario, MedicionSZ, NOCHE } from './visuales';
+import type { Paso } from '../../utils/guiaPractica';
+/** Color y tamaño de la esfera por tipo de paso (inhalar crece, exhalar se achica). */
+const PASO_VISUAL: Record<string, { color: string; escala: number; texto: string }> = {
+  inhala: { color: NOCHE.inhala, escala: 0.95, texto: 'Inhalá' },
+  retiene: { color: NOCHE.atencion, escala: 0.95, texto: 'Sostené' },
+  exhala: { color: NOCHE.descanso, escala: 0.55, texto: 'Exhalá' },
+  sonido: { color: NOCHE.sonido, escala: 0.7, texto: 'Con sonido' },
+  accion: { color: NOCHE.inhala, escala: 0.75, texto: 'Hacé' },
+  descanso: { color: NOCHE.descanso, escala: 0.6, texto: 'Descansá' },
+};
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 const UMBRAL_VOZ_DB = -50;    // por debajo: silencio
@@ -87,6 +97,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
   const [hoy, setHoy] = useState<number>(previa?.practicas_hoy || 0);
   const [reloj, setReloj] = useState<{ restante: number; total: number } | null>(null);
   const [cuentaNum, setCuentaNum] = useState(3);
+  const [pasoActual, setPasoActual] = useState<{ paso: Paso; n: number; total: number } | null>(null);
   const nivel = useRef(0);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
@@ -186,6 +197,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
 
   const elegir = (i: number) => {
     setIdx(i); setResumen(null); audio();
+    if (medidaDe(info.ejercicios[i]) === 'pasos') { setFase('practica'); setTimeout(() => practicarPasos(i), 50); return; }
     if (preparado.current) { setFase('practica'); setTimeout(() => practicar(i), 50); }
     else { setPrep({ paso: 'inicio' }); setFase('preparar'); }
   };
@@ -243,6 +255,50 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
     await decir(calib.ok ? 'afinado' : 'de_nuevo', calib.ok ? 'Muy bien, estás en tu nota.' : 'Probemos de nuevo.');
   };
   const empezar = () => { preparado.current = true; setFase('practica'); setTimeout(() => practicar(idx), 50); };
+
+  /** Ejercicio con tiempo: cada paso con cuenta regresiva; no se usa el micrófono. */
+  const practicarPasos = async (i: number) => {
+    const e: Ejercicio = info.ejercicios[i];
+    const pasos = e.pasos || [];
+    corriendo.current = true; setPasoActual(null);
+    const ctx = audio();
+    const t0 = performance.now();
+    let hechas = 0;
+    setEtapa('escucha'); setAviso(e.consigna || '');
+    await decir(`ej:${e.bank_id || ''}`, e.consigna || '', 300);
+    for (let r = 0; r < e.repeticiones && corriendo.current; r++) {
+      setRep(r + 1);
+      for (let k = 0; k < pasos.length && corriendo.current; k++) {
+        const p = pasos[k];
+        setPasoActual({ paso: p, n: k + 1, total: pasos.length }); setAviso(p.texto);
+        clic(ctx, ctx.currentTime + 0.02, p.tipo !== 'descanso');
+        decir(`paso:${e.bank_id || ''}:${k}`, p.texto, 0);
+        const ini = performance.now();
+        while (corriendo.current) {
+          const resta = p.segundos - (performance.now() - ini) / 1000;
+          if (resta <= 0) break;
+          setReloj({ restante: resta, total: p.segundos });
+          await dormir(100);
+        }
+      }
+      if (corriendo.current) hechas++;
+    }
+    corriendo.current = false; setPasoActual(null);
+    const duracionS = Math.round((performance.now() - t0) / 100) / 10;
+    const res: any = { medida: 'pasos', repeticiones: hechas, duracion_s: duracionS,
+                       logro_pct: Math.round((hechas / Math.max(1, e.repeticiones)) * 100) };
+    setResumen(res); setFase('fin');
+    decir(hechas >= e.repeticiones ? 'fin_bien' : 'fin', hechas >= e.repeticiones ? 'Muy bien, terminaste el ejercicio.' : 'Terminaste. Buen trabajo.');
+    if (previa) { setHechos(h => [...new Set([...h, i])]); if (!tandaContada.current) { tandaContada.current = true; setHoy(x => x + 1); } return; }
+    if (hechas > 0) {
+      fetch(`${BACKEND_URL}/api/practica/${token}/sesion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resultados: [{ ejercicio: i, ...res }], ambiente: { tanda: tanda.current } }),
+      }).then(r => {
+        if (r.ok) { setHechos(h => [...new Set([...h, i])]); if (!tandaContada.current) { tandaContada.current = true; setHoy(x => x + 1); } }
+      }).catch(() => {});
+    }
+  };
 
   const practicar = async (i: number) => {
     const e: Ejercicio = info.ejercicios[i];
@@ -502,7 +558,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
               <p className="font-bold">{nombreLimpio(e.nombre)} {hechos.includes(i) && <span className="text-emerald-600 text-sm">✓ hecho</span>}</p>
               {e.consigna && <p className="text-sm text-slate-600 dark:text-slate-300">{e.consigna}</p>}
               <p className="text-xs text-slate-500 mt-1">{e.repeticiones} repeticiones · {usaTono(e) && e.base_hz ? `empieza en ${nota(e.base_hz)}`
-                : ({ flujo: 'sonido parejo y continuo', sostenido: 'sostenido y parejo', intensidad: 'suave–fuerte–suave', pulsos: 'impulsos con el pulso', libre: 'libre, cómodo' } as any)[medidaDe(e)] || ''}</p>
+                : ({ flujo: 'sonido parejo y continuo', sostenido: 'sostenido y parejo', intensidad: 'suave–fuerte–suave', pulsos: 'impulsos con el pulso', libre: 'libre, cómodo', pasos: `con tiempo · ${Math.round(duracion(e))} s por vuelta` } as any)[medidaDe(e)] || ''}</p>
             </button>
           ))}
           <button onClick={() => { audio(); setFase('sz'); }} className={caja + ' w-full text-left hover:border-[#b39cff]'}>
@@ -553,6 +609,17 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       {fase === 'practica' && ej && (
         <div className={caja + ' space-y-2'}>
           <div className="flex justify-between text-sm"><b>{nombreLimpio(ej.nombre)}</b><span className="text-slate-500">Repetición {rep} de {ej.repeticiones}</span></div>
+          {pasoActual ? (
+            <div className="flex flex-col items-center gap-3 py-2">
+              <Escenario tamano="w-48 h-48" color={PASO_VISUAL[pasoActual.paso.tipo].color} escala={PASO_VISUAL[pasoActual.paso.tipo].escala}
+                fraccion={reloj ? reloj.restante / reloj.total : 1} centro={reloj ? Math.ceil(reloj.restante) : pasoActual.paso.segundos} />
+              <p className="text-xl font-black" style={{ color: PASO_VISUAL[pasoActual.paso.tipo].color }}>{PASO_VISUAL[pasoActual.paso.tipo].texto}</p>
+              <p className="text-center font-semibold text-slate-100 min-h-12" aria-live="polite">{pasoActual.paso.texto}</p>
+              <p className="text-xs text-[#8d98ad]">Paso {pasoActual.n} de {pasoActual.total}</p>
+            </div>
+          ) : medidaDe(ej) === 'pasos' ? (
+            <p className="text-center font-semibold text-slate-200 py-6" aria-live="polite">{aviso || 'Preparate…'}</p>
+          ) : (<>
           <div className="flex items-center gap-4">
             <Escenario color={VISUAL[etapa].color} escala={VISUAL[etapa].escala} nivel={nivel}
               fraccion={etapa === 'cuenta' ? cuentaNum / 3 : (etapa === 'canto' || etapa === 'pausa') && reloj ? reloj.restante / reloj.total : null}
@@ -563,6 +630,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
             </div>
           </div>
           <canvas ref={canvas} width={640} height={300} className="w-full rounded-2xl bg-black/30" />
+          </>)}
           <button onClick={() => { corriendo.current = false; loc.current?.callar(); }} className="w-full py-2 rounded-xl border border-slate-300 dark:border-white/20 text-sm">Terminar</button>
         </div>
       )}
@@ -580,6 +648,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
 }
 
 function mensajeFinal(r: any): string {
+  if (r.medida === 'pasos') return r.logro_pct >= 100 ? '¡Muy bien! Hiciste todas las vueltas.' : `Hiciste ${r.repeticiones} vuelta${r.repeticiones === 1 ? '' : 's'}. ¡Bien!`;
   if (!r.voz_pct) return 'No llegamos a escuchar tu voz: probá acercar el celular.';
   if ((r.octava_pct || 0) >= 30) return 'Lo hiciste una octava distinta de la nota: la próxima, escuchá el modelo y buscá la misma altura.';
   const l = r.logro_pct ?? 0;
