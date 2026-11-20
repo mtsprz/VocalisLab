@@ -44,7 +44,9 @@ def a_ar(valor):
         t = str(valor).strip().replace("Z", "+00:00").replace(" ", "T", 1)
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", t):
             return datetime.combine(date.fromisoformat(t), time(12, 0), ZONA)
-        t = re.sub(r"(\.\d{6})\d+", r"\1", t)  # Postgres puede traer más de 6 decimales
+        # Python 3.10 (Render) solo acepta 3 o 6 decimales: se normalizan a 6.
+        t = re.sub(r"\.(\d+)", lambda m: "." + (m.group(1) + "000000")[:6], t, count=1)
+        t = re.sub(r"([+-]\d{2})$", r"\1:00", t)  # "+00" → "+00:00"
         try:
             dt = datetime.fromisoformat(t)
         except ValueError:

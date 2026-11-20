@@ -1,4 +1,5 @@
 import os
+from fechas import ahora_ar as _ahora_ar
 import base64
 from io import BytesIO
 from datetime import datetime
@@ -210,7 +211,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
 
     elements.append(Paragraph("PROTOCOLO DE EVALUACIÓN BIOACÚSTICA DE LA VOZ", title_style))
     elements.append(Paragraph(
-        f"Generado: {__import__("fechas").ahora_ar().strftime('%d/%m/%Y %H:%M')} | "
+        f"Generado: {_ahora_ar().strftime('%d/%m/%Y %H:%M')} | "
         f"Motor: Praat/Parselmouth {metricas.get('parselmouth_version', '0.4.3')}",
         subtitle_style
     ))
@@ -219,7 +220,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
         [P(f"<b>Paciente:</b> {paciente.get('nombre', 'N/A')}", body_style),
          P(f"<b>DNI:</b> {paciente.get('dni', 'N/A')}", body_style)],
         [P(f"<b>Edad:</b> {paciente.get('edad', 'N/A')} años | <b>Sexo:</b> {paciente.get('sexo', 'N/A')}", body_style),
-         P(f"<b>Fecha:</b> {__import__("fechas").ahora_ar().strftime('%d/%m/%Y')}", body_style)],
+         P(f"<b>Fecha:</b> {_ahora_ar().strftime('%d/%m/%Y')}", body_style)],
         [P(f"<b>Motivo:</b> {paciente.get('motivo', 'N/A')}", body_style),
          P(f"<b>Derivador:</b> {paciente.get('derivador', 'N/A')}", body_style)],
         [P(f"<b>GRBAS:</b> {grbas_str}", body_style),
@@ -449,7 +450,7 @@ def generar_pdf_clinico(paciente: dict, metricas: dict, img_path: str, pdf_path:
     elements.append(Paragraph("_" * 95, disclaimer_style))
     footer_data = [
         [P(f"<b>Profesional:</b> {prof_name or 'N/D'}", body_style),
-         P(f"<b>Fecha:</b> {__import__("fechas").ahora_ar().strftime('%d/%m/%Y %H:%M')}", body_style)],
+         P(f"<b>Fecha:</b> {_ahora_ar().strftime('%d/%m/%Y %H:%M')}", body_style)],
         [P(f"<b>Matrícula:</b> {prof_mat or 'N/D'}", body_style),
          P(f"<b>Hash SHA-256:</b> {audio.get('file_hash_sha256', 'N/D')[:32]}...", body_style)],
     ]
