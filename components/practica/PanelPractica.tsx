@@ -223,6 +223,10 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
               <p className="text-slate-600 dark:text-slate-300">«{sug.cuadernillo.titulo}» del {sug.cuadernillo.fecha}: {sug.cuadernillo.con_guia} de {sug.cuadernillo.total} ejercicios
                 tienen práctica guiada. Se muestran en el orden del cuadernillo, con su número.</p>
             )}
+            {sug.origen === 'fonoar' && sug.fonoar && (
+              <p className="text-slate-600 dark:text-slate-300">Cuadernillo de Fonoar: {sug.fonoar.con_guia} de {sug.fonoar.total} ejercicios
+                tienen práctica guiada, con el número que el paciente ve en su cuadernillo.</p>
+            )}
             {sug.sin_guia?.length > 0 && (
               <p className="text-slate-500">Del cuadernillo, sin práctica guiada todavía: {sug.sin_guia.map((x: any) => `${x.orden}. ${x.nombre}`).join(' · ')}.</p>
             )}

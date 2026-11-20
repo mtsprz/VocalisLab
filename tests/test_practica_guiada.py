@@ -288,14 +288,29 @@ def test_practica_sigue_el_cuadernillo_del_paciente(cliente):
 def test_paciente_de_fonoar_va_a_su_cuadernillo(cliente, monkeypatch):
     c, base = cliente
     base.t["pacientes"][0]["centro"] = "fonoar_la_plata"
+    real = PG.catalogo_fonoar
     monkeypatch.setattr(PG, "catalogo_fonoar", lambda: None)
     r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
     assert r["origen"] == "fonoar" and "Fonoar" in r["aviso_origen"] and r["ejercicios"]
-    monkeypatch.setattr(PG, "catalogo_fonoar", lambda: {"ejercicios": [
-        {"numero": "10.1", "nombre": "Glissandos", "bank_id": "tubo_agua"}]})
+    monkeypatch.setattr(PG, "catalogo_fonoar", real)
     r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
-    assert [e["bank_id"] for e in r["ejercicios"]] == ["tubo_agua"]
-    assert r["ejercicios"][0]["ref_cuadernillo"] == "Cuadernillo Fonoar · 10.1 Glissandos"
+    refs = {e["ref_cuadernillo"]: e for e in r["ejercicios"]}
+    assert "Cuadernillo Fonoar · 11. Glissandos ascendentes" in refs
+    # 12, 13 y 14 son escalas distintas aunque compartan el ejercicio base.
+    e12, e14 = refs["Cuadernillo Fonoar · 12. M y vocales en escala de 3.ª"], refs["Cuadernillo Fonoar · 14. Escala de 8.ª"]
+    assert e12["bank_id"] != e14["bank_id"] and max(e12["semitonos"]) < max(e14["semitonos"])
+    assert any(x["orden"] == "4b" for x in r["sin_guia"])  # bostezo/succión: todavía sin guía
+    assert r["fonoar"]["total"] == 23  # 19 números (el 4 en a, b, c) + 2 rutinas
+    # La clave única de cada número se guarda bien en la rutina.
+    assert PG.normalizar_ejercicio(dict(e14, nombre=e14["nombre"]), 118)["bank_id"] == e14["bank_id"]
+
+
+def test_catalogo_fonoar_apunta_a_ejercicios_del_banco():
+    import json
+    banco = json.load(open(os.path.join(os.path.dirname(__file__), "..", "server_api", "exercise_bank.json"), encoding="utf-8"))
+    ids = {e["id"] for s in banco["sections"] for e in s["exercises"]}
+    cat = PG.catalogo_fonoar()
+    assert cat and all(e["bank_id"] in ids for e in cat["ejercicios"])
 
 
 def test_la_rutina_guarda_el_origen_del_ejercicio():

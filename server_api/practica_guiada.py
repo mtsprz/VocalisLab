@@ -88,6 +88,8 @@ GUIA_POR_EJERCICIO = {
                          "consigna": "«Hu hu hu» suaves, en báscula baja, siguiendo el pulso."},
     "frases_balanceadas": {"medida": "libre", "guia": "sostenida", "duracion_objetivo_s": 20, "modelo": "sin_modelo",
                            "consigna": "Leé o decí tus frases en voz conversacional, cómoda."},
+    "escalas_vocalicas": {"medida": "libre", "guia": "sostenida", "duracion_objetivo_s": 60, "modelo": "sin_modelo",
+                          "consigna": "Contá algo de tu día en voz conversacional, aplicando lo trabajado."},
     "consonantes_fricativas": {"medida": "libre", "guia": "sostenida", "duracion_objetivo_s": 20, "modelo": "sin_modelo",
                                "consigna": "Voz salmodiada con versos o refranes, cómoda."},
 }
@@ -392,46 +394,55 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
     auto = origen_automatico(p, cuad)
     elegido = origen if origen in ORIGENES_PRACTICA else auto
     aviso = ""
-    # referencia por bank_id: (orden, texto que ve el paciente)
-    refs: dict = {}
+    # Entradas en orden: (clave única, id del banco, orden, referencia para el paciente, ajuste de guía).
+    # Un mismo ejercicio del banco puede estar con distinto número (Fonoar 12, 13 y 14 = escalas).
+    entradas, sin_guia, vistos = [], [], {}
     if elegido == "fonoar":
         cat = catalogo_fonoar()
         if cat:
             for i, e in enumerate(cat["ejercicios"]):
-                if e.get("bank_id"):
-                    refs.setdefault(e["bank_id"], (i, f"Cuadernillo Fonoar · {e.get('numero') or i + 1} {e.get('nombre') or ''}".strip()))
+                bid = e.get("bank_id")
+                ref = f"Cuadernillo Fonoar · {e.get('numero')}. {e.get('nombre')}".replace("Rutina. ", "")
+                if bid in GUIA_POR_EJERCICIO and bid in banco:
+                    vistos[bid] = vistos.get(bid, 0) + 1
+                    clave = bid if vistos[bid] == 1 else f"{bid}~{e.get('numero')}"
+                    entradas.append((clave, bid, i, ref, e.get("guia") or {}, e.get("nombre")))
+                else:
+                    sin_guia.append({"orden": e.get("numero"), "nombre": e.get("nombre")})
         else:
             aviso = ("Todavía no está cargado el cuadernillo de Fonoar: se muestran todos los ejercicios. "
                      "Cuando se cargue, la práctica sigue su numeración.")
     elif elegido == "cuadernillo":
         if cuad and cuad["ejercicios"]:
             for e in cuad["ejercicios"]:
-                refs.setdefault(e["id"], (e["orden"], f"Tu cuadernillo · ejercicio {e['orden']}"))
+                if e["id"] in GUIA_POR_EJERCICIO and e["id"] in banco and e["id"] not in vistos:
+                    vistos[e["id"]] = 1
+                    entradas.append((e["id"], e["id"], e["orden"], f"Tu cuadernillo · ejercicio {e['orden']}", {}, None))
+                elif e["id"] not in GUIA_POR_EJERCICIO:
+                    sin_guia.append({"orden": e["orden"],
+                                     "nombre": nombre_limpio(banco.get(e["id"], {}).get("name") or e["nombre"])})
         else:
             aviso = "El paciente no tiene un cuadernillo generado en la app: se muestran todos los ejercicios."
-    candidatos = [i for i in GUIA_POR_EJERCICIO if i in banco and (not refs or i in refs)]
+    con_ref = bool(entradas)
+    if not con_ref:
+        entradas = [(i, i, None, None, {}, None) for i in GUIA_POR_EJERCICIO if i in banco]
     from recomendar_motor import verificar_contraindicaciones
-    seguros, excluidos = verificar_contraindicaciones(candidatos, diag)
+    seguros, excluidos = verificar_contraindicaciones(sorted({e[1] for e in entradas}), diag)
+    seguros = set(seguros)
     lista = []
-    for bid in seguros:
-        g = GUIA_POR_EJERCICIO[bid]
+    for clave, bid, orden, ref, ajuste, nombre_ref in entradas:
+        if bid not in seguros:
+            continue
+        g = dict(GUIA_POR_EJERCICIO[bid], **ajuste)
         if usa_tono(g):
             g = ajustar_a_rango(g, base["hz"], rango.get("min_hz"), rango.get("max_hz"))
-        item = dict(g, bank_id=bid, nombre=nombre_limpio(banco[bid].get("name", bid)), base_hz=base["hz"],
-                    en_plan=bid in plan_ids, origen=elegido if refs else "sueltos")
-        if bid in refs:
-            item["ref_cuadernillo"] = refs[bid][1]
-            item["orden_cuadernillo"] = refs[bid][0]
+        item = dict(g, bank_id=clave, nombre=nombre_limpio(nombre_ref or banco[bid].get("name", bid)),
+                    base_hz=base["hz"], en_plan=bid in plan_ids, origen=elegido if con_ref else "sueltos")
+        if ref:
+            item["ref_cuadernillo"], item["orden_cuadernillo"] = ref, orden
         lista.append(item)
-    if refs:
-        lista.sort(key=lambda x: x.get("orden_cuadernillo", 999))
-    else:
+    if not con_ref:
         lista.sort(key=lambda x: (not x["en_plan"], x["nombre"]))
-    # Ejercicios del cuadernillo que todavía no tienen práctica guiada (coherencia visible).
-    sin_guia = []
-    if elegido == "cuadernillo" and refs:
-        sin_guia = [{"orden": e["orden"], "nombre": nombre_limpio(banco.get(e["id"], {}).get("name") or e["nombre"])}
-                    for e in cuad["ejercicios"] if e["id"] not in GUIA_POR_EJERCICIO]
     sug_tol = {"cents": 100, "motivo": "margen normal (1 semitono)"}
     try:
         ev = (sb.table("evaluaciones_clinicas").select("*").eq("paciente_id", paciente_id)
@@ -448,7 +459,9 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
                              "total": len(cuad["ejercicios"]),
                              "con_guia": len([e for e in cuad["ejercicios"] if e["id"] in GUIA_POR_EJERCICIO])}
                             if cuad else None),
-            "sin_guia": sin_guia, "fonoar_cargado": bool(catalogo_fonoar())}
+            "sin_guia": sin_guia, "fonoar_cargado": bool(catalogo_fonoar()),
+            "fonoar": ({"total": len(catalogo_fonoar()["ejercicios"]), "con_guia": len([x for x in lista if x.get("ref_cuadernillo")])}
+                       if elegido == "fonoar" and catalogo_fonoar() else None)}
 
 
 @router.post("/api/practicas")
