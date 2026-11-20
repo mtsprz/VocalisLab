@@ -31,21 +31,57 @@ GUIAS = ("sostenida", "escalera", "rampa", "patron")
 VERSION_CONSENTIMIENTO = "2026-11"
 
 # Ejercicios del cuadernillo (exercise_bank.json) que se pueden guiar con la pelota.
+# Qué se mide en cada ejercicio del cuadernillo con guía (medida):
+#   tono       altura objetivo (camino de notas): sirenas, escalas, trinos.
+#   sostenido  duración y estabilidad (de intensidad; de altura si con_tono).
+#   flujo      sonido con ruido sin altura medible (tubo en agua, LaxVox,
+#              fricativas, /sh/): continuidad, cortes e intensidad pareja.
+#   intensidad dinámica respecto de su nivel cómodo (pareja o arco messa di voce).
+#   pulsos     impulsos/ataques rítmicos (método del acento, /ch-ch/, hu-hu-hu).
+#   libre      búsqueda o habla sin objetivo tonal: se registra F0 e intensidad.
+# modelo: "sonoro" = ejemplo audible antes de cada repetición; "sin_modelo" =
+# no se da ejemplo para no condicionar la búsqueda.
 GUIA_POR_EJERCICIO = {
-    "tubo_agua": {"guia": "rampa", "amplitud": 7, "consigna": "Glissando con el tubo en el agua: subí y bajá suave, sin empujar."},
-    "glissandos": {"guia": "rampa", "amplitud": 7, "consigna": "Sirena suave sobre /u/ o /m/: subí y bajá siguiendo la rampa."},
-    "laxvox_agua": {"guia": "rampa", "amplitud": 5, "consigna": "Tubo en agua: burbujeo parejo mientras seguís la rampa."},
-    "tubo_aire_libre": {"guia": "rampa", "amplitud": 5, "consigna": "Tubo en el aire: seguí la rampa con sonido continuo."},
-    "popote_aire": {"guia": "escalera", "semitonos": [0, 2, 4, 5, 7, 5, 4, 2, 0], "consigna": "Escala de cinco notas, subiendo y bajando, cómoda."},
-    "trino_labial": {"guia": "escalera", "semitonos": [0, 2, 4, 2, 0], "consigna": "Trino de labios /br/ siguiendo los escalones."},
-    "trino_lingual": {"guia": "escalera", "semitonos": [0, 2, 4, 2, 0], "consigna": "Trino de lengua /rr/ siguiendo los escalones."},
-    "oclusion_nasal": {"guia": "sostenida", "duracion_s": 6, "consigna": "/m/ sostenida en tu tono cómodo, abrí a vocal al final."},
-    "vocales_cerradas": {"guia": "sostenida", "duracion_s": 6, "consigna": "/u/ o /i/ sostenida, pareja y sin esfuerzo."},
-    "fricativas_sonoras": {"guia": "sostenida", "duracion_s": 6, "consigna": "/v/ o /z/ sostenida, sonido parejo."},
-    "b_prolongada": {"guia": "sostenida", "duracion_s": 5, "consigna": "/b/ prolongada en tono cómodo."},
-    "messa_di_voce": {"guia": "sostenida", "duracion_s": 8, "consigna": "Misma nota: empezá suave, crecé y volvé a suave."},
-    "finger_kazoo": {"guia": "rampa", "amplitud": 5, "consigna": "Dedo en los labios: sirena suave siguiendo la rampa."},
+    "glissandos": {"medida": "tono", "guia": "rampa", "amplitud": 7, "modelo": "sonoro",
+                   "consigna": "Sirena suave sobre /u/ o /m/: subí y bajá siguiendo la rampa."},
+    "popote_aire": {"medida": "tono", "guia": "escalera", "semitonos": [0, 2, 4, 5, 7, 5, 4, 2, 0], "modelo": "sonoro",
+                    "consigna": "Escala de cinco notas, subiendo y bajando, cómoda."},
+    "trino_labial": {"medida": "tono", "guia": "escalera", "semitonos": [0, 2, 4, 2, 0], "modelo": "sonoro", "tolerancia_cents": 200,
+                     "consigna": "Trino de labios /br/ siguiendo los escalones."},
+    "trino_lingual": {"medida": "tono", "guia": "escalera", "semitonos": [0, 2, 4, 2, 0], "modelo": "sonoro", "tolerancia_cents": 200,
+                      "consigna": "Trino de lengua /rr/ siguiendo los escalones."},
+    "finger_kazoo": {"medida": "tono", "guia": "rampa", "amplitud": 5, "modelo": "sonoro", "tolerancia_cents": 200,
+                     "consigna": "Dedo en los labios: sirena suave siguiendo la rampa."},
+    "tubo_agua": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo",
+                  "consigna": "Tubo en el agua: burbujeo parejo y sonido continuo, sin empujar."},
+    "laxvox_agua": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo",
+                    "consigna": "Tubo en agua: burbujeo parejo mientras sostenés el sonido."},
+    "tubo_aire_libre": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo",
+                        "consigna": "Tubo en el aire: sonido continuo y parejo."},
+    "fricativas_sonoras": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo",
+                           "consigna": "/v/ o /z/ sostenida, sonido parejo."},
+    "respiracion_dinamica": {"medida": "flujo", "guia": "sostenida", "duracion_objetivo_s": 6, "modelo": "sin_modelo",
+                             "consigna": "/sh/ largo y parejo, sin cortar el aire."},
+    "oclusion_nasal": {"medida": "sostenido", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo", "con_tono": False,
+                       "consigna": "/m/ sostenida en tu tono cómodo, abrí a vocal al final."},
+    "vocales_cerradas": {"medida": "sostenido", "guia": "sostenida", "duracion_objetivo_s": 8, "modelo": "sin_modelo", "con_tono": False,
+                         "consigna": "/u/ o /i/ sostenida, pareja y sin esfuerzo."},
+    "b_prolongada": {"medida": "sostenido", "guia": "sostenida", "duracion_objetivo_s": 5, "modelo": "sin_modelo", "con_tono": False,
+                     "consigna": "/b/ prolongada en tono cómodo."},
+    "messa_di_voce": {"medida": "intensidad", "guia": "sostenida", "duracion_s": 8, "patron_intensidad": "arco", "margen_db": 4,
+                      "modelo": "sonoro", "consigna": "Misma nota: empezá suave, crecé y volvé a suave."},
+    "metodo_acento": {"medida": "pulsos", "guia": "sostenida", "pulsos": 6, "tempo_bpm": 80, "modelo": "sonoro",
+                      "consigna": "Impulsos rítmicos con apoyo abdominal, siguiendo el pulso."},
+    "soplo_fraccionado": {"medida": "pulsos", "guia": "sostenida", "pulsos": 8, "tempo_bpm": 100, "modelo": "sonoro",
+                          "consigna": "Chistidos /ch-ch-ch/ cortos y parejos, siguiendo el pulso."},
+    "oclusion_succion": {"medida": "pulsos", "guia": "sostenida", "pulsos": 6, "tempo_bpm": 70, "modelo": "sonoro",
+                         "consigna": "«Hu hu hu» suaves, en báscula baja, siguiendo el pulso."},
+    "frases_balanceadas": {"medida": "libre", "guia": "sostenida", "duracion_objetivo_s": 20, "modelo": "sin_modelo",
+                           "consigna": "Leé o decí tus frases en voz conversacional, cómoda."},
+    "consonantes_fricativas": {"medida": "libre", "guia": "sostenida", "duracion_objetivo_s": 20, "modelo": "sin_modelo",
+                               "consigna": "Voz salmodiada con versos o refranes, cómoda."},
 }
+MEDIDAS = ("tono", "sostenido", "flujo", "intensidad", "pulsos", "libre")
 TONO_BASE_DEFECTO = {"varon": 110.0, "mujer": 196.0, "otro": 150.0}
 
 
@@ -199,36 +235,63 @@ def ajustar_a_rango(e: dict, base: float, lo, hi) -> dict:
     return e
 
 
-def normalizar_ejercicio(e: dict, base_defecto: float) -> dict:
+def usa_tono(e: dict) -> bool:
+    """El ejercicio tiene una altura objetivo (se valida contra el rango)."""
+    return e.get("medida", "tono") == "tono" or (e.get("medida") == "sostenido" and bool(e.get("con_tono")))
+
+
+def normalizar_ejercicio(e: dict, base_defecto) -> dict:
     """Valida y completa un ejercicio; rechaza valores fuera de rango."""
-    guia = str(e.get("guia") or "")
+    medida = str(e.get("medida") or "tono")
+    if medida not in MEDIDAS:
+        raise HTTPException(status_code=400, detail=f"Tipo de medición inválido: {medida}")
+    guia = str(e.get("guia") or ("sostenida" if medida != "tono" else ""))
     if guia not in GUIAS:
         raise HTTPException(status_code=400, detail=f"Tipo de guía inválido: {guia or 'vacío'}")
-    try:
-        base = float(e.get("base_hz") or base_defecto)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Tono base inválido")
-    if not 60 <= base <= 1000:
-        raise HTTPException(status_code=400, detail="El tono base va de 60 a 1000 Hz.")
     out = {"bank_id": e.get("bank_id") or None, "nombre": str(e.get("nombre") or "Ejercicio")[:80],
-           "guia": guia, "base_hz": round(base, 1),
+           "medida": medida, "guia": guia,
+           "modelo": "sin_modelo" if e.get("modelo") == "sin_modelo" else "sonoro",
            "consigna": str(e.get("consigna") or "")[:300],
            "repeticiones": max(1, min(20, int(e.get("repeticiones") or 3))),
-           "tolerancia_cents": max(25, min(300, int(e.get("tolerancia_cents") or 100)))}
-    if guia == "sostenida":
-        out["duracion_s"] = max(2.0, min(30.0, float(e.get("duracion_s") or 6)))
-    elif guia == "rampa":
-        out["amplitud"] = max(1, min(24, int(e.get("amplitud") or 7)))
-        out["duracion_s"] = max(2.0, min(20.0, float(e.get("duracion_s") or 6)))
-    else:
-        semis = [int(s) for s in (e.get("semitonos") or [])][:24]
-        if len(semis) < 2 or any(abs(s) > 24 for s in semis):
-            raise HTTPException(status_code=400, detail="La escalera necesita de 2 a 24 notas, dentro de ±24 semitonos.")
-        out["semitonos"] = semis
-        out["nota_s"] = max(0.5, min(5.0, float(e.get("nota_s") or 1.2)))
-    tope = base * 2 ** (max(out.get("semitonos") or [out.get("amplitud", 0)]) / 12)
-    if tope > 1200:
-        raise HTTPException(status_code=400, detail="El ejercicio sube por encima de 1200 Hz: bajá el tono base.")
+           "tolerancia_cents": max(25, min(400, int(e.get("tolerancia_cents") or 100)))}
+    if medida == "sostenido":
+        out["con_tono"] = bool(e.get("con_tono"))
+    necesita_tono = usa_tono(out)
+    try:
+        base = float(e.get("base_hz") or base_defecto) if (e.get("base_hz") or base_defecto) else None
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Tono base inválido")
+    if necesita_tono and base is None:
+        raise HTTPException(status_code=400, detail=f"«{out['nombre']}» necesita tono de inicio.")
+    if base is not None:
+        if not 60 <= base <= 1000:
+            raise HTTPException(status_code=400, detail="El tono base va de 60 a 1000 Hz.")
+        out["base_hz"] = round(base, 1)
+    if medida in ("sostenido", "flujo", "libre"):
+        out["duracion_objetivo_s"] = max(2.0, min(60.0, float(e.get("duracion_objetivo_s") or e.get("duracion_s") or (20 if medida == "libre" else 8))))
+        out["margen_db"] = max(2.0, min(15.0, float(e.get("margen_db") or 6)))
+    elif medida == "intensidad":
+        out["duracion_s"] = max(3.0, min(30.0, float(e.get("duracion_s") or 8)))
+        out["patron_intensidad"] = "arco" if e.get("patron_intensidad") == "arco" else "pareja"
+        out["margen_db"] = max(2.0, min(15.0, float(e.get("margen_db") or 4)))
+    elif medida == "pulsos":
+        out["pulsos"] = max(2, min(30, int(e.get("pulsos") or 6)))
+        out["tempo_bpm"] = max(30, min(200, int(e.get("tempo_bpm") or 80)))
+    if medida == "tono" or (medida == "sostenido" and out.get("con_tono")):
+        if guia == "sostenida":
+            out["duracion_s"] = max(2.0, min(30.0, float(e.get("duracion_objetivo_s") or e.get("duracion_s") or 6)))
+        elif guia == "rampa":
+            out["amplitud"] = max(1, min(24, int(e.get("amplitud") or 7)))
+            out["duracion_s"] = max(2.0, min(20.0, float(e.get("duracion_s") or 6)))
+        else:
+            semis = [int(x) for x in (e.get("semitonos") or [])][:24]
+            if len(semis) < 2 or any(abs(x) > 24 for x in semis):
+                raise HTTPException(status_code=400, detail="La escalera necesita de 2 a 24 notas, dentro de ±24 semitonos.")
+            out["semitonos"] = semis
+            out["nota_s"] = max(0.5, min(5.0, float(e.get("nota_s") or 1.2)))
+        tope = base * 2 ** (max(out.get("semitonos") or [out.get("amplitud", 0)]) / 12)
+        if tope > 1200:
+            raise HTTPException(status_code=400, detail="El ejercicio sube por encima de 1200 Hz: bajá el tono base.")
     return out
 
 
@@ -263,11 +326,22 @@ async def sugerencias(paciente_id: str):
     seguros, excluidos = verificar_contraindicaciones([i for i in GUIA_POR_EJERCICIO if i in banco], diag)
     lista = []
     for bid in seguros:
-        g = ajustar_a_rango(GUIA_POR_EJERCICIO[bid], base["hz"], rango.get("min_hz"), rango.get("max_hz"))
+        g = GUIA_POR_EJERCICIO[bid]
+        if usa_tono(g):
+            g = ajustar_a_rango(g, base["hz"], rango.get("min_hz"), rango.get("max_hz"))
         lista.append(dict(g, bank_id=bid, nombre=banco[bid].get("name", bid), base_hz=base["hz"],
                           en_plan=bid in plan_ids))
     lista.sort(key=lambda x: (not x["en_plan"], x["nombre"]))
-    return {"tono_base": base, "rango": rango, "mediciones": perfil["mediciones"],
+    sug_tol = {"cents": 100, "motivo": "margen normal (1 semitono)"}
+    try:
+        ev = (sb.table("evaluaciones_clinicas").select("*").eq("paciente_id", paciente_id)
+              .order("fecha", desc=True).limit(1).execute().data or [])
+        g_val = ((ev[0].get("grbas") or {}).get("G") if ev else None)
+        if g_val is not None and float(g_val) >= 2:
+            sug_tol = {"cents": 200, "motivo": f"disfonía grado G{int(float(g_val))}: margen amplio (2 semitonos)"}
+    except Exception:
+        pass
+    return {"tono_base": base, "rango": rango, "mediciones": perfil["mediciones"], "tolerancia_sugerida": sug_tol,
             "ejercicios": lista, "excluidos": excluidos}
 
 
@@ -293,6 +367,9 @@ async def crear(request: Request):
     base = tono_base(sb, pid, p)["hz"]
     ejercicios = [normalizar_ejercicio(e, base) for e in ejercicios]
     for e in ejercicios:
+        if not usa_tono(e):
+            e["rango_min_hz"], e["rango_max_hz"] = round(lo, 1), round(hi, 1)
+            continue
         grave, agudo = limites_hz(e)
         if grave < lo * 2 ** (-0.5 / 12) or agudo > hi * 2 ** (0.5 / 12):
             raise HTTPException(status_code=400, detail=(
@@ -455,15 +532,32 @@ def limpiar_resultado(x: dict, n_ejercicios: int) -> dict:
     i = int(x.get("ejercicio") if x.get("ejercicio") is not None else -1)
     if not 0 <= i < n_ejercicios:
         raise HTTPException(status_code=400, detail="Ejercicio inexistente en la rutina.")
-    return {"ejercicio": i,
+    medida = x.get("medida") if x.get("medida") in MEDIDAS else None
+    return {"ejercicio": i, "medida": medida,
             "repeticiones": int(_num(x.get("repeticiones"), 0, 50) or 0),
+            "logro_pct": _num(x.get("logro_pct"), 0, 100),
+            # Altura
             "dentro_pct": _num(x.get("dentro_pct"), 0, 100),
-            "voz_pct": _num(x.get("voz_pct"), 0, 100),
             "octava_pct": _num(x.get("octava_pct"), 0, 100),
             "f0_mediana_hz": _num(x.get("f0_mediana_hz"), 50, 1500),
             "f0_min_hz": _num(x.get("f0_min_hz"), 50, 1500),
             "f0_max_hz": _num(x.get("f0_max_hz"), 50, 1500),
             "desvio_cents": _num(x.get("desvio_cents"), 0, 2400),
+            "altura_no_medible": bool(x.get("altura_no_medible")),
+            # Sonido, periodicidad y continuidad
+            "voz_pct": _num(x.get("voz_pct"), 0, 100),
+            "periodicidad_pct": _num(x.get("periodicidad_pct"), 0, 100),
+            "sonido_s": _num(x.get("sonido_s"), 0, 3600),
+            "tramo_max_s": _num(x.get("tramo_max_s"), 0, 3600),
+            "cortes": int(_num(x.get("cortes"), 0, 1000) or 0),
+            # Intensidad (dB relativos: sobre el ruido del lugar / respecto de su nivel cómodo)
+            "intensidad_media_db": _num(x.get("intensidad_media_db"), -20, 100),
+            "intensidad_rango_db": _num(x.get("intensidad_rango_db"), 0, 100),
+            "intensidad_sd_db": _num(x.get("intensidad_sd_db"), 0, 60),
+            "intensidad_dentro_pct": _num(x.get("intensidad_dentro_pct"), 0, 100),
+            # Pulsos
+            "pulsos": int(_num(x.get("pulsos"), 0, 500) or 0),
+            "pulsos_regularidad_pct": _num(x.get("pulsos_regularidad_pct"), 0, 100),
             "duracion_s": _num(x.get("duracion_s"), 0, 3600)}
 
 
@@ -488,7 +582,8 @@ async def guardar_sesion(token: str, request: Request):
                          "tanda": str(amb.get("tanda") or "")[:40] or None,
                          # F0 cómoda medida hoy antes de practicar y su distancia al tono de inicio.
                          "calibracion_hz": _num(amb.get("calibracion_hz"), 50, 1500),
-                         "calibracion_st": _num(amb.get("calibracion_st"), -36, 36)},
+                         "calibracion_st": _num(amb.get("calibracion_st"), -36, 36),
+                         "calibracion_db": _num(amb.get("calibracion_db"), -120, 0)},
             "modo": "vivo" if body.get("modo") == "vivo" else "casa",
             "comentario": str(body.get("comentario") or "")[:500]}
     sb.table("practica_sesiones").insert(fila).execute()

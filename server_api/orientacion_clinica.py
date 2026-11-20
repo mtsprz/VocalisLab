@@ -54,12 +54,21 @@ def practica_resumen(sb, pid: str) -> dict:
         for x in s.get("resultados") or []:
             n = (nombres.get(s.get("practica_id")) or [])
             nom = n[x["ejercicio"]] if x.get("ejercicio") is not None and x["ejercicio"] < len(n) else f"ejercicio {x.get('ejercicio')}"
-            if x.get("dentro_pct") is not None:
-                por_ej.setdefault(nom, []).append(x["dentro_pct"])
+            logro = x.get("logro_pct") if x.get("logro_pct") is not None else x.get("dentro_pct")
+            if logro is not None:
+                d = por_ej.setdefault(nom, {"medida": x.get("medida") or "tono", "logro": [], "tramo_max_s": [], "cortes": [],
+                                            "intensidad_sd_db": [], "altura_no_medible": 0})
+                d["logro"].append(logro)
+                for k in ("tramo_max_s", "cortes", "intensidad_sd_db"):
+                    if x.get(k) is not None:
+                        d[k].append(x[k])
+                d["altura_no_medible"] += 1 if x.get("altura_no_medible") else 0
     return {"rutinas_enviadas": len(rut),
             "dias_con_practica": len({str(s.get("creada_at"))[:10] for s in ses}),
             "primera": str(ses[-1].get("creada_at"))[:10], "ultima": str(ses[0].get("creada_at"))[:10],
-            "porcentaje_en_el_camino_promedio": {k: round(sum(v) / len(v), 1) for k, v in por_ej.items()}}
+            "por_ejercicio": {k: {"medida": v["medida"], "logro_promedio_pct": round(sum(v["logro"]) / len(v["logro"]), 1),
+                                  **{f"{c}_promedio": round(sum(v[c]) / len(v[c]), 1) for c in ("tramo_max_s", "cortes", "intensidad_sd_db") if v[c]},
+                                  "veces_altura_no_medible": v["altura_no_medible"]} for k, v in por_ej.items()}}
 
 
 def expediente(datos: dict, practica: dict, situacion: dict) -> dict:

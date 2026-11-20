@@ -193,3 +193,42 @@ def test_adherencia_cuenta_tandas_por_dia():
            {"creada_at": hoy, "ambiente": {"tanda": "b"}}]
     ad = PG.adherencia(ses, 2, 7)
     assert ad["hoy"] == 2 and ad["dias_cumplidos"] == 1 and len(ad["serie"]) == 7
+
+
+def test_medidas_sin_altura_no_exigen_tono_ni_rango_tonal(cliente):
+    c, base = cliente
+    base.t["evaluaciones_clinicas"] = []
+    base.t["analisis_acusticos"] = []
+    ej = [{"medida": "flujo", "nombre": "Tubo en agua", "duracion_objetivo_s": 8, "modelo": "sin_modelo"},
+          {"medida": "pulsos", "nombre": "Acento", "pulsos": 6, "tempo_bpm": 80}]
+    r = c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": ej, **OK})
+    assert r.status_code == 200, r.text
+    rut = base.t["practicas"][0]["ejercicios"]
+    assert rut[0]["medida"] == "flujo" and rut[0]["modelo"] == "sin_modelo" and "base_hz" not in rut[0]
+    assert rut[1]["pulsos"] == 6 and rut[1]["tempo_bpm"] == 80
+    sin_base = c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": [{"medida": "tono", "guia": "rampa", "nombre": "Sirena"}], **OK})
+    assert sin_base.status_code == 400 and "tono de inicio" in sin_base.json()["detail"]
+
+
+def test_resultados_guardan_todas_las_medidas(cliente):
+    c, base = cliente
+    token = c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": EJ, **OK}).json()["enlace"].split("=")[1]
+    c.post(f"/api/practica/{token}/consentimiento", json={"acepta": True})
+    res = {"ejercicio": 0, "medida": "flujo", "logro_pct": 92.5, "tramo_max_s": 7.4, "cortes": 1, "sonido_s": 14.2,
+           "intensidad_media_db": 24.3, "intensidad_rango_db": 6.1, "intensidad_sd_db": 1.8, "intensidad_dentro_pct": 88,
+           "periodicidad_pct": 12, "altura_no_medible": True, "pulsos": 0}
+    assert c.post(f"/api/practica/{token}/sesion", json={"resultados": [res], "ambiente": {"calibracion_db": -31}}).status_code == 200
+    g = base.t["practica_sesiones"][0]
+    r = g["resultados"][0]
+    assert r["medida"] == "flujo" and r["logro_pct"] == 92.5 and r["tramo_max_s"] == 7.4 and r["cortes"] == 1
+    assert r["altura_no_medible"] is True and r["periodicidad_pct"] == 12 and r["intensidad_sd_db"] == 1.8
+    assert g["ambiente"]["calibracion_db"] == -31
+
+
+def test_catalogo_cubre_sovt_y_ritmo():
+    assert PG.GUIA_POR_EJERCICIO["tubo_agua"]["medida"] == "flujo"
+    assert PG.GUIA_POR_EJERCICIO["messa_di_voce"]["medida"] == "intensidad"
+    assert PG.GUIA_POR_EJERCICIO["metodo_acento"]["medida"] == "pulsos"
+    for g in PG.GUIA_POR_EJERCICIO.values():
+        e = PG.normalizar_ejercicio(dict(g, nombre="x"), 118)
+        assert e["medida"] in PG.MEDIDAS

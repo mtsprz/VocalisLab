@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { yin, dbfs, nombreNota, hzAMidi, SuavizadorF0 } from '../../utils/pitch';
 import {
-  Ejercicio, duracion, objetivoSemis, rangoSemis, semisDe, hzDe, Medidor,
-  tocarCamino, tocarNota, clic, compararTono,
+  Ejercicio, duracion, objetivoSemis, rangoSemis, semisDe, hzDe, Analizador,
+  tocarCamino, tocarNota, clic, compararTono, medidaDe, usaTono, objetivoDb, tiemposPulsos, crearTimbre,
 } from '../../utils/guiaPractica';
 import { Locutor } from '../../utils/locutor';
 
@@ -21,13 +21,37 @@ export const DEMO = {
   nombre: 'León', estado: 'activa', consentimiento: true, profesional: 'Matías Pérez · Fonoaudiólogo',
   indicaciones: 'Dos veces por día, mañana y tarde.', veces_por_dia: 2, practicas_hoy: 1, voz: [],
   ejercicios: [
-    { bank_id: 'glissandos', nombre: 'Glissandos ascendentes y descendentes', guia: 'rampa', base_hz: 118, amplitud: 5, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: 'Sirena suave sobre /u/: subí y bajá siguiendo la rampa.', rango_min_hz: 98, rango_max_hz: 175 },
-    { bank_id: 'popote_aire', nombre: 'Escala de cinco notas', guia: 'escalera', base_hz: 118, semitonos: [0, 2, 4, 5, 7, 5, 4, 2, 0], nota_s: 1.2, repeticiones: 2, tolerancia_cents: 100, consigna: 'Subí y bajá los escalones, cómodo.', rango_min_hz: 98, rango_max_hz: 175 },
-    { bank_id: 'oclusion_nasal', nombre: '/m/ sostenida', guia: 'sostenida', base_hz: 118, duracion_s: 6, repeticiones: 3, tolerancia_cents: 100, consigna: '/m/ en tu tono cómodo, pareja y sin esfuerzo.', rango_min_hz: 98, rango_max_hz: 175 },
+    { bank_id: 'glissandos', nombre: 'Glissandos ascendentes y descendentes', medida: 'tono', modelo: 'sonoro', guia: 'rampa', base_hz: 118, amplitud: 5, duracion_s: 6, repeticiones: 2, tolerancia_cents: 200, consigna: 'Sirena suave sobre /u/: subí y bajá siguiendo la rampa.' },
+    { bank_id: 'tubo_agua', nombre: 'Tubo en agua', medida: 'flujo', modelo: 'sin_modelo', guia: 'sostenida', base_hz: 118, duracion_objetivo_s: 8, margen_db: 6, repeticiones: 2, tolerancia_cents: 100, consigna: 'Tubo en el agua: burbujeo parejo y sonido continuo, sin empujar.' },
+    { bank_id: 'messa_di_voce', nombre: 'Messa di voce', medida: 'intensidad', modelo: 'sonoro', guia: 'sostenida', base_hz: 118, duracion_s: 8, patron_intensidad: 'arco', margen_db: 4, repeticiones: 2, tolerancia_cents: 100, consigna: 'Misma nota: empezá suave, crecé y volvé a suave.' },
+    { bank_id: 'metodo_acento', nombre: 'Método del acento', medida: 'pulsos', modelo: 'sonoro', guia: 'sostenida', base_hz: 118, pulsos: 6, tempo_bpm: 80, repeticiones: 2, tolerancia_cents: 100, consigna: 'Impulsos rítmicos con apoyo abdominal, siguiendo el pulso.' },
   ],
 };
 
 type Props = { token?: string; vistaPrevia?: any; onCerrar?: () => void };
+
+/** Cuadro simulado (vista previa) según lo que mide el ejercicio. */
+function simularCuadro(e: Ejercicio, t: number, base: number, ref: number): { db: number; hz: number | null } {
+  const ruido = (Math.random() - 0.5);
+  switch (medidaDe(e)) {
+    case 'flujo': return { db: ref - 2 + ruido * 3 - (t % 3 > 2.85 ? 30 : 0), hz: null };
+    case 'intensidad': return { db: ref + objetivoDb(e, t) + ruido * 2, hz: base };
+    case 'pulsos': return { db: tiemposPulsos(e).some(tp => t >= tp && t < tp + 0.18) ? ref + 4 : ref - 40, hz: base };
+    case 'libre': return { db: ref + Math.sin(t * 3) * 4 + ruido * 2, hz: base * Math.pow(2, (Math.sin(t * 1.7) * 2) / 12) };
+    case 'sostenido': return { db: ref + ruido * 2, hz: usaTono(e) ? hzDe(Math.sin(t * 2.3) * 0.3, base) : base * (1 + ruido * 0.01) };
+    default: return { db: ref, hz: hzDe(objetivoSemis(e, t) + Math.sin(t * 2.3) * 0.6 + ruido * 0.4, base) };
+  }
+}
+
+/** Modelo de dinámica (messa di voce): la nota crece y decrece en volumen. */
+function tocarDinamica(ctx: AudioContext, e: Ejercicio, hz: number, t0: number) {
+  const d = duracion(e), o = ctx.createOscillator(), g = ctx.createGain();
+  o.setPeriodicWave(crearTimbre(ctx)); o.frequency.value = hz;
+  g.gain.setValueAtTime(0, t0);
+  for (let k = 0; k <= 20; k++) g.gain.linearRampToValueAtTime(0.25 * Math.pow(10, (objetivoDb(e, (k / 20) * d) - 6) / 20), t0 + (k / 20) * d);
+  g.gain.linearRampToValueAtTime(0, t0 + d + 0.05);
+  o.connect(g).connect(ctx.destination); o.start(t0); o.stop(t0 + d + 0.1);
+}
 
 /**
  * Práctica guiada del paciente (?practica=<token>): sin login. Cada
@@ -119,24 +143,26 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
 
   /** F0 mediana durante `seg` segundos, sin el ataque y sin saltos aislados. */
   const medir = async (seg: number, objetivo: number) => {
-    if (simular) { await dormir(seg * 1000); return { hz: objetivo * Math.pow(2, 0.1 / 12), db: -60 }; }
+    if (simular) { await dormir(seg * 1000); return { hz: objetivo * Math.pow(2, 0.1 / 12), db: -60, dbVoz: -30 }; }
     const { an } = await abrirMic();
     const ctx = audio();
     const buf = new Float32Array(an.fftSize);
     const suav = new SuavizadorF0();
-    const f0: number[] = [], dbs: number[] = [];
+    const f0: number[] = [], dbs: number[] = [], dbVoz: number[] = [];
     const fin = Date.now() + seg * 1000;
     await new Promise<void>(res => {
       const t = setInterval(() => {
         an.getFloatTimeDomainData(buf);
-        const db = dbfs(buf); dbs.push(db);
+        const db = dbfs(buf); dbs.push(db); if (db > UMBRAL_VOZ_DB) dbVoz.push(db);
         const hz = suav.agregar(db > UMBRAL_VOZ_DB ? yin(buf, ctx.sampleRate, 55, 1000) : null);
         if (hz) f0.push(hz);
         if (Date.now() > fin) { clearInterval(t); res(); }
       }, 40);
     });
     const ord = [...f0].sort((a, b) => a - b), od = [...dbs].sort((a, b) => a - b);
-    return { hz: ord.length >= 10 ? ord[Math.floor(ord.length / 2)] : null, db: Math.round(od[Math.floor(od.length / 2)]) };
+    const ov = [...dbVoz].sort((a, b) => a - b);
+    return { hz: ord.length >= 10 ? ord[Math.floor(ord.length / 2)] : null, db: Math.round(od[Math.floor(od.length / 2)]),
+             dbVoz: ov.length >= 10 ? Math.round(ov[Math.floor(ov.length / 2)]) : null };
   };
 
   const aceptar = async () => {
@@ -168,8 +194,21 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       setError('No se pudo usar el micrófono. Revisá el permiso del navegador y volvé a intentar.');
     }
   };
+  const hayTono = (info?.ejercicios || []).some((x: Ejercicio) => usaTono(x));
   const afinar = async () => {
     const base = ej!.base_hz;
+    if (!hayTono || !base) {
+      // Sin altura objetivo: se registra su voz cómoda de hoy, sin dar ninguna nota.
+      setPrep(p => ({ ...p, paso: 'instruccion' }));
+      await decir('hace_mmm', 'Ahora hacé un mmm cómodo, sin buscar ninguna nota.', 300);
+      setPrep(p => ({ ...p, paso: 'cantando' }));
+      const r = await medir(3, base || 150);
+      const calib = r.hz ? { hz: Math.round(r.hz * 10) / 10, st: null, db: r.dbVoz, ok: true, texto: `Listo: tu voz cómoda de hoy está en ${nota(r.hz)}.` }
+        : { hz: null, st: null, db: r.dbVoz, ok: false, texto: 'No te escuchamos bien: acercá el celular y probá de nuevo.' };
+      calibRef.current = calib;
+      setPrep(p => ({ ...p, paso: 'resultado', calib }));
+      return;
+    }
     setPrep(p => ({ ...p, paso: 'escuchando' }));
     await decir('escucha_nota', 'Escuchá tu nota.');
     tocarNota(audio(), base, 2.2);
@@ -181,7 +220,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
     let calib: any = { hz: r.hz, st: null, texto: 'No te escuchamos: acercá el celular y probá de nuevo.', ok: false };
     if (r.hz) {
       const c = compararTono(r.hz, base);
-      calib = { hz: Math.round(r.hz * 10) / 10, st: Math.round(c.st * 10) / 10, ok: Math.abs(c.st) <= 2 };
+      calib = { hz: Math.round(r.hz * 10) / 10, st: Math.round(c.st * 10) / 10, db: r.dbVoz, ok: Math.abs(c.st) <= 2 };
       calib.texto = calib.ok
         ? (Math.abs(c.st) <= 0.5 ? `¡Muy bien! Estás en tu nota (${nota(base)}).`
           : `¡Muy bien! Estás cerca de tu nota (${nota(base)}), apenas un poco más ${c.st > 0 ? 'agudo' : 'grave'}.`)
@@ -196,41 +235,58 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
 
   const practicar = async (i: number) => {
     const e: Ejercicio = info.ejercicios[i];
+    const medida = medidaDe(e), conTono = usaTono(e);
     const ctx = audio();
     const m = simular ? null : await abrirMic().catch(() => null);
     if (!simular && !m) { setError('No se pudo usar el micrófono. Revisá el permiso del navegador.'); return; }
     corriendo.current = true;
     const buf = new Float32Array(2048);
-    const med = new Medidor();
+    const ambiente = ruidoRef.current?.db ?? -60;
+    const referencia = calibRef.current?.db ?? ambiente + 25;      // su nivel cómodo de hoy
+    const an = new Analizador(e, ambiente, referencia);
     const suav = new SuavizadorF0();
     const d = duracion(e);
-    const [lo, hi] = rangoSemis(e);
-    const minHz = Math.max(55, hzDe(lo - 8, e.base_hz)), maxHz = Math.min(1200, hzDe(hi + 14, e.base_hz));
-    const rastro: { x: number; s: number | null }[] = [];
-    const notasGuia = [...new Set(e.guia === 'rampa' ? [0, e.amplitud || 7] : e.guia === 'sostenida' ? [0] : (e.semitonos || [0]))];
+    const base = e.base_hz || calibRef.current?.hz || 150;
+    const [lo, hi] = conTono ? rangoSemis(e) : [-24, 18];           // dB respecto de su nivel cómodo
+    const minHz = conTono ? Math.max(55, hzDe(lo - 8, base)) : 55, maxHz = conTono ? Math.min(1200, hzDe(hi + 14, base)) : 1000;
+    const rastro: { x: number; v: number | null }[] = [];
+    const pulsosVistos: number[] = [];
+    const notasGuia = conTono ? [...new Set(e.guia === 'rampa' ? [0, e.amplitud || 7] : e.guia === 'sostenida' ? [0] : (e.semitonos || [0]))] : [];
+    const IZQ = 52;
 
-    const dibujar = (t: number, semis: number | null, estado: 'modelo' | 'dentro' | 'fuera' | 'nada') => {
+    /** Eje vertical: semitonos (altura) o dB respecto de su nivel cómodo (intensidad). */
+    const dibujar = (t: number, v: number | null, estado: 'modelo' | 'dentro' | 'fuera' | 'nada' | 'sinAltura') => {
       const c = canvas.current; if (!c) return;
-      const g = c.getContext('2d')!; const W = c.width, H = c.height, IZQ = 52;
+      const g = c.getContext('2d')!; const W = c.width, H = c.height;
       const y = (s: number) => H - 18 - ((s - lo) / (hi - lo)) * (H - 36);
+      const xDe = (tt: number) => IZQ + (Math.min(tt, d) / d) * (W - IZQ);
       const oscuro = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
       g.clearRect(0, 0, W, H);
-      g.font = '20px system-ui'; g.fillStyle = oscuro ? '#9ca3af' : '#6b7280'; g.textBaseline = 'middle';
-      notasGuia.forEach(s => { g.fillText(nota(hzDe(s, e.base_hz)), 4, y(s)); });
-      const tol = e.tolerancia_cents / 100;
+      g.font = '18px system-ui'; g.fillStyle = oscuro ? '#9ca3af' : '#6b7280'; g.textBaseline = 'middle';
+      if (conTono) notasGuia.forEach(s => g.fillText(nota(hzDe(s, base)), 4, y(s)));
+      else { g.fillText('fuerte', 2, y(12)); g.fillText('cómodo', 0, y(0)); g.fillText('suave', 4, y(-14)); }
+      // Banda objetivo
       g.fillStyle = oscuro ? 'rgba(29,158,117,0.35)' : 'rgba(93,202,165,0.45)';
-      for (let x = IZQ; x < W; x += 3) {
-        const s = objetivoSemis(e, ((x - IZQ) / (W - IZQ)) * d);
-        g.fillRect(x, y(s + tol), 3, Math.max(4, y(s - tol) - y(s + tol)));
+      if (medida !== 'libre' && medida !== 'pulsos') {
+        const tol = conTono ? e.tolerancia_cents / 100 : (e.margen_db || 6);
+        for (let x = IZQ; x < W; x += 3) {
+          const tt = ((x - IZQ) / (W - IZQ)) * d;
+          const s = conTono ? objetivoSemis(e, tt) : objetivoDb(e, tt);
+          g.fillRect(x, y(s + tol), 3, Math.max(4, y(s - tol) - y(s + tol)));
+        }
+      }
+      if (medida === 'pulsos') {
+        tiemposPulsos(e).forEach(tp => { g.fillStyle = oscuro ? 'rgba(127,119,221,0.5)' : 'rgba(127,119,221,0.35)'; g.fillRect(xDe(tp) - 3, 0, 6, H); });
+        pulsosVistos.forEach(tp => { g.beginPath(); g.arc(xDe(tp), H - 14, 8, 0, Math.PI * 2); g.fillStyle = '#1D9E75'; g.fill(); });
       }
       g.strokeStyle = oscuro ? '#5DCAA5' : '#0F6E56'; g.lineWidth = 2; g.beginPath();
-      rastro.forEach((p, k) => { if (p.s == null) return; const yy = y(p.s); k && rastro[k - 1].s != null ? g.lineTo(p.x, yy) : g.moveTo(p.x, yy); });
+      rastro.forEach((p, k) => { if (p.v == null) return; const yy = y(Math.max(lo, Math.min(hi, p.v))); k && rastro[k - 1].v != null ? g.lineTo(p.x, yy) : g.moveTo(p.x, yy); });
       g.stroke();
-      const x = IZQ + (Math.min(t, d) / d) * (W - IZQ);
+      const x = xDe(t);
       g.fillStyle = oscuro ? '#555' : '#ccc'; g.fillRect(x, 0, 1, H);
-      if (semis != null) {
-        g.beginPath(); g.arc(x, y(Math.max(lo, Math.min(hi, semis))), 15, 0, Math.PI * 2);
-        g.fillStyle = estado === 'modelo' ? '#7F77DD' : estado === 'dentro' ? '#1D9E75' : '#D85A30'; g.fill();
+      if (v != null) {
+        g.beginPath(); g.arc(x, y(Math.max(lo, Math.min(hi, v))), 15, 0, Math.PI * 2);
+        g.fillStyle = estado === 'modelo' ? '#7F77DD' : estado === 'dentro' ? '#1D9E75' : estado === 'sinAltura' ? '#888780' : '#D85A30'; g.fill();
       }
     };
 
@@ -247,58 +303,74 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       tick();
     });
 
+    /** Modelo de cada tipo: altura (sonido), dinámica (sonido con volumen), pulsos (clics) o solo visual. */
+    const modelo = async () => {
+      if (conTono) { tocarCamino(ctx, e, ctx.currentTime + 0.05); }
+      else if (medida === 'intensidad') { tocarDinamica(ctx, e, base, ctx.currentTime + 0.05); }
+      else if (medida === 'pulsos') { tiemposPulsos(e).forEach(tp => clic(ctx, ctx.currentTime + 0.05 + tp, true)); }
+      await durante(d + 0.1, t => {
+        const v = conTono ? objetivoSemis(e, Math.min(t, d)) : medida === 'pulsos'
+          ? (tiemposPulsos(e).some(tp => t >= tp && t < tp + 0.18) ? 4 : -14) : objetivoDb(e, Math.min(t, d));
+        dibujar(t, v, 'modelo');
+      });
+      await dormir(250);
+    };
+
     let cantado = 0;
     for (let r = 0; r < e.repeticiones && corriendo.current; r++) {
-      setRep(r + 1);
-      // 1) ESCUCHÁ: consigna (la primera vez) + modelo sonando con la pelota.
-      if (modeloSiempre || r === 0) {
-        setEtapa('escucha'); rastro.length = 0; dibujar(0, null, 'nada');
+      setRep(r + 1); an.nuevaRepeticion();
+      const conModelo = e.modelo !== 'sin_modelo' && (modeloSiempre || r === 0);
+      // 1) Consigna (la primera vez) y modelo.
+      if (r === 0 || conModelo) {
+        setEtapa('escucha'); rastro.length = 0; pulsosVistos.length = 0; dibujar(0, null, 'nada');
         if (r === 0) { setAviso(e.consigna || ''); await decir(`ej:${e.bank_id || ''}`, e.consigna || '', 300); }
-        if (!corriendo.current) break;
-        setAviso('Escuchá y mirá la pelota');
-        await decir('escucha', 'Escuchá.', 150);
-        tocarCamino(ctx, e, ctx.currentTime + 0.05);
-        await durante(d + 0.1, t => dibujar(t, objetivoSemis(e, Math.min(t, d)), 'modelo'));
-        await dormir(250);   // que termine de sonar
+        if (conModelo && corriendo.current) {
+          setAviso(conTono || medida === 'intensidad' || medida === 'pulsos' ? 'Escuchá y mirá la pelota' : 'Mirá cómo es');
+          await decir('escucha', 'Escuchá.', 150);
+          await modelo();
+        }
       }
       if (!corriendo.current) break;
-      // 2) CUENTA: "Ahora vos" (se espera que termine) + dos clics.
-      setEtapa('cuenta'); setAviso('Preparate…'); rastro.length = 0; dibujar(0, null, 'nada');
+      // 2) Cuenta.
+      setEtapa('cuenta'); setAviso('Preparate…'); rastro.length = 0; pulsosVistos.length = 0; dibujar(0, null, 'nada');
       await decir('ahora_vos', 'Ahora vos.', 100);
-      clic(ctx, ctx.currentTime + 0.05); clic(ctx, ctx.currentTime + 0.5, true);
-      await dormir(800);
+      if (medida !== 'pulsos') { clic(ctx, ctx.currentTime + 0.05); clic(ctx, ctx.currentTime + 0.5, true); await dormir(800); }
       if (!corriendo.current) break;
-      // 3) AHORA VOS: se mide sin ningún sonido de la app.
+      // 3) Ahora vos: se mide sin ningún sonido de la app.
       setEtapa('canto'); setAviso(''); suav.reset();
       const ini = performance.now();
+      let sinAltura = 0, conSonido = 0;
       await durante(d, t => {
         let db: number, hzCrudo: number | null;
         if (m) {
           m.an.getFloatTimeDomainData(buf);
           db = dbfs(buf);
-          hzCrudo = db > UMBRAL_VOZ_DB ? yin(buf, ctx.sampleRate, minHz, maxHz) : null;
+          hzCrudo = db > an.umbralSonido() ? yin(buf, ctx.sampleRate, minHz, maxHz) : null;
         } else {
-          db = -25;
-          hzCrudo = hzDe(objetivoSemis(e, t) + Math.sin(t * 2.3) * 0.6 + (Math.random() - 0.5) * 0.4, e.base_hz);
+          ({ db, hz: hzCrudo } = simularCuadro(e, t, base, referencia));
         }
         const hz = suav.agregar(hzCrudo);
-        const objetivo = hzDe(objetivoSemis(e, t), e.base_hz);
-        if (hzCrudo == null || hz != null) med.agregar(hz, objetivo, e.tolerancia_cents);  // el ataque no se cuenta
-        const semis = hz ? semisDe(hz, e.base_hz) : null;
-        const cents = hz ? 1200 * Math.log2(hz / objetivo) : 0;
-        const dentro = hz != null && Math.abs(cents) <= e.tolerancia_cents;
-        const octava = hz != null && !dentro && Math.abs(Math.abs(cents) - 1200) <= e.tolerancia_cents;
-        rastro.push({ x: 52 + (t / d) * ((canvas.current?.width || 640) - 52), s: semis });
-        setAviso(db > MUY_FUERTE_DB ? 'Más suave: no hace falta fuerza'
-          : hzCrudo == null ? 'Te escucho…'
-          : hz == null ? ''
-          : dentro ? 'Muy bien'
-          : octava ? `Estás una octava más ${cents > 0 ? 'aguda' : 'grave'}`
-          : cents > 0 ? 'Un poco más grave' : 'Un poco más agudo');
-        dibujar(t, semis, hz == null ? 'nada' : dentro ? 'dentro' : 'fuera');
+        const st = an.cuadro(t, hz, db);
+        if (st.pulso) pulsosVistos.push(t);
+        if (st.suena) { conSonido++; if (!hz) sinAltura++; }
+        const sinAlturaMucho = conTono && conSonido > 25 && sinAltura / conSonido > 0.6;
+        const v = conTono ? (hz ? semisDe(hz, base) : (st.suena ? objetivoSemis(e, t) : null)) : (st.suena ? st.dbRel : null);
+        rastro.push({ x: IZQ + (t / d) * ((canvas.current?.width || 640) - IZQ), v: conTono && !hz ? null : v });
+        let aviso = '';
+        if (db > MUY_FUERTE_DB) aviso = 'Más suave: no hace falta fuerza';
+        else if (!st.suena) aviso = medida === 'pulsos' ? 'Seguí el pulso' : 'Te escucho…';
+        else if (conTono && !hz) aviso = sinAlturaMucho ? 'Te escuchamos: con este sonido la altura no se mide, seguí parejo' : '';
+        else if (conTono) aviso = st.dentroTono ? 'Muy bien' : st.octava ? `Estás una octava más ${st.cents > 0 ? 'aguda' : 'grave'}` : st.cents > 0 ? 'Un poco más grave' : 'Un poco más agudo';
+        else if (medida === 'intensidad') aviso = st.dentroDb ? 'Muy bien' : st.dbRel > objetivoDb(e, t) ? 'Un poco más suave' : 'Un poco más fuerte';
+        else if (medida === 'flujo' || medida === 'sostenido') aviso = st.dentroDb ? 'Parejo, muy bien' : st.dbRel > 0 ? 'Más suave, sin empujar' : 'Sostené el sonido';
+        else if (medida === 'libre') aviso = hz ? `Tu voz: ${nota(hz)}` : 'Seguí, cómodo';
+        setAviso(aviso);
+        const estado = !st.suena ? 'nada' : conTono ? (hz ? (st.dentroTono ? 'dentro' : 'fuera') : 'sinAltura')
+          : medida === 'libre' || medida === 'pulsos' ? 'dentro' : (st.dentroDb ? 'dentro' : 'fuera');
+        dibujar(t, v, estado);
       });
       cantado += Math.min(d, (performance.now() - ini) / 1000);
-      // 4) RESPIRÁ.
+      // 4) Respirá.
       if (r < e.repeticiones - 1 && corriendo.current) {
         setEtapa('pausa'); setAviso('Respirá tranquilo'); dibujar(0, null, 'nada');
         const p0 = performance.now();
@@ -308,15 +380,16 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
     }
     const completo = corriendo.current;
     corriendo.current = false;
-    const res = med.resumen(cantado, e.repeticiones);
+    const res = an.resumen(cantado, e.repeticiones);
     setResumen(res); setFase('fin');
-    const bien = res.dentro_pct != null && res.dentro_pct >= 70;
+    const bien = res.logro_pct != null && res.logro_pct >= 70;
     decir(bien ? 'fin_bien' : 'fin', bien ? 'Muy bien, terminaste el ejercicio.' : 'Terminaste. Buen trabajo.');
     if (previa) { setHechos(h => [...new Set([...h, i])]); if (!tandaContada.current) { tandaContada.current = true; setHoy(x => x + 1); } return; }
     if (completo || (res.voz_pct || 0) > 0) {
       const amb: any = { tanda: tanda.current };
       if (ruidoRef.current) { amb.ruido_dbfs = ruidoRef.current.db; amb.silencioso = ruidoRef.current.ok; }
       if (calibRef.current?.hz) { amb.calibracion_hz = calibRef.current.hz; amb.calibracion_st = calibRef.current.st; }
+      if (calibRef.current?.db != null) amb.calibracion_db = calibRef.current.db;
       fetch(`${BACKEND_URL}/api/practica/${token}/sesion`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resultados: [{ ejercicio: i, ...res }], ambiente: amb }),
@@ -393,7 +466,8 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
             <button key={i} onClick={() => elegir(i)} className={caja + ' w-full text-left hover:border-indigo-400'}>
               <p className="font-bold">{i + 1}. {e.nombre} {hechos.includes(i) && <span className="text-emerald-600 text-sm">✓ hecho</span>}</p>
               {e.consigna && <p className="text-sm text-slate-600 dark:text-slate-300">{e.consigna}</p>}
-              <p className="text-xs text-slate-500 mt-1">{e.repeticiones} repeticiones · empieza en {nota(e.base_hz)}</p>
+              <p className="text-xs text-slate-500 mt-1">{e.repeticiones} repeticiones · {usaTono(e) && e.base_hz ? `empieza en ${nota(e.base_hz)}`
+                : ({ flujo: 'sonido parejo y continuo', sostenido: 'sostenido y parejo', intensidad: 'suave–fuerte–suave', pulsos: 'impulsos con el pulso', libre: 'libre, cómodo' } as any)[medidaDe(e)] || ''}</p>
             </button>
           ))}
         </div>
@@ -414,8 +488,10 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
             </p>
           )}
           {prep.paso === 'nota' && (<>
-            <p>2. Ahora afinamos: escuchá tu nota de inicio (<b>{nota(ej.base_hz)}</b>) y hacé «mmm» en esa misma nota.</p>
-            <button onClick={afinar} className={boton}>Escuchar y afinar</button>
+            {hayTono && ej.base_hz
+              ? <p>2. Ahora afinamos: escuchá tu nota de inicio (<b>{nota(ej.base_hz)}</b>) y hacé «mmm» en esa misma nota.</p>
+              : <p>2. Hacé un «mmm» cómodo unos segundos, sin buscar ninguna nota: así registramos tu voz de hoy.</p>}
+            <button onClick={afinar} className={boton}>{hayTono && ej.base_hz ? 'Escuchar y afinar' : 'Empezar'}</button>
           </>)}
           {prep.paso === 'escuchando' && <p className="text-center py-4">Escuchá la nota… 🎵</p>}
           {prep.paso === 'instruccion' && <p className="text-center py-4">Escuchá la indicación… 🔊</p>}
@@ -444,17 +520,23 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       {fase === 'fin' && resumen && (
         <div className={caja + ' space-y-3 text-sm'}>
           <p className="text-lg font-black">¡Bien hecho!</p>
-          <p>{resumen.dentro_pct == null ? 'No llegamos a escuchar tu voz: probá acercar el celular.'
-            : (resumen.octava_pct || 0) >= 30 ? 'Lo hiciste una octava distinta de la nota: la próxima, escuchá el modelo y buscá la misma altura.'
-            : resumen.dentro_pct >= 70 ? 'Seguiste muy bien el camino.'
-            : resumen.dentro_pct >= 40 ? 'Vas bien: con práctica te va a salir cada vez más fácil.'
-            : 'Fue un buen comienzo. Escuchá bien el modelo y hacelo despacio, sin esfuerzo.'}</p>
+          <p>{mensajeFinal(resumen)}</p>
           <p className="text-xs text-slate-500">Hoy: {Math.min(hoy, veces)} de {veces} práctica{veces === 1 ? '' : 's'}.</p>
           <button onClick={() => setFase('lista')} className={boton}>Volver a la lista</button>
         </div>
       )}
     </Marco>
   );
+}
+
+function mensajeFinal(r: any): string {
+  if (!r.voz_pct) return 'No llegamos a escuchar tu voz: probá acercar el celular.';
+  if ((r.octava_pct || 0) >= 30) return 'Lo hiciste una octava distinta de la nota: la próxima, escuchá el modelo y buscá la misma altura.';
+  const l = r.logro_pct ?? 0;
+  const extra = r.medida === 'flujo' || r.medida === 'sostenido' ? ` Tu tramo más largo: ${r.tramo_max_s} s${r.cortes ? `, con ${r.cortes} corte${r.cortes === 1 ? '' : 's'}` : ', sin cortes'}.`
+    : r.medida === 'pulsos' ? ` Hiciste ${r.pulsos} impulsos.` : '';
+  if (r.medida === 'libre') return 'Listo, quedó registrado. ¡Bien hecho!';
+  return (l >= 70 ? '¡Muy bien!' : l >= 40 ? 'Vas bien: con práctica te va a salir cada vez más fácil.' : 'Fue un buen comienzo: hacelo despacio y sin esfuerzo.') + extra;
 }
 
 function Marco({ children }: { children: React.ReactNode }) {
