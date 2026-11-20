@@ -465,6 +465,9 @@ def adherencia(sesiones: list, veces_por_dia: int, dias: int = 14) -> dict:
     los ejercicios hechos en una misma apertura), no cada ejercicio."""
     por_dia = {}
     for s in sesiones:
+        res = s.get("resultados") or []
+        if res and all((r or {}).get("medida") == "sz" for r in res):
+            continue  # la medición s/z sola no es una práctica
         try:
             t = datetime.fromisoformat(str(s.get("creada_at")).replace("Z", "+00:00"))
             if t.tzinfo is None:
@@ -528,7 +531,23 @@ def _num(v, lo, hi):
     return round(f, 2)
 
 
+def resultado_sz(x: dict) -> dict:
+    """Medición s/z: hasta 3 intentos de /s/ y de /z/ (segundos). El índice
+    se calcula acá con el mejor intento de cada uno (no se confía en el cliente)."""
+    def intentos(k):
+        vals = [_num(v, 1, 120) for v in (x.get(k) or [])[:3]]
+        return [v for v in vals if v is not None]
+    s, z = intentos("s"), intentos("z")
+    if not s and not z:
+        raise HTTPException(status_code=400, detail="La medición s/z no tiene intentos válidos.")
+    s_max, z_max = (max(s) if s else None), (max(z) if z else None)
+    return {"ejercicio": -1, "medida": "sz", "s_intentos": s, "z_intentos": z, "s_max_s": s_max, "z_max_s": z_max,
+            "indice_sz": round(s_max / z_max, 2) if s_max and z_max else None}
+
+
 def limpiar_resultado(x: dict, n_ejercicios: int) -> dict:
+    if x.get("medida") == "sz":
+        return resultado_sz(x)
     i = int(x.get("ejercicio") if x.get("ejercicio") is not None else -1)
     if not 0 <= i < n_ejercicios:
         raise HTTPException(status_code=400, detail="Ejercicio inexistente en la rutina.")

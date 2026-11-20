@@ -232,3 +232,20 @@ def test_catalogo_cubre_sovt_y_ritmo():
     for g in PG.GUIA_POR_EJERCICIO.values():
         e = PG.normalizar_ejercicio(dict(g, nombre="x"), 118)
         assert e["medida"] in PG.MEDIDAS
+
+
+def test_medicion_sz_valida_y_calcula_el_indice():
+    r = PG.limpiar_resultado({"medida": "sz", "s": [17.2, 19.4, "x", 500], "z": [16, 15.3, 17.0]}, 2)
+    assert r["s_intentos"] == [17.2, 19.4] and r["z_max_s"] == 17.0
+    assert r["indice_sz"] == round(19.4 / 17.0, 2) and r["ejercicio"] == -1
+    assert PG.limpiar_resultado({"medida": "sz", "s": [12], "z": []}, 2)["indice_sz"] is None
+    with pytest.raises(HTTPException):
+        PG.limpiar_resultado({"medida": "sz", "s": [0.2], "z": []}, 2)
+
+
+def test_medicion_sz_sola_no_cuenta_como_practica():
+    from datetime import datetime, timezone
+    hoy = datetime.now(timezone.utc).isoformat()
+    ses = [{"creada_at": hoy, "ambiente": {"tanda": "sz-a"}, "resultados": [{"medida": "sz"}]},
+           {"creada_at": hoy, "ambiente": {"tanda": "b"}, "resultados": [{"medida": "flujo"}]}]
+    assert PG.adherencia(ses, 2, 7)["hoy"] == 1

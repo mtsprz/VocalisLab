@@ -5,14 +5,22 @@ import {
   tocarCamino, tocarNota, clic, compararTono, medidaDe, usaTono, objetivoDb, tiemposPulsos, crearTimbre,
 } from '../../utils/guiaPractica';
 import { Locutor } from '../../utils/locutor';
+import { Escenario, MedicionSZ, NOCHE } from './visuales';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 const UMBRAL_VOZ_DB = -50;    // por debajo: silencio
 const RUIDO_ALTO_DB = -45;    // ambiente ruidoso
 const MUY_FUERTE_DB = -8;     // volumen muy alto
-const PAUSA_MS = 2500;        // respiro entre repeticiones
+const PAUSA_MS = 3000;        // respiro entre repeticiones (con cuenta regresiva)
+/** Color y tamaño de la esfera en cada etapa: azul escucha, lavanda tu voz, verde agua respirar. */
+const VISUAL: Record<string, { color: string; escala: number; texto: string }> = {
+  escucha: { color: NOCHE.inhala, escala: 0.7, texto: 'Escuchá' },
+  cuenta: { color: NOCHE.tenue, escala: 0.85, texto: 'Preparate' },
+  canto: { color: NOCHE.sonido, escala: 0.62, texto: 'Ahora vos' },
+  pausa: { color: NOCHE.descanso, escala: 0.95, texto: 'Respirá' },
+};
 
-type Fase = 'lista' | 'preparar' | 'practica' | 'fin';
+type Fase = 'lista' | 'preparar' | 'practica' | 'fin' | 'sz';
 type Etapa = 'escucha' | 'cuenta' | 'canto' | 'pausa';
 const nota = (hz: number) => nombreNota(hzAMidi(hz));
 const dormir = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -77,6 +85,9 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
   const [resumen, setResumen] = useState<any>(null);
   const [hechos, setHechos] = useState<number[]>([]);
   const [hoy, setHoy] = useState<number>(previa?.practicas_hoy || 0);
+  const [reloj, setReloj] = useState<{ restante: number; total: number } | null>(null);
+  const [cuentaNum, setCuentaNum] = useState(3);
+  const nivel = useRef(0);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const mic = useRef<{ stream: MediaStream; an: AnalyserNode } | null>(null);
@@ -260,7 +271,7 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       const g = c.getContext('2d')!; const W = c.width, H = c.height;
       const y = (s: number) => H - 18 - ((s - lo) / (hi - lo)) * (H - 36);
       const xDe = (tt: number) => IZQ + (Math.min(tt, d) / d) * (W - IZQ);
-      const oscuro = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+      const oscuro = true; // la guía del paciente es siempre nocturna
       g.clearRect(0, 0, W, H);
       g.font = '18px system-ui'; g.fillStyle = oscuro ? '#9ca3af' : '#6b7280'; g.textBaseline = 'middle';
       if (conTono) notasGuia.forEach(s => g.fillText(nota(hzDe(s, base)), 4, y(s)));
@@ -332,12 +343,17 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       }
       if (!corriendo.current) break;
       // 2) Cuenta.
-      setEtapa('cuenta'); setAviso('Preparate…'); rastro.length = 0; pulsosVistos.length = 0; dibujar(0, null, 'nada');
+      setEtapa('cuenta'); setAviso('Tomá aire…'); setReloj(null); rastro.length = 0; pulsosVistos.length = 0; dibujar(0, null, 'nada');
       await decir('ahora_vos', 'Ahora vos.', 100);
-      if (medida !== 'pulsos') { clic(ctx, ctx.currentTime + 0.05); clic(ctx, ctx.currentTime + 0.5, true); await dormir(800); }
+      if (medida !== 'pulsos') {
+        // Cuenta regresiva 3·2·1 con un clic por número (el último, agudo).
+        for (let n = 3; n >= 1 && corriendo.current; n--) {
+          setCuentaNum(n); clic(ctx, ctx.currentTime + 0.02, n === 1); await dormir(550);
+        }
+      }
       if (!corriendo.current) break;
       // 3) Ahora vos: se mide sin ningún sonido de la app.
-      setEtapa('canto'); setAviso(''); suav.reset();
+      setEtapa('canto'); setAviso(''); suav.reset(); setReloj({ restante: d, total: d });
       const ini = performance.now();
       let sinAltura = 0, conSonido = 0;
       await durante(d, t => {
@@ -351,6 +367,8 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
         }
         const hz = suav.agregar(hzCrudo);
         const st = an.cuadro(t, hz, db);
+        nivel.current = st.suena ? Math.max(0, Math.min(1, ((st.dbRel ?? 0) + 15) / 25)) : 0;
+        setReloj({ restante: Math.max(0, d - t), total: d });
         if (st.pulso) pulsosVistos.push(t);
         if (st.suena) { conSonido++; if (!hz) sinAltura++; }
         const sinAlturaMucho = conTono && conSonido > 25 && sinAltura / conSonido > 0.6;
@@ -370,12 +388,14 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
         dibujar(t, v, estado);
       });
       cantado += Math.min(d, (performance.now() - ini) / 1000);
+      nivel.current = 0;
       // 4) Respirá.
       if (r < e.repeticiones - 1 && corriendo.current) {
         setEtapa('pausa'); setAviso('Respirá tranquilo'); dibujar(0, null, 'nada');
-        const p0 = performance.now();
-        await decir('respira', 'Respirá.', 0);
-        await dormir(Math.max(0, PAUSA_MS - (performance.now() - p0)));
+        const p0 = performance.now(), totalP = PAUSA_MS / 1000;
+        setReloj({ restante: totalP, total: totalP });
+        decir('respira', 'Respirá.', 0);
+        await durante(totalP, () => setReloj({ restante: Math.max(0, totalP - (performance.now() - p0) / 1000), total: totalP }));
       }
     }
     const completo = corriendo.current;
@@ -402,9 +422,23 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
     }
   };
 
-  const caja = 'bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 p-5';
-  const boton = 'w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:opacity-50';
-  const secundario = 'w-full py-2.5 rounded-xl border border-indigo-300 text-indigo-700 dark:text-indigo-300 font-semibold';
+  /** Guarda la medición s/z como un resultado más (no cuenta como práctica del día). */
+  const guardarSZ = async (s: number[], z: number[]) => {
+    if (previa) return true;
+    try {
+      const amb: any = { tanda: `sz-${tanda.current}` };
+      if (ruidoRef.current) { amb.ruido_dbfs = ruidoRef.current.db; amb.silencioso = ruidoRef.current.ok; }
+      const r = await fetch(`${BACKEND_URL}/api/practica/${token}/sesion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resultados: [{ medida: 'sz', s, z }], ambiente: amb }),
+      });
+      return r.ok;
+    } catch { return false; }
+  };
+
+  const caja = 'bg-[#121a28] rounded-3xl border border-[#233047] p-5';
+  const boton = 'w-full py-3.5 rounded-2xl bg-[#b39cff] hover:bg-[#c4b2ff] text-[#140f26] font-bold disabled:opacity-50';
+  const secundario = 'w-full py-2.5 rounded-2xl border border-[#b39cff]/50 text-[#c9b8ff] font-semibold';
 
   if (error) return <Marco><div className={caja}><p className="text-red-600">{error}</p></div></Marco>;
   if (!info) return <Marco><p className="text-slate-500">Cargando…</p></Marco>;
@@ -470,7 +504,17 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
                 : ({ flujo: 'sonido parejo y continuo', sostenido: 'sostenido y parejo', intensidad: 'suave–fuerte–suave', pulsos: 'impulsos con el pulso', libre: 'libre, cómodo' } as any)[medidaDe(e)] || ''}</p>
             </button>
           ))}
+          <button onClick={() => { audio(); setFase('sz'); }} className={caja + ' w-full text-left hover:border-[#b39cff]'}>
+            <p className="font-bold">Medición s/z <span className="text-xs font-semibold text-[#8d98ad]">· opcional, 2 minutos</span></p>
+            <p className="text-sm text-slate-300">Sostené «sss» y «zzz» todo lo que puedas, tres veces cada uno. Así vemos cómo cierra tu voz.</p>
+          </button>
         </div>
+      )}
+
+      {fase === 'sz' && (
+        <MedicionSZ simular={simular} abrirMic={abrirMic}
+          clic={(acento?: boolean) => { const c = audio(); clic(c, c.currentTime + 0.02, !!acento); }}
+          decir={decir} onGuardar={guardarSZ} onVolver={() => setFase('lista')} />
       )}
 
       {fase === 'preparar' && ej && (
@@ -508,11 +552,16 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       {fase === 'practica' && ej && (
         <div className={caja + ' space-y-2'}>
           <div className="flex justify-between text-sm"><b>{ej.nombre}</b><span className="text-slate-500">Repetición {rep} de {ej.repeticiones}</span></div>
-          <p className={`text-center text-lg font-black ${etapa === 'escucha' ? 'text-indigo-600' : etapa === 'canto' ? 'text-emerald-600' : 'text-slate-500'}`}>
-            {etapa === 'escucha' ? '🎧 Escuchá' : etapa === 'cuenta' ? 'Preparate…' : etapa === 'canto' ? '🎙️ Ahora vos' : '🌬️ Respirá'}
-          </p>
-          <canvas ref={canvas} width={640} height={300} className="w-full rounded-xl bg-slate-50 dark:bg-black/30" />
-          <p className="text-center font-semibold min-h-6">{aviso}</p>
+          <div className="flex items-center gap-4">
+            <Escenario color={VISUAL[etapa].color} escala={VISUAL[etapa].escala} nivel={nivel}
+              fraccion={etapa === 'cuenta' ? cuentaNum / 3 : (etapa === 'canto' || etapa === 'pausa') && reloj ? reloj.restante / reloj.total : null}
+              centro={etapa === 'cuenta' ? cuentaNum : (etapa === 'canto' || etapa === 'pausa') && reloj ? Math.ceil(reloj.restante) : '♪'} />
+            <div className="min-w-0 space-y-1">
+              <p className="text-xl font-black" style={{ color: VISUAL[etapa].color }}>{VISUAL[etapa].texto}</p>
+              <p className="font-semibold min-h-6 text-slate-200" aria-live="polite">{aviso}</p>
+            </div>
+          </div>
+          <canvas ref={canvas} width={640} height={300} className="w-full rounded-2xl bg-black/30" />
           <button onClick={() => { corriendo.current = false; loc.current?.callar(); }} className="w-full py-2 rounded-xl border border-slate-300 dark:border-white/20 text-sm">Terminar</button>
         </div>
       )}
@@ -541,10 +590,11 @@ function mensajeFinal(r: any): string {
 
 function Marco({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-white p-4">
+    // Siempre nocturno: menos brillo para practicar sin molestar la vista.
+    <div className="dark min-h-screen bg-[#0a0e16] text-[#e4e9f2] p-4" style={{ colorScheme: 'dark' }}>
       <div className="max-w-md mx-auto space-y-3">
         {children}
-        <p className="text-center text-[11px] text-slate-400 pt-2">Matías Pérez · Fonoaudiólogo</p>
+        <p className="text-center text-[11px] text-[#8d98ad] pt-2">Matías Pérez · Fonoaudiólogo</p>
       </div>
     </div>
   );

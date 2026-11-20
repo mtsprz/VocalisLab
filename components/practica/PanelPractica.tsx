@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Send, Copy, Pause, Play, Eye, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import PracticaPaciente from './PracticaPaciente';
 import VozGuia from './VozGuia';
+import { MedidorIndice, lecturaSZ } from './visuales';
 import { nombreNota, hzAMidi } from '../../utils/pitch';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
@@ -137,6 +138,9 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   const nombreEj = (s: any, i: number) => lista.practicas.find((x: any) => x.id === s.practica_id)?.ejercicios?.[i]?.nombre || `Ejercicio ${i + 1}`;
   const inp = 'px-2 py-1 rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-black/20 text-xs';
   const ad = lista.adherencia;
+  // Mediciones s/z (la más reciente primero).
+  const medicionesSZ = (lista.sesiones || []).flatMap((s: any) =>
+    (s.resultados || []).filter((r: any) => r.medida === 'sz').map((r: any) => ({ s, r })));
 
   return (
     <div className="space-y-3 text-xs">
@@ -316,6 +320,31 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
         </div>
       )}
 
+      {medicionesSZ.length > 0 && (
+        <div className="space-y-2">
+          <p className="font-bold">Índice s/z medido en casa</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="text-slate-700 dark:text-slate-200"><MedidorIndice valor={medicionesSZ[0].r.indice_sz} compacto /></div>
+            <table className="text-xs">
+              <thead><tr className="text-[10px] uppercase text-slate-500 text-left">
+                <th className="pr-3">Fecha</th><th className="pr-3">/s/ mejor</th><th className="pr-3">/z/ mejor</th><th className="pr-3">Índice</th><th>Intentos</th></tr></thead>
+              <tbody>
+                {medicionesSZ.map(({ s, r }: any) => (
+                  <tr key={s.id} className="border-t border-slate-100 dark:border-white/5">
+                    <td className="pr-3 py-0.5 whitespace-nowrap">{fecha(s.creada_at)}</td>
+                    <td className="pr-3">{r.s_max_s ?? '—'} s</td>
+                    <td className="pr-3">{r.z_max_s ?? '—'} s</td>
+                    <td className="pr-3 font-bold" style={{ color: r.indice_sz != null ? lecturaSZ(r.indice_sz).color : undefined }}>{r.indice_sz ?? '—'}</td>
+                    <td className="text-slate-500">s: {(r.s_intentos || []).join(' · ') || '—'} | z: {(r.z_intentos || []).join(' · ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-slate-500">Mejor /s/ dividido mejor /z/, con el micrófono del celular (detecta inicio y fin del sonido). Orientativo: confirmalo en consultorio.</p>
+        </div>
+      )}
+
       {lista.sesiones.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -325,7 +354,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
               <th className="px-1.5">Continuidad</th><th className="px-1.5">Pulsos</th><th className="px-1.5">Periodicidad</th>
               <th className="px-1.5">Afinación inicial</th><th className="px-1.5">Ambiente</th></tr></thead>
             <tbody>
-              {lista.sesiones.flatMap((s: any) => (s.resultados || []).map((r: any, i: number) => (
+              {lista.sesiones.flatMap((s: any) => (s.resultados || []).filter((r: any) => r.medida !== 'sz').map((r: any, i: number) => (
                 <tr key={`${s.id}-${i}`} className="border-t border-slate-100 dark:border-white/5 align-top">
                   <td className="px-1.5 py-1 whitespace-nowrap">{fecha(s.creada_at)}</td>
                   <td className="px-1.5">{nombreEj(s, r.ejercicio)}<span className="block text-[10px] text-slate-500">{(MEDIDAS[r.medida || 'tono'] || '').split(' (')[0].split(':')[0]}</span></td>

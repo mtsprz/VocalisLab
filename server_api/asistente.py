@@ -298,7 +298,7 @@ def h_practica_paciente(paciente_id: str) -> dict:
     try:
         rutinas = (sb.table("practicas").select("*").eq("paciente_id", paciente_id)
                    .order("creada_at", desc=True).limit(3).execute().data or [])
-        sesiones = (sb.table("practica_sesiones").select("id, creada_at, modo, ambiente, comentario")
+        sesiones = (sb.table("practica_sesiones").select("id, creada_at, modo, ambiente, comentario, resultados")
                     .eq("paciente_id", paciente_id).order("creada_at", desc=True).limit(200).execute().data or [])
     except Exception as e:
         return {"error": f"La práctica guiada no está disponible ({str(e)[:100]})"}
@@ -315,7 +315,12 @@ def h_practica_paciente(paciente_id: str) -> dict:
             "adherencia_14_dias": {"hoy": ad["hoy"], "dias_cumplidos": ad["dias_cumplidos"],
                                    "dias_con_practica": ad["dias_con_practica"]},
             "ultima_practica": _fecha_txt(ultima) if ultima else None,
-            "comentarios_recientes": [s["comentario"][:200] for s in sesiones[:10] if s.get("comentario")][:3]}
+            "comentarios_recientes": [s["comentario"][:200] for s in sesiones[:10] if s.get("comentario")][:3],
+            # Índice s/z medido en casa (mejor /s/ ÷ mejor /z/), más reciente primero.
+            "indice_sz": [{"fecha": _fecha_txt(s.get("creada_at")), "indice": r.get("indice_sz"),
+                           "s_s": r.get("s_max_s"), "z_s": r.get("z_max_s")}
+                          for s in sesiones for r in (s.get("resultados") or [])
+                          if (r or {}).get("medida") == "sz"][:6]}
 
 
 def h_autoevaluaciones(paciente_id: str = "") -> dict:
