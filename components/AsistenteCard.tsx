@@ -57,8 +57,10 @@ export default function AsistenteCard() {
             {estado?.vinculado && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold">activo</span>}
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xl">
-            Te avisa cuando llega la agenda de Fonoar, te manda el repaso del día a las 7:30 y responde
-            consultas sobre la agenda y tus pacientes («¿qué tengo mañana?», «resumime a Yesica»).
+            Te avisa cuando llega la agenda de Fonoar, te manda el repaso del día a las 7:30 y entiende
+            texto y notas de voz: consulta agenda, pacientes, práctica en casa y autoevaluaciones, y
+            agenda, reprograma o cancela turnos, anota, envía la autoevaluación o abre una sala, siempre
+            con tu confirmación. Comandos: /hoy /manana /semana /pendientes /repaso.
           </p>
         </div>
         <div className="flex gap-2">
