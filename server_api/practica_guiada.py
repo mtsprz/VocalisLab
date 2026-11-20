@@ -296,6 +296,8 @@ def normalizar_ejercicio(e: dict, base_defecto) -> dict:
         out["origen"] = e["origen"]
     if e.get("ref_cuadernillo"):
         out["ref_cuadernillo"] = str(e["ref_cuadernillo"])[:60]
+    if e.get("numero_cuadernillo"):
+        out["numero_cuadernillo"] = str(e["numero_cuadernillo"])[:8]
     if medida == "sostenido":
         out["con_tono"] = bool(e.get("con_tono"))
     necesita_tono = usa_tono(out)
@@ -445,7 +447,7 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
     aviso = ""
     # Entradas en orden: (clave única, id del banco, orden, referencia para el paciente, ajuste de guía).
     # Un mismo ejercicio del banco puede estar con distinto número (Fonoar 12, 13 y 14 = escalas).
-    entradas, sin_guia, vistos, bloque_de = [], [], {}, {}
+    entradas, sin_guia, vistos, bloque_de, numero_de = [], [], {}, {}, {}
     if elegido == "fonoar":
         cat = catalogo_fonoar()
         if cat:
@@ -457,6 +459,7 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
                     clave = bid if vistos[bid] == 1 else f"{bid}~{e.get('numero')}"
                     bloque_de[clave] = AREAS_FONOAR.get(e.get("area"), e.get("area") or "")
                     entradas.append((clave, bid, i, ref, e.get("guia") or {}, e.get("nombre")))
+                    numero_de[clave] = str(e.get("numero") or "") if e.get("numero") != "Rutina" else ""
                 else:
                     sin_guia.append({"orden": e.get("numero"), "nombre": e.get("nombre")})
         else:
@@ -472,6 +475,7 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
                 if e["id"] in GUIA_POR_EJERCICIO and e["id"] in banco and e["id"] not in vistos:
                     vistos[e["id"]] = 1
                     entradas.append((e["id"], e["id"], e["orden"], f"Tu cuadernillo · ejercicio {e['orden']}", {}, None))
+                    numero_de[e["id"]] = str(e["orden"])
                 elif e["id"] not in GUIA_POR_EJERCICIO:
                     sin_guia.append({"orden": e["orden"],
                                      "nombre": nombre_limpio(banco.get(e["id"], {}).get("name") or e["nombre"])})
@@ -494,6 +498,8 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
                     base_hz=base["hz"], en_plan=bid in plan_ids, origen=elegido if con_ref else "sueltos")
         if ref:
             item["ref_cuadernillo"], item["orden_cuadernillo"] = ref, orden
+        if numero_de.get(clave):
+            item["numero_cuadernillo"] = numero_de[clave]  # lo único que ve el paciente
         # Bloque para seleccionar de a grupos: área del cuadernillo de Fonoar, etapa del
         # apartado de tubos, o sección del banco.
         item["bloque"] = bloque_de.get(clave) or (ref.split(" · ")[0] if elegido == "tvso" and ref else "") or seccion_de.get(bid, "")

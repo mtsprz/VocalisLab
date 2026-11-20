@@ -371,3 +371,12 @@ def test_fonoar_trae_bloques_y_rutina_sin_rango(cliente):
     todo = c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": r["ejercicios"], "confirmado": True,
                                           "rango": {"min_hz": 90, "max_hz": 260}})
     assert todo.status_code == 200, todo.text
+
+
+def test_paciente_solo_ve_el_numero(cliente):
+    c, base = cliente
+    base.t["pacientes"][0]["centro"] = "fonoar_la_plata"
+    r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
+    e = next(x for x in r["ejercicios"] if x.get("numero_cuadernillo") == "4b")
+    assert PG.normalizar_ejercicio(e, 118)["numero_cuadernillo"] == "4b"
+    assert not any(x.get("numero_cuadernillo") == "Rutina" for x in r["ejercicios"])
