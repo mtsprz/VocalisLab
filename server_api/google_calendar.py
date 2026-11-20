@@ -234,7 +234,7 @@ async def create_event_json(request: Request):
     paciente_nombre = body.get("pacienteNombre", "Paciente") if isinstance(body, dict) else "Paciente"
     paciente_email = body.get("pacienteEmail", "") if isinstance(body, dict) else ""
     modalidad = body.get("modalidad", "PRESENCIAL") if isinstance(body, dict) else "PRESENCIAL"
-    fecha = body.get("fecha", datetime.utcnow().strftime("%Y-%m-%d")) if isinstance(body, dict) else datetime.utcnow().strftime("%Y-%m-%d")
+    fecha = body.get("fecha", __import__("fechas").hoy_ar().isoformat()) if isinstance(body, dict) else __import__("fechas").hoy_ar().isoformat()
     hora_inicio = body.get("horaInicio", "10:00") if isinstance(body, dict) else "10:00"
     hora_fin = body.get("horaFin", "10:45") if isinstance(body, dict) else "10:45"
     motivo = body.get("motivoConsulta", "Especialidad Voz") if isinstance(body, dict) else "Especialidad Voz"

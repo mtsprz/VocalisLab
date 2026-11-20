@@ -78,7 +78,7 @@ def _reemplazos(texto: str, anio: int) -> list:
 
 def parsear_planilla(filas: list, hoy: date = None) -> dict:
     """filas: valores de la pestaña (lista de listas de texto)."""
-    hoy = hoy or date.today()
+    hoy = hoy or __import__("fechas").hoy_ar()
     alumnos, liquidacion, mes_liq = [], [], ""
     idx = None
     dia_actual = DIA_DEFECTO
@@ -159,7 +159,7 @@ def importar_planilla(datos: dict, sb=None, hoy: date = None, simular: bool = Fa
         from api_clinica import supabase as sb
     if not sb:
         raise HTTPException(status_code=503, detail="Supabase no configurado")
-    hoy = hoy or date.today()
+    hoy = hoy or __import__("fechas").hoy_ar()
     existentes = sb.table("pacientes").select("*").limit(5000).execute().data or []
     por_dni = {re.sub(r"\D", "", str(p.get("dni") or "")): p for p in existentes if p.get("dni")}
     por_nombre = {}

@@ -3,6 +3,7 @@ import { Mic, Square, Music, Volume2, Save, Activity, CheckCircle2, RefreshCw } 
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
 import { CONVENCION_OCTAVAS, RANGOS_RESPALDO, edadDesde, elegirRangoNormativo, notaDesdeMidi, notaEs, promedioTexto } from './vozNormas';
+import { diaAR } from '../utils/fechas';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -78,8 +79,8 @@ export default function PitchMeterModule({ contexto = 'pitchmeter' }: PitchMeter
             const rd = await fetch(`${BACKEND_URL}/api/companion/sessions/${s.id}?user_id=${uid}`);
             const dd = await rd.json();
             const a = (dd.acustica || []).find((x: any) => x.task_type === 'conversacion_espontanea') || (dd.acustica || [])[0];
-            return { fecha: (s.recorded_at || '').slice(0, 10), mediana: a?.f0_median_hz ?? null, p5: a?.f0_p5_hz ?? null, p95: a?.f0_p95_hz ?? null };
-          } catch { return { fecha: (s.recorded_at || '').slice(0, 10), mediana: null, p5: null, p95: null }; }
+            return { fecha: diaAR(s.recorded_at), mediana: a?.f0_median_hz ?? null, p5: a?.f0_p5_hz ?? null, p95: a?.f0_p95_hz ?? null };
+          } catch { return { fecha: diaAR(s.recorded_at), mediana: null, p5: null, p95: null }; }
         }));
         setCompanion(filas);
       } catch {}

@@ -270,7 +270,7 @@ async def subir_archivo(
     sb, paciente = _fila_valida(paciente_id)
     tipo = tipo if tipo in TIPOS else "documento"
     origen = origen if origen in ORIGENES else "otro"
-    fecha = fecha if re.match(r"^\d{4}-\d{2}-\d{2}$", fecha or "") else date.today().isoformat()
+    fecha = fecha if re.match(r"^\d{4}-\d{2}-\d{2}$", fecha or "") else __import__("fechas").hoy_ar().isoformat()
     mime = (archivo.content_type or "application/octet-stream").split(";")[0].strip()
     nombre_orig = archivo.filename or "archivo"
     ext = os.path.splitext(nombre_orig)[1][:10]

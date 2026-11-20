@@ -42,7 +42,7 @@ def _edad(fecha_nac) -> int | None:
         n = date.fromisoformat(str(fecha_nac)[:10])
     except Exception:
         return None
-    hoy = date.today()
+    hoy = __import__("fechas").hoy_ar()
     return hoy.year - n.year - ((hoy.month, hoy.day) < (n.month, n.day))
 
 
@@ -72,14 +72,14 @@ def hidratar_desde_db(sb, pid: str, paciente: dict, escalas: dict, riesgo: dict,
             det = ev.get("riesgo_vocal_detalle") or {}
             if isinstance(det, dict) and det.get("factores_prioritarios"):
                 riesgo.setdefault("factores_prioritarios", det["factores_prioritarios"])
-    usados["evaluacion"] = (str(ev.get("fecha"))[:10] if ev else None)
+    usados["evaluacion"] = (__import__("fechas").dia_ar(ev.get("fecha")) if ev else None)
 
     ac = _ultima(sb, "analisis_acusticos", pid)
     if ac:
         for clave in CAMPOS_ACUSTICA:
             if _vacio(acustica.get(clave)) and not _vacio(ac.get(clave)):
                 acustica[clave] = ac[clave]
-    usados["acustica"] = (str(ac.get("fecha"))[:10] if ac else None)
+    usados["acustica"] = (__import__("fechas").dia_ar(ac.get("fecha")) if ac else None)
 
     # F0 conversacional más reciente (Companion, PitchMeter, sala virtual).
     try:

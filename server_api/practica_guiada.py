@@ -17,6 +17,7 @@ Rutas:
 - POST /api/practica/{token}/sesion             (público) resultados (solo números)
 """
 import math
+from fechas import dia_ar
 import re
 import os
 import secrets
@@ -160,7 +161,7 @@ def perfil_tonal(sb, pid: str, paciente: dict) -> dict:
         for e in (sb.table("evaluaciones_clinicas").select("*").eq("paciente_id", pid).execute().data or []):
             if _f(e.get("f0_conversacional_hz")):
                 fuentes.append({"tipo": "conversacional", "hz": round(float(e["f0_conversacional_hz"]), 1),
-                                "fecha": str(e.get("fecha") or "")[:10], "origen": "evaluación (Riesgo & Escalas)"})
+                                "fecha": dia_ar(e.get("fecha")), "origen": "evaluación (Riesgo & Escalas)"})
     except Exception:
         pass
     medidos = []
@@ -168,10 +169,10 @@ def perfil_tonal(sb, pid: str, paciente: dict) -> dict:
         for a in (sb.table("analisis_acusticos").select("*").eq("paciente_id", pid).execute().data or []):
             if _f(a.get("f0_mean")):
                 fuentes.append({"tipo": "sostenida", "hz": round(float(a["f0_mean"]), 1),
-                                "fecha": str(a.get("fecha") or "")[:10], "origen": "análisis acústico (vocal sostenida)"})
+                                "fecha": dia_ar(a.get("fecha")), "origen": "análisis acústico (vocal sostenida)"})
             lo, hi = _f(a.get("f0_min")), _f(a.get("f0_max"))
             if lo and hi and hi > lo and _st(hi, lo) >= 3:
-                medidos.append({"min_hz": round(lo, 1), "max_hz": round(hi, 1), "fecha": str(a.get("fecha") or "")[:10]})
+                medidos.append({"min_hz": round(lo, 1), "max_hz": round(hi, 1), "fecha": dia_ar(a.get("fecha"))})
     except Exception:
         pass
     for x in fuentes:

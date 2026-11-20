@@ -3,13 +3,14 @@ import { ClipboardList, Loader2, Image as ImageIcon, Film, Columns2, Eye, EyeOff
 import { nombreCentro } from '../centros';
 import PanelPractica from '../practica/PanelPractica';
 import OrientacionClinica from './OrientacionClinica';
+import { fechaCorta, fechaHora, edad as edadDe } from '../../utils/fechas';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 interface Props { pacienteId: string | null }
 
 const fmt = (v: any, dec = 1) => (v == null || v === '' ? '—' : typeof v === 'number' ? String(Math.round(v * 10 ** dec) / 10 ** dec) : String(v));
-const fecha = (f: any) => (f ? String(f).slice(0, 10).split('-').reverse().join('/') : '—');
+const fecha = (f: any) => fechaCorta(f);
 const esVisual = (a: any) => /^(image|video)\//.test(a.mime || '') || ['foto', 'video'].includes(a.tipo);
 const vistaDrive = (a: any) => `https://drive.google.com/file/d/${a.drive_file_id}/preview`;
 
@@ -84,7 +85,7 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
 
   const p = d.paciente, an = d.anamnesis || {};
   const evals = d.evaluaciones || [], acus = d.analisis_acusticos || [];
-  const edad = p.fecha_nacimiento ? Math.floor((Date.now() - new Date(p.fecha_nacimiento).getTime()) / 3.15576e10) : null;
+  const edad = edadDe(p.fecha_nacimiento);
   const th = 'px-2 py-1.5 text-left text-[10px] uppercase font-bold text-slate-500';
   const td = 'px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200';
 
@@ -264,6 +265,47 @@ export default function FichaIntegralModule({ pacienteId }: Props) {
               </div>
             )}
           </div>
+        </Tarjeta>
+      )}
+
+      <Tarjeta titulo={`Sala virtual: sesiones en vivo (${(d.sala_virtual || []).length})`}>
+        {(d.sala_virtual || []).length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-[10px] uppercase text-slate-500 text-left">
+                <th className={th}>Fecha</th><th className={th}>Modo</th><th className={th}>Objetivo</th><th className={th}>F0 mediana</th>
+                <th className={th}>Rango p5–p95</th><th className={th}>En objetivo</th><th className={th}>TMF</th><th className={th}>Consigna / notas</th></tr></thead>
+              <tbody>
+                {d.sala_virtual.map((x: any) => {
+                  const r = x.resultados || {};
+                  return (
+                    <tr key={x.id} className="border-t border-slate-100 dark:border-white/5 align-top">
+                      <td className={td}>{fechaHora(x.creada_at)}</td>
+                      <td className={td}>{({ habla: 'Habla', nota: 'Nota sostenida', canto: 'Canto', tmf: 'TMF' } as any)[x.modo] || x.modo}</td>
+                      <td className={td}>{x.objetivo?.hz ? `${x.objetivo.nota || ''} ${fmt(x.objetivo.hz, 0)} Hz ±${fmt(x.objetivo.tolerancia_cents, 0)}¢` : '—'}</td>
+                      <td className={td}>{r.mediana_hz != null ? `${fmt(r.mediana_hz, 0)} Hz` : '—'}</td>
+                      <td className={td}>{r.p5_hz != null ? `${fmt(r.p5_hz, 0)}–${fmt(r.p95_hz, 0)} Hz` : '—'}</td>
+                      <td className={td}>{r.en_objetivo_pct != null ? `${r.en_objetivo_pct} %` : '—'}</td>
+                      <td className={td}>{x.modo === 'tmf' && r.tmf_s != null ? `${fmt(r.tmf_s)} s` : '—'}</td>
+                      <td className={td}>{[x.consigna, x.notas].filter(Boolean).join(' · ') || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="text-[10px] text-slate-500 mt-1">Medido en el equipo del paciente durante la videollamada. Solo las sesiones de Habla suman a la F0 conversacional.</p>
+          </div>
+        ) : <p className="text-xs text-slate-500">Sin sesiones guardadas desde la sala virtual.</p>}
+      </Tarjeta>
+
+      {(d.notas_turnos || []).length > 0 && (
+        <Tarjeta titulo="Notas de las sesiones">
+          <ul className="text-xs space-y-1.5">
+            {d.notas_turnos.map((t: any, i: number) => (
+              <li key={i}><b>{fechaHora(t.fecha_hora)}</b> <span className="text-slate-500">({t.tipo || 'turno'}{t.estado ? `, ${t.estado}` : ''})</span>
+                <span className="block whitespace-pre-line text-slate-700 dark:text-slate-300">{t.notas}</span></li>
+            ))}
+          </ul>
         </Tarjeta>
       )}
 

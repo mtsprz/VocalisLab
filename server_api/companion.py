@@ -267,11 +267,15 @@ def elegir_rango_normativo(rangos: list, sexo: str, edad):
     buscado = "masculino" if s.startswith("masc") or s == "m" else (
         "femenino" if s.startswith("fem") or s == "f" else "")
 
+    # Una fila sin límite de edad vale para todas las edades (antes quedaba afuera).
+    def _max(r):
+        return 120 if r.get("edad_max") in (None, "") else int(r["edad_max"])
+
     def ancho(r):
-        return int(r.get("edad_max") or 0) - int(r.get("edad_min") or 0)
+        return _max(r) - int(r.get("edad_min") or 0)
 
     def contiene(r):
-        return int(r.get("edad_min") or 0) <= edad <= int(r.get("edad_max") or 0)
+        return int(r.get("edad_min") or 0) <= edad <= _max(r)
 
     if edad is not None:
         tipo = "ninex" if edad <= 18 else buscado
@@ -1135,7 +1139,7 @@ async def aprobar_borrador(session_id: str, request: Request):
     if dr.get("status") == "approved":
         raise HTTPException(status_code=409, detail="Borrador ya aprobado")
     try:
-        fecha_ses = (ses.get("recorded_at") or ses.get("created_at") or "")[:10]
+        fecha_ses = __import__("fechas").dia_ar(ses.get("recorded_at") or ses.get("created_at"))
     except Exception:
         fecha_ses = ""
     bloque = (f"\n\n[Sesión {fecha_ses}] Motivo: {dr.get('motivo_consulta', '')} · "
@@ -1204,7 +1208,7 @@ def _datos_sesion_pdf(sb, ses: dict) -> dict:
             "task_type", "f0_median_hz", "f0_sd_semitones", "intensity_mean_db",
             "jitter_pct", "shimmer_pct", "hnr_db", "mpt_sec")})
     try:
-        fecha = (ses.get("recorded_at") or "")[:10]
+        fecha = __import__("fechas").dia_ar(ses.get("recorded_at"))
     except Exception:
         fecha = ""
     return {"paciente": p.get("nombre_completo", "—"), "fecha": fecha or "—",
@@ -1279,7 +1283,7 @@ async def informe_evolucion(request: Request):
                 continue
             sub = res.get("subescalas") or {}
             serie.append({
-                "fecha": (s.get("recorded_at") or "")[:10],
+                "fecha": __import__("fechas").dia_ar(s.get("recorded_at")),
                 "tipo": str(ia.get("tipo_sesion") or "").replace("_", " "),
                 "f0_median_hz": a.get("f0_median_hz"), "f0_mean_hz": a.get("f0_mean_hz"),
                 "f0_p5_hz": a.get("f0_p5_hz"), "f0_p95_hz": a.get("f0_p95_hz"),
@@ -1940,7 +1944,7 @@ def _process_job(job: dict):
                 nm = p.data[0].get("nombre_completo", "")
                 sx = p.data[0].get("sexo_referencia") or p.data[0].get("sexo") or ""
                 try:
-                    fch = (ses.get("recorded_at") or "")[:10]
+                    fch = __import__("fechas").dia_ar(ses.get("recorded_at"))
                 except Exception:
                     fch = ""
                 notificar_sesion_procesada(nm, sx, fch, ses["patient_id"])

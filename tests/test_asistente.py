@@ -268,13 +268,25 @@ def test_comandos_rapidos(cliente, entorno, monkeypatch):
     assert "/pendientes" in enviados[-1][1]
 
 
-def test_fecha_hora_valida():
-    assert A._fecha_hora("2026-11-26", "9") == "2026-11-26T09:00:00-03:00"
-    assert A._fecha_hora("2026-11-26", "14:30") == "2026-11-26T14:30:00-03:00"
+def test_fecha_hora_la_calcula_el_codigo(monkeypatch):
+    monkeypatch.setattr(A, "_ahora", lambda: datetime(2026, 11, 20, 9, 0, tzinfo=A.ZONA))  # viernes
+    assert A._fecha_hora("jueves", "10") == "2026-11-26T10:00:00-03:00"
+    assert A._fecha_hora("26/11", "14:30") == "2026-11-26T14:30:00-03:00"
+    assert A._fecha_hora("mañana", "5 de la tarde") == "2026-11-21T17:00:00-03:00"
     with pytest.raises(ValueError):
-        A._fecha_hora("26/11", "10:00")
+        A._fecha_hora("miércoles 26/11", "10")   # día y fecha no coinciden
     with pytest.raises(ValueError):
         A._fecha_hora("2026-11-26", "25:00")
+
+
+def test_agendar_en_el_pasado_se_rechaza_y_domingo_avisa(monkeypatch):
+    monkeypatch.setattr(A, "_ahora", lambda: datetime(2026, 11, 20, 9, 0, tzinfo=A.ZONA))
+    monkeypatch.setattr(A, "_nombre_paciente", lambda pid: "Alvarez Yesica")
+    monkeypatch.setattr(A, "_superpuestos", lambda *a, **k: [])
+    with pytest.raises(ValueError):
+        A.p_agendar("p1", "2026-11-19", "10")
+    r = A.p_agendar("p1", "domingo", "10")
+    assert "domingo 22 de noviembre de 2026 a las 10:00" in r["resumen"] and "es domingo" in r["resumen"]
 
 
 def test_sistema_lista_acciones_y_calendario():

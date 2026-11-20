@@ -4,6 +4,7 @@ import {
   Stethoscope, Save, FileText, Eye, Trash2
 } from 'lucide-react';
 import { useClinical } from './ClinicalContext';
+import { fechaCorta } from '../utils/fechas';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -103,7 +104,7 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
     try {
       const fd = new FormData();
       fd.append('paciente_id', pacienteId);
-      fd.append('titulo', `Informe ORL — ${new Date().toLocaleDateString()}`);
+      fd.append('titulo', `Informe ORL — ${fechaCorta(new Date())}`);
       fd.append('tipo_informe', 'ORL');
       fd.append('archivo_nombre', archivoNombre);
       fd.append('mime', archivoMime);
@@ -322,7 +323,7 @@ export default function InformeOrlUpload({ pacienteId, onVolcado }: Props) {
                           {inf.diagnostico_principal || inf.titulo}
                         </p>
                         <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                          {inf.archivo_nombre || ''} · {inf.fecha ? new Date(inf.fecha).toLocaleDateString() : ''}
+                          {inf.archivo_nombre || ''} · {inf.fecha ? fechaCorta(inf.fecha) : ''}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">

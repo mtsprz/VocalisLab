@@ -22,7 +22,7 @@ FIXTURES = {
 }
 SVG_DIR = os.path.join(ROOT, "server_api", "rendering", "svg")
 
-FOOTER_PROF = "Lic. Matías Pérez"
+FOOTER_PROF = "Matías Pérez · Fonoaudiólogo"
 FOOTER_PAG = re.compile(r"Página \d+ de \d+")
 
 

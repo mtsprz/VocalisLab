@@ -41,7 +41,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 router = APIRouter()
 
-ZONA = timezone(timedelta(hours=-3))  # Argentina (sin horario de verano)
+from fechas import ZONA, a_ar, dia_ar, largo, resolver_fecha, resolver_hora, iso_ar, txt as _txt_fecha
 NOMBRE = "Asistente del Consultorio de Voz"
 MAX_PASOS = 6
 MAX_AUDIO_BYTES = 20 * 1024 * 1024  # límite de descarga de la Bot API
@@ -157,10 +157,11 @@ def _consulta_tolerante(armar, campos_completos: str, campos_basicos: str):
 
 
 def h_agenda(desde: str = "", hasta: str = "") -> dict:
-    """Turnos entre dos fechas (AAAA-MM-DD, inclusive)."""
+    """Turnos entre dos fechas (inclusive). Acepta AAAA-MM-DD o como lo dice
+    Matías ('jueves', 'mañana', '26/11'): la fecha la calcula el código."""
     hoy = _ahora().date()
-    d = desde or hoy.isoformat()
-    h = hasta or d
+    d = resolver_fecha(desde, hoy).isoformat() if desde else hoy.isoformat()
+    h = resolver_fecha(hasta, hoy).isoformat() if hasta else d
     base = "id, fecha_hora, duracion_min, tipo, estado, modalidad, motivo, notas, paciente_id, "
     filas = _consulta_tolerante(
         lambda campos: (_sb().table("turnos").select(campos)
@@ -170,11 +171,7 @@ def h_agenda(desde: str = "", hasta: str = "") -> dict:
     turnos = []
     for t in filas:
         p = t.get("pacientes") or {}
-        try:
-            fh = datetime.fromisoformat(str(t["fecha_hora"]).replace("Z", "+00:00")).astimezone(ZONA)
-            cuando = fh.strftime("%a %d/%m %H:%M")
-        except Exception:
-            cuando = str(t.get("fecha_hora"))
+        cuando = _txt_fecha(t.get("fecha_hora"))
         turnos.append({"turno_id": t.get("id"), "cuando": cuando, "paciente": p.get("nombre_completo"),
                        "paciente_id": t.get("paciente_id"),
                        "centro": NOMBRE_CENTRO.get(p.get("centro") or "", p.get("centro") or ""),
@@ -183,7 +180,7 @@ def h_agenda(desde: str = "", hasta: str = "") -> dict:
                        "motivo": t.get("motivo"), "modalidad": t.get("modalidad"),
                        "duracion_min": t.get("duracion_min"),
                        "notas": (t.get("notas") or "")[:200]})
-    return {"desde": d, "hasta": h, "cantidad": len(turnos), "turnos": turnos}
+    return {"desde": largo(d), "hasta": largo(h), "cantidad": len(turnos), "turnos": turnos}
 
 
 def h_buscar_paciente(texto: str) -> dict:
@@ -249,16 +246,18 @@ def h_resumen_paciente(paciente_id: str) -> dict:
                       .in_("session_id", ids).execute().data or []):
                 if r.get("task_type") == "conversacion_espontanea" and r.get("f0_median_hz"):
                     f0[r["session_id"]] = r["f0_median_hz"]
-        out["f0_conversacional"] = [{"fecha": str(s.get("recorded_at") or "")[:10], "mediana_hz": f0[s["id"]]}
+        out["f0_conversacional"] = [{"fecha": dia_ar(s.get("recorded_at")), "mediana_hz": f0[s["id"]]}
                                     for s in reversed(ses) if s["id"] in f0]
     except Exception:
         out["f0_conversacional"] = []
     try:
         ts = (sb.table("turnos").select("fecha_hora, tipo, estado").eq("paciente_id", paciente_id)
               .order("fecha_hora", desc=True).limit(20).execute().data or [])
-        ahora = _ahora().isoformat()
-        out["turnos"] = {"pasados": len([t for t in ts if str(t["fecha_hora"]) < ahora]),
-                         "proximos": [str(t["fecha_hora"])[:16] for t in ts if str(t["fecha_hora"]) >= ahora][:3]}
+        ahora = _ahora()
+        activos = [t for t in ts if t.get("estado") != "cancelado" and a_ar(t["fecha_hora"])]
+        out["turnos"] = {"pasados": len([t for t in activos if a_ar(t["fecha_hora"]) < ahora]),
+                         "proximos": [_txt_fecha(t["fecha_hora"]) for t in reversed(activos)
+                                      if a_ar(t["fecha_hora"]) >= ahora][:3]}
     except Exception:
         out["turnos"] = None
     try:
@@ -267,6 +266,17 @@ def h_resumen_paciente(paciente_id: str) -> dict:
         out["archivos"] = arch
     except Exception:
         out["archivos"] = None
+    try:
+        sala = (sb.table("sala_sesiones").select("creada_at, modo, objetivo, resultados, notas")
+                .eq("paciente_id", paciente_id).order("creada_at", desc=True).limit(5).execute().data or [])
+        out["sala_virtual"] = [{"fecha": _fecha_txt(x["creada_at"]), "modo": x.get("modo"),
+                                "objetivo": (x.get("objetivo") or {}).get("nota"),
+                                "mediana_hz": (x.get("resultados") or {}).get("mediana_hz"),
+                                "en_objetivo_pct": (x.get("resultados") or {}).get("en_objetivo_pct"),
+                                "tmf_s": (x.get("resultados") or {}).get("tmf_s") if x.get("modo") == "tmf" else None,
+                                "notas": (x.get("notas") or "")[:200]} for x in sala]
+    except Exception:
+        out["sala_virtual"] = None
     c = _uno("cuadernillos_paciente", paciente_id, "fecha_creacion", "fecha_creacion, titulo")
     out["ultimo_cuadernillo"] = c
     return out
@@ -277,10 +287,7 @@ def _frontend() -> str:
 
 
 def _fecha_txt(valor) -> str:
-    try:
-        return datetime.fromisoformat(str(valor).replace("Z", "+00:00")).astimezone(ZONA).strftime("%d/%m %H:%M")
-    except Exception:
-        return str(valor or "")[:16]
+    return _txt_fecha(valor)
 
 
 def _nombre_paciente(pid: str) -> str:
@@ -376,7 +383,8 @@ def h_pendientes(dias: int = 7) -> dict:
 
 
 HERRAMIENTAS = {
-    "agenda": (h_agenda, "Turnos entre fechas (incluye turno_id). args: {desde: 'AAAA-MM-DD', hasta: 'AAAA-MM-DD'}"),
+    "agenda": (h_agenda, "Turnos entre fechas, inclusive (incluye turno_id). args: {desde, hasta}: pasalas "
+                         "COMO LAS DIJO MATÍAS ('hoy', 'jueves', 'próximo lunes', '26/11'); el código calcula el día."),
     "buscar_paciente": (h_buscar_paciente, "Busca pacientes por nombre. args: {texto}"),
     "resumen_paciente": (h_resumen_paciente,
                          "Ficha resumida de un paciente (usar el paciente_id de buscar_paciente o agenda). "
@@ -425,16 +433,32 @@ def _turno(turno_id: str) -> dict:
 
 
 def _fecha_hora(fecha: str, hora: str) -> str:
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(fecha or "")):
-        raise ValueError("fecha debe ser AAAA-MM-DD")
-    m = re.match(r"^(\d{1,2})[:.h]?(\d{2})?$", str(hora or "").strip())
-    if not m or int(m.group(1)) > 23 or int(m.group(2) or 0) > 59:
-        raise ValueError("hora debe ser HH:MM")
-    return f"{fecha}T{int(m.group(1)):02d}:{int(m.group(2) or 0):02d}:00-03:00"
+    """Fecha y hora tal como las dijo Matías → timestamp con zona argentina."""
+    return iso_ar(resolver_fecha(fecha, _ahora().date()), resolver_hora(hora))
+
+
+def _controles_fecha(fh: str) -> str:
+    """Avisos que se muestran en la confirmación (no bloquean salvo el pasado)."""
+    dt = a_ar(fh)
+    if dt < _ahora() - timedelta(minutes=5):
+        raise ValueError(f"El {largo(dt)} a las {dt:%H:%M} ya pasó. ¿Qué fecha es?")
+    avisos = []
+    if dt.weekday() == 6:
+        avisos.append("es domingo")
+    if not 7 <= dt.hour <= 21:
+        avisos.append(f"es a las {dt:%H:%M}")
+    if (dt.date() - _ahora().date()).days > 120:
+        avisos.append("es dentro de más de 4 meses")
+    return f"\n⚠️ Revisá: {', '.join(avisos)}." if avisos else ""
+
+
+def _cuando_largo(fh: str) -> str:
+    dt = a_ar(fh)
+    return f"{largo(dt)} a las {dt:%H:%M}"
 
 
 def _superpuestos(fecha_hora: str, duracion: int, excluir: str = "") -> list:
-    inicio = datetime.fromisoformat(fecha_hora)
+    inicio = a_ar(fecha_hora)
     fin = inicio + timedelta(minutes=duracion)
     dia = inicio.date().isoformat()
     filas = (_sb().table("turnos").select("id, fecha_hora, duracion_min, estado, pacientes(nombre_completo)")
@@ -445,8 +469,10 @@ def _superpuestos(fecha_hora: str, duracion: int, excluir: str = "") -> list:
         if t.get("id") == excluir or t.get("estado") == "cancelado":
             continue
         try:
-            ti = datetime.fromisoformat(str(t["fecha_hora"]).replace("Z", "+00:00"))
+            ti = a_ar(t["fecha_hora"])
         except Exception:
+            continue
+        if not ti:
             continue
         tf = ti + timedelta(minutes=int(t.get("duracion_min") or 45))
         if ti < fin and inicio < tf:
@@ -462,9 +488,10 @@ def p_agendar(paciente_id: str, fecha: str, hora: str, duracion_min: int = 45, t
     fh = _fecha_hora(fecha, hora)
     if tipo not in TIPO_TURNO:
         return {"error": f"tipo debe ser uno de {list(TIPO_TURNO)}"}
+    aviso = _controles_fecha(fh)
     choques = _superpuestos(fh, int(duracion_min or 45))
-    aviso = f"\n⚠️ Se superpone con: {', '.join(choques)}" if choques else ""
-    return {"resumen": f"Agendar a {nombre} el {_fecha_txt(fh)} ({int(duracion_min or 45)} min, "
+    aviso += f"\n⚠️ Se superpone con: {', '.join(choques)}" if choques else ""
+    return {"resumen": f"Agendar a {nombre} el {_cuando_largo(fh)} ({int(duracion_min or 45)} min, "
                        f"{TIPO_TURNO[tipo]}, {str(modalidad).lower()}). Motivo: {motivo}.{aviso}"}
 
 
@@ -477,7 +504,7 @@ def e_agendar(paciente_id: str, fecha: str, hora: str, duracion_min: int = 45, t
                         sincronizar_google=bool(_google_id())))
     extra = ("" if _google_id() else
              " Si lo querés en Google Calendar, sincronizalo desde la agenda de la app.")
-    return {"texto": f"✅ Turno agendado: {_nombre_paciente(paciente_id)}, {_fecha_txt(_fecha_hora(fecha, hora))}.{extra}"}
+    return {"texto": f"✅ Turno agendado: {_nombre_paciente(paciente_id)}, {_cuando_largo(_fecha_hora(fecha, hora))}.{extra}"}
 
 
 def _google_id() -> str:
@@ -501,15 +528,16 @@ def p_reprogramar(turno_id: str, fecha: str, hora: str) -> dict:
     if not t:
         return {"error": "Turno inexistente: consultá la agenda para obtener el turno_id."}
     fh = _fecha_hora(fecha, hora)
+    aviso = _controles_fecha(fh)
     choques = _superpuestos(fh, int(t.get("duracion_min") or 45), excluir=turno_id)
-    aviso = f"\n⚠️ Se superpone con: {', '.join(choques)}" if choques else ""
+    aviso += f"\n⚠️ Se superpone con: {', '.join(choques)}" if choques else ""
     return {"resumen": f"Pasar el turno de {(t.get('pacientes') or {}).get('nombre_completo')} del "
-                       f"{_fecha_txt(t['fecha_hora'])} al {_fecha_txt(fh)}.{aviso}"}
+                       f"{_cuando_largo(t['fecha_hora'])} al {_cuando_largo(fh)}.{aviso}"}
 
 
 def e_reprogramar(turno_id: str, fecha: str, hora: str) -> dict:
     _actualizar_turno(turno_id, fecha_hora=_fecha_hora(fecha, hora))
-    return {"texto": f"✅ Turno reprogramado al {_fecha_txt(_fecha_hora(fecha, hora))}."}
+    return {"texto": f"✅ Turno reprogramado al {_cuando_largo(_fecha_hora(fecha, hora))}."}
 
 
 ESTADOS = {"cancelado": "cancelar", "confirmado": "marcar como confirmado", "completado": "marcar como realizado",
@@ -523,7 +551,7 @@ def p_estado_turno(turno_id: str, estado: str) -> dict:
     if estado not in ESTADOS:
         return {"error": f"estado debe ser uno de {list(ESTADOS)}"}
     return {"resumen": f"{ESTADOS[estado].capitalize()} el turno de "
-                       f"{(t.get('pacientes') or {}).get('nombre_completo')} del {_fecha_txt(t['fecha_hora'])}."}
+                       f"{(t.get('pacientes') or {}).get('nombre_completo')} del {_cuando_largo(t['fecha_hora'])}."}
 
 
 def e_estado_turno(turno_id: str, estado: str) -> dict:
@@ -588,7 +616,7 @@ def e_sala(paciente_id: str, modo: str = "habla") -> dict:
     r = _llamar(crear_sala(_PedidoFalso({"paciente_id": paciente_id, "modo": modo})))
     msj = f"Hola {r.get('nombre') or ''}, entrá a la sala de práctica en vivo desde acá: {r['enlace']}"
     return {"texto": f"✅ Sala abierta. Enlace para el paciente:\n{r['enlace']}\n"
-                     "Vos la seguís desde la app (Sala virtual).",
+                     "Seguila desde la app: Sala virtual → Salas abiertas → Retomar.",
             "botones": [[{"text": "Enviar por WhatsApp", "url": f"https://wa.me/?text={quote(msj)}"}],
                         [{"text": "Abrir la app", "url": _frontend()}]]}
 
@@ -788,10 +816,11 @@ HERRAMIENTAS["orientacion_clinica"] = (h_orientacion, "Última orientación clí
 
 ACCIONES = {
     "agendar_turno": (p_agendar, e_agendar,
-                      "Agenda un turno. args: {paciente_id, fecha: 'AAAA-MM-DD', hora: 'HH:MM', duracion_min?: 45, "
+                      "Agenda un turno. args: {paciente_id, fecha: COMO LA DIJO MATÍAS ('jueves', 'mañana', '26/11', "
+                      "'26 de noviembre'), hora: como la dijo ('10', '10:30', '5 de la tarde'), duracion_min?: 45, "
                       f"tipo?: uno de {list(TIPO_TURNO)}, modalidad?: 'PRESENCIAL'|'VIRTUAL', motivo?}}"),
     "reprogramar_turno": (p_reprogramar, e_reprogramar,
-                          "Cambia fecha/hora de un turno. args: {turno_id, fecha: 'AAAA-MM-DD', hora: 'HH:MM'}"),
+                          "Cambia fecha/hora de un turno. args: {turno_id, fecha: como la dijo Matías, hora: como la dijo}"),
     "estado_turno": (p_estado_turno, e_estado_turno,
                      f"Cancela o marca un turno. args: {{turno_id, estado: uno de {list(ESTADOS)}}}"),
     "anotar_turno": (p_anotar, e_anotar, "Agrega una nota clínica breve a un turno. args: {turno_id, texto}"),
@@ -837,6 +866,9 @@ def _sistema() -> str:
         "(audio de la voz del paciente; si es una /a/ sostenida sirve para el análisis acústico).\n"
         "Los mensajes que empiezan con «(nota de voz)» son transcripciones automáticas: pueden traer "
         "errores en nombres propios; si un nombre no aparece, buscá por partes o preguntá.\n\n"
+        "FECHAS: no calcules fechas ni días de la semana. Pasá a las herramientas y acciones la expresión "
+        "tal como la dijo Matías ('el jueves', 'pasado mañana', '26/11'); el sistema la resuelve y en la "
+        "respuesta usá el día que te devuelve la herramienta (campo 'desde'/'cuando'), nunca uno propio.\n\n"
         "Reglas:\n"
         "- Usá las herramientas para cualquier dato de la app; NUNCA inventes datos clínicos, fechas, "
         "nombres ni ids. Si un dato no está, decilo.\n"

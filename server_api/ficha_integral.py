@@ -49,9 +49,18 @@ def _f0_conversacional(sb, pid):
         return []
     por_ses = {a["session_id"]: a["f0_median_hz"] for a in ac
                if a.get("task_type") == "conversacion_espontanea" and a.get("f0_median_hz")}
-    return [{"fecha": str(s.get("recorded_at") or "")[:10], "f0_mediana_hz": por_ses[s["id"]],
+    return [{"fecha": __import__("fechas").dia_ar(s.get("recorded_at")), "f0_mediana_hz": por_ses[s["id"]],
              "origen": (s.get("device_info") or {}).get("contexto") or (s.get("device_info") or {}).get("origen") or "companion"}
             for s in ses if s["id"] in por_ses]
+
+
+def _sala(sb, pid):
+    """Sesiones en vivo de la sala virtual (vacío si falta la migración)."""
+    try:
+        return (sb.table("sala_sesiones").select("id, creada_at, modo, duracion_s, objetivo, consigna, resultados, notas")
+                .eq("paciente_id", pid).order("creada_at", desc=True).limit(30).execute().data or [])
+    except Exception:
+        return []
 
 
 @router.get("/api/ficha/{paciente_id}")
@@ -82,7 +91,12 @@ async def ficha(paciente_id: str):
         "plan_vigente": recs[0] if recs else None,
         "turnos": {"total": len(turnos),
                    "realizados": len([t for t in turnos if t.get("estado") == "completado"]),
-                   "primero": str(turnos[0]["fecha_hora"])[:10] if turnos else None},
+                   "primero": __import__("fechas").dia_ar(turnos[0]["fecha_hora"]) if turnos else None},
+        # Notas de cada turno (escritas en la agenda o dictadas al asistente de Telegram).
+        "notas_turnos": [{"fecha_hora": t.get("fecha_hora"), "estado": t.get("estado"), "tipo": t.get("tipo"),
+                          "notas": t.get("notas")}
+                         for t in reversed(turnos) if (t.get("notas") or "").strip()][:20],
+        "sala_virtual": _sala(sb, paciente_id),
         "archivos": _lista(sb, "archivos_paciente", paciente_id, "fecha"),
     }
     from criterios_clinicos import hallazgos, autopercepciones

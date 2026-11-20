@@ -42,7 +42,7 @@ def extraer_variables_cuadernillo(
         from cuadernillo_pdf import _normalizar_fecha_inicio
         fecha_hoy = _normalizar_fecha_inicio(fecha_inicio)
     except Exception:
-        fecha_hoy = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
+        fecha_hoy = __import__("fechas").ahora_ar().strftime("%d/%m/%Y")
     
     # Formatear la lista de ejercitación para la plantilla.
     # Precaución STOP por ejercicio: viene del frontend o se enriquece acá

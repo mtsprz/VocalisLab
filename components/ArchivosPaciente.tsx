@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Upload, Loader2, ExternalLink, Trash2, FileText, Image as ImageIcon, Film, Music, FolderOpen, AlertTriangle } from 'lucide-react';
+import { hoyAR } from '../utils/fechas';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -51,7 +52,7 @@ export default function ArchivosPaciente({ paciente, onClose }: Props) {
   const [tipo, setTipo] = useState('documento');
   const [origen, setOrigen] = useState('whatsapp_paciente');
   const [titulo, setTitulo] = useState('');
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(() => hoyAR());
   const [notas, setNotas] = useState('');
   const [subiendo, setSubiendo] = useState(false);
   const [hecho, setHecho] = useState('');

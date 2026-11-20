@@ -825,7 +825,7 @@ def _comparar_previa(sb, ses: dict, actual: dict) -> dict:
         if not r.data:
             return {"hay_previa": False}
         prev = r.data[0]
-        out = {"hay_previa": True, "fecha_previa": (prev.get("recorded_at") or "")[:10]}
+        out = {"hay_previa": True, "fecha_previa": __import__("fechas").dia_ar(prev.get("recorded_at"))}
 
         def f0(sid):
             a = sb.table("session_acoustics").select("f0_median_hz")\

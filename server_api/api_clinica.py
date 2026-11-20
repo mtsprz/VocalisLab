@@ -1340,6 +1340,11 @@ async def listar_turnos(
 ):
     if not supabase:
         return JSONResponse(content=[])
+    # Una fecha sola es el día argentino completo (sin zona, Postgres la toma como UTC).
+    if fecha_desde and len(fecha_desde) == 10:
+        fecha_desde += "T00:00:00-03:00"
+    if fecha_hasta and len(fecha_hasta) == 10:
+        fecha_hasta += "T23:59:59-03:00"
     def _armar(join: str):
         q = supabase.table("turnos").select(f"*, pacientes({join})")
         if fecha_desde:

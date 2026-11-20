@@ -32,6 +32,24 @@ export default function SalaVirtualModule() {
   const [guardado, setGuardado] = useState<{ ok: boolean; t: string } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const inicioRef = useRef<number>(0);
+  const [abiertas, setAbiertas] = useState<any[]>([]);
+  const [notas, setNotas] = useState('');
+
+  // Salas abiertas (también las que se crean desde el asistente de Telegram).
+  const cargarAbiertas = async () => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/salas`);
+      if (r.ok) setAbiertas((await r.json()).salas || []);
+    } catch { /* sin conexión: no se listan */ }
+  };
+  useEffect(() => { if (!sala) cargarAbiertas(); }, [sala]);
+  const retomar = (s: any) => {
+    setError(''); setGuardado(null); setMuestras([]);
+    setModo(s.modo); setSala(s); inicioRef.current = s.creada * 1000;
+  };
+  // El paciente de la sala manda; si no tiene, el elegido en «Pacientes».
+  const pacienteId = sala?.paciente_id || paciente?.id || '';
+  const pacienteNombre = sala?.nombre && sala?.paciente_id ? sala.nombre : (paciente?.nombre_completo || '');
 
   const crear = async () => {
     setError(''); setGuardado(null);
@@ -117,26 +135,32 @@ export default function SalaVirtualModule() {
   }, [conVoz, muestras, objHz, tolerancia]);
 
   const guardar = async () => {
-    if (!stats || !paciente?.id) return;
+    if (!stats || !pacienteId || !sala) return;
     setGuardado(null);
     const st = conVoz.map(m => 12 * Math.log2(m.f0 / stats.mediana));
     const media = st.reduce((a, b) => a + b, 0) / st.length;
     const sd = Math.sqrt(st.reduce((a, b) => a + (b - media) ** 2, 0) / st.length);
     const paso = Math.max(1, Math.ceil(conVoz.length / 600));
+    const modoSala = sala.modo || modo;
     try {
-      const r = await fetch(`${BACKEND_URL}/api/companion/pitchmeter`, {
+      const r = await fetch(`${BACKEND_URL}/api/sala-sesiones`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          paciente_id: paciente.id, contexto: 'sala_virtual',
+          paciente_id: pacienteId, modo: modoSala, consigna, notas,
           duracion_s: (Date.now() - inicioRef.current) / 1000,
-          f0: { mean: conVoz.reduce((a, m) => a + m.f0, 0) / conVoz.length, median: stats.mediana,
-                p5: stats.p5, p95: stats.p95, min: stats.min, max: stats.max, sd_st: Math.round(sd * 100) / 100 },
+          objetivo: objHz ? { hz: Math.round(objHz * 10) / 10, nota: nombreNota(Number(objetivoMidi)), tolerancia_cents: tolerancia } : null,
+          media_hz: conVoz.reduce((a, m) => a + m.f0, 0) / conVoz.length,
+          resultados: { mediana_hz: stats.mediana, p5_hz: stats.p5, p95_hz: stats.p95, min_hz: stats.min, max_hz: stats.max,
+                        sd_st: Math.round(sd * 100) / 100, n: stats.n, tmf_s: Math.round(stats.tmf * 10) / 10,
+                        en_objetivo_pct: stats.enObj != null ? Math.round(stats.enObj * 100) : null },
           contorno: conVoz.filter((_, i) => i % paso === 0).map(m => m.f0),
         }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.detail || `Error ${r.status}`);
-      setGuardado({ ok: true, t: `Guardado en la historia: F0 mediana ${stats.mediana.toFixed(0)} Hz.` });
+      const que = modoSala === 'habla' ? `F0 mediana ${stats.mediana.toFixed(0)} Hz (suma a la evolución de F0 conversacional)`
+        : modoSala === 'tmf' ? `TMF ${stats.tmf.toFixed(1)} s` : `mediana ${stats.mediana.toFixed(0)} Hz${stats.enObj != null ? ` · ${Math.round(stats.enObj * 100)} % en objetivo` : ''}`;
+      setGuardado({ ok: !d.aviso, t: d.aviso || `Guardado en la ficha integral (Sala virtual): ${que}.` });
     } catch (e: any) {
       setGuardado({ ok: false, t: e?.message || 'No se pudo guardar' });
     }
@@ -163,12 +187,25 @@ export default function SalaVirtualModule() {
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="bg-white/80 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10 p-5">
         <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Video size={18} className="text-indigo-500" /> Sala virtual {paciente?.nombre_completo ? `· ${paciente.nombre_completo}` : ''}
+          <Video size={18} className="text-indigo-500" /> Sala virtual {pacienteNombre ? `· ${pacienteNombre}` : ''}
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           Usala junto a Meet o Zoom: el paciente abre un enlace, su equipo mide la voz con el micrófono sin filtros y
           acá la ves en vivo. Elegí antes el paciente en «Pacientes» para poder guardar la medición en su historia.
         </p>
+        {!sala && abiertas.length > 0 && (
+          <div className="mt-4 space-y-1.5">
+            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Salas abiertas</p>
+            {abiertas.map(a => (
+              <div key={a.token} className="flex flex-wrap items-center gap-2 text-xs rounded-xl border border-slate-200 dark:border-white/10 px-3 py-2">
+                <span className="font-semibold">{a.nombre || 'Sin paciente'}</span>
+                <span className="text-slate-500">{MODOS[a.modo]?.split(' (')[0]} · abierta {new Date(a.creada * 1000).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}</span>
+                <span className={a.paciente_conectado ? 'text-emerald-600 font-bold' : 'text-amber-600'}>{a.paciente_conectado ? 'paciente conectado' : 'esperando'}</span>
+                <button onClick={() => retomar(a)} className="ml-auto px-3 py-1 rounded-lg bg-indigo-600 text-white font-bold">Retomar</button>
+              </div>
+            ))}
+          </div>
+        )}
         {!sala ? (
           <div className="flex flex-wrap items-center gap-2 mt-4">
             <select value={modo} onChange={e => setModo(e.target.value)} className={campo}>
@@ -208,7 +245,7 @@ export default function SalaVirtualModule() {
                 ['Ahora', actual ? `${nombreNota(hzAMidi(actual))} · ${actual.toFixed(0)} Hz` : '—'],
                 ['Mediana', stats ? `${stats.mediana.toFixed(0)} Hz (${nombreNota(hzAMidi(stats.mediana))})` : '—'],
                 ['Rango p5–p95', stats ? `${stats.p5.toFixed(0)}–${stats.p95.toFixed(0)} Hz` : '—'],
-                [modo === 'tmf' ? 'TMF (mejor)' : 'En objetivo', modo === 'tmf'
+                [sala.modo === 'tmf' ? 'TMF (mejor)' : 'En objetivo', sala.modo === 'tmf'
                   ? (stats ? `${stats.tmf.toFixed(1)} s` : '—')
                   : (stats?.enObj != null ? `${Math.round(stats.enObj * 100)} %` : '—')],
               ].map(([k, v]) => (
@@ -257,12 +294,15 @@ export default function SalaVirtualModule() {
             </div>
 
             <div className="rounded-2xl bg-white/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-4 space-y-2">
-              <button onClick={guardar} disabled={!stats || !paciente?.id}
+              <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2} placeholder="Observaciones de la sesión (opcional)"
+                className={`${campo} w-full`} />
+              <button onClick={guardar} disabled={!stats || !pacienteId}
                 className="w-full px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40">
-                <Save size={13} /> Guardar medición en la historia
+                <Save size={13} /> Guardar en la ficha {pacienteNombre ? `de ${pacienteNombre}` : ''}
               </button>
-              {!paciente?.id && <p className="text-[11px] text-slate-500">Elegí el paciente en «Pacientes» para poder guardar.</p>}
-              <button onClick={() => setMuestras([])} className="w-full text-[11px] text-slate-500 underline">Empezar medición de nuevo</button>
+              {!pacienteId && <p className="text-[11px] text-slate-500">Elegí el paciente en «Pacientes» para poder guardar.</p>}
+              <p className="text-[10px] text-slate-500">Queda en la Ficha integral → «Sala virtual». Solo el modo Habla suma a la F0 conversacional.</p>
+              <button onClick={() => { setMuestras([]); setGuardado(null); inicioRef.current = Date.now(); }} className="w-full text-[11px] text-slate-500 underline">Empezar medición de nuevo</button>
               {guardado && (
                 <p className={`text-xs flex gap-1.5 ${guardado.ok ? 'text-emerald-600' : 'text-red-600'}`}>
                   {guardado.ok ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />} {guardado.t}

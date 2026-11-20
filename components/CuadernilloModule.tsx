@@ -4,6 +4,7 @@ import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
 import { firmaProfesional } from './clinicalUtils';
 import { centroPorId } from './centros';
+import { hoyAR } from '../utils/fechas';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -324,7 +325,7 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const [notas, setNotas] = useState('');
   // Nombre editable (el PDF lo exige) + fecha de inicio editable.
   const [nombrePaciente, setNombrePaciente] = useState('');
-  const [fechaInicio, setFechaInicio] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fechaInicio, setFechaInicio] = useState(() => hoyAR());
   const [generating, setGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [motorExport, setMotorExport] = useState<'reportlab_vector' | 'html_pdf' | 'figma'>('reportlab_vector');

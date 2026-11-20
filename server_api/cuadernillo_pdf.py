@@ -1881,7 +1881,7 @@ def _canvas_numerado(pie_izq: str, pie_der: str):
 def _normalizar_fecha_inicio(fecha_inicio: str = "") -> str:
     """Normaliza la fecha de inicio editable (ISO yyyy-mm-dd o dd/mm/aaaa)
     a dd/mm/aaaa. Si viene vacía o inválida, usa hoy."""
-    hoy = __import__('datetime').datetime.now().strftime("%d/%m/%Y")
+    hoy = __import__("fechas").ahora_ar().strftime("%d/%m/%Y")
     f = (fecha_inicio or "").strip()
     if not f:
         return hoy

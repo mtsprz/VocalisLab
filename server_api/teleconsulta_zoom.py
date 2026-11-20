@@ -31,6 +31,13 @@ ZOOM_API_BASE = "https://api.zoom.us/v2"
 _token_cache = {"token": "", "exp": 0}
 
 
+def _a_utc_zoom(dt_valor) -> str:
+    """Zoom lee "…Z" como hora UTC: se convierte desde la hora argentina del turno."""
+    from fechas import a_ar
+    from datetime import timezone as _tz
+    return a_ar(dt_valor).astimezone(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 async def _zoom_request(method: str, path: str, token: str, payload: dict = None):
     """Llamada a Zoom API con reintentos ante fallas transitorias (429/5xx/red)."""
     import asyncio
@@ -183,7 +190,7 @@ async def crear_sala(request: Request):
     try:
         from datetime import datetime as dt
         parsed = dt.fromisoformat(str(fecha_hora).replace("Z", "+00:00"))
-        start_time = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        start_time = _a_utc_zoom(parsed)
     except Exception:
         pass
 
@@ -347,7 +354,7 @@ async def zoom_create(request: Request):
     try:
         from datetime import datetime as dt
         parsed = dt.fromisoformat(str(fecha_hora).replace("Z", "+00:00"))
-        start_time = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        start_time = _a_utc_zoom(parsed)
     except Exception:
         start_time = None
 
@@ -421,7 +428,7 @@ async def zoom_update(meeting_id: str, request: Request):
         try:
             from datetime import datetime as dt
             parsed = dt.fromisoformat(str(body["fecha_hora"]).replace("Z", "+00:00"))
-            patch["start_time"] = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+            patch["start_time"] = _a_utc_zoom(parsed)
         except Exception:
             pass
     if body.get("duracion_min"):

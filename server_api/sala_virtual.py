@@ -181,3 +181,100 @@ async def ws_profesional(ws: WebSocket, token: str):
         pass
     finally:
         sala.profesionales.discard(ws)
+
+
+# ─── Salas abiertas y sesiones guardadas ───────────────────────────────
+
+MSG_MIGRACION = ("Falta crear la tabla de la sala virtual: corré supabase/migracion_2026_11_sala.sql en "
+                 "Supabase (SQL Editor → pegar → Run).")
+
+
+@router.get("/api/salas")
+async def salas_abiertas():
+    """Salas abiertas (también las creadas desde Telegram), para retomarlas."""
+    _limpiar()
+    frontend = os.environ.get("FRONTEND_URL", "https://vocalis-lab.vercel.app").rstrip("/")
+    return {"salas": [{"token": s.token, "enlace": f"{frontend}/?sala={s.token}", "nombre": s.nombre,
+                       "paciente_id": s.paciente_id, "modo": s.modo, "creada": int(s.creada),
+                       "vence": int(s.vence), "paciente_conectado": bool(s.pacientes)}
+                      for s in sorted(SALAS.values(), key=lambda x: -x.creada)]}
+
+
+def _n(v, lo, hi):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return round(f, 2) if lo <= f <= hi else None
+
+
+def resultados_sala(r: dict) -> dict:
+    """Valida los resultados que manda la pantalla de la sala."""
+    return {"mediana_hz": _n(r.get("mediana_hz"), 50, 1500), "p5_hz": _n(r.get("p5_hz"), 50, 1500),
+            "p95_hz": _n(r.get("p95_hz"), 50, 1500), "min_hz": _n(r.get("min_hz"), 50, 1500),
+            "max_hz": _n(r.get("max_hz"), 50, 1500), "sd_st": _n(r.get("sd_st"), 0, 48),
+            "en_objetivo_pct": _n(r.get("en_objetivo_pct"), 0, 100), "tmf_s": _n(r.get("tmf_s"), 0, 120),
+            "n": int(_n(r.get("n"), 0, 10 ** 6) or 0)}
+
+
+@router.post("/api/sala-sesiones")
+async def guardar_sesion_sala(request: Request):
+    """Guarda la medición de la sala con su modo. Solo el modo «habla» suma a
+    la F0 conversacional (Companion); nota, canto y TMF quedan aparte."""
+    body = await request.json()
+    pid = str(body.get("paciente_id") or "").strip()
+    modo = body.get("modo") if body.get("modo") in MODOS else None
+    if not pid:
+        raise HTTPException(status_code=400, detail="La sala no tiene paciente: elegilo antes de guardar.")
+    if not modo:
+        raise HTTPException(status_code=400, detail="Modo de sala inválido.")
+    res = resultados_sala(body.get("resultados") or {})
+    if res["mediana_hz"] is None and res["tmf_s"] is None:
+        raise HTTPException(status_code=400, detail="No hay voz medida para guardar.")
+    from api_clinica import supabase as sb
+    if not sb:
+        raise HTTPException(status_code=503, detail="Supabase no configurado")
+    contorno = [v for v in (_n(x, 50, 1500) for x in (body.get("contorno") or [])[:600]) if v is not None]
+    obj = body.get("objetivo") if isinstance(body.get("objetivo"), dict) else None
+    fila = {"paciente_id": pid, "modo": modo, "duracion_s": _n(body.get("duracion_s"), 0, 4 * 3600),
+            "objetivo": {"hz": _n(obj.get("hz"), 50, 1500), "nota": str(obj.get("nota") or "")[:8],
+                         "tolerancia_cents": _n(obj.get("tolerancia_cents"), 0, 1200)} if obj else None,
+            "consigna": str(body.get("consigna") or "")[:300], "resultados": res, "contorno": contorno,
+            "notas": str(body.get("notas") or "")[:1000]}
+    sid = None
+    if modo == "habla" and res["mediana_hz"]:
+        from companion import guardar_pitchmeter
+
+        class _P:
+            headers, query_params = request.headers, request.query_params
+            state = request.state
+
+            async def json(self_inner):
+                return {"paciente_id": pid, "contexto": "sala_virtual", "duracion_s": fila["duracion_s"],
+                        "f0": {"median": res["mediana_hz"], "p5": res["p5_hz"], "p95": res["p95_hz"],
+                               "min": res["min_hz"], "max": res["max_hz"], "sd_st": res["sd_st"],
+                               "mean": body.get("media_hz")}, "contorno": contorno}
+        sid = (await guardar_pitchmeter(_P())).get("session_id")
+        fila["companion_session_id"] = sid
+    try:
+        guardada = (sb.table("sala_sesiones").insert(fila).execute().data or [fila])[0]
+    except Exception as e:
+        if "sala_sesiones" in str(e):
+            if sid:  # la F0 del habla igual quedó guardada
+                return {"ok": True, "aviso": MSG_MIGRACION + " La F0 del habla SÍ se guardó."}
+            raise HTTPException(status_code=503, detail=MSG_MIGRACION)
+        raise
+    return {"ok": True, "sesion": guardada}
+
+
+@router.get("/api/sala-sesiones")
+async def listar_sesiones_sala(paciente_id: str):
+    from api_clinica import supabase as sb
+    try:
+        filas = (sb.table("sala_sesiones").select("id, creada_at, modo, duracion_s, objetivo, consigna, resultados, notas")
+                 .eq("paciente_id", paciente_id).order("creada_at", desc=True).limit(50).execute().data or [])
+    except Exception as e:
+        if "sala_sesiones" in str(e):
+            return {"sesiones": [], "aviso": MSG_MIGRACION}
+        raise
+    return {"sesiones": filas}

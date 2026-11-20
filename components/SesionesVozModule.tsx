@@ -5,6 +5,7 @@ import { Mic, Play, Activity, GitBranch, Scale, FileText, CheckCircle2, XCircle,
 import { useClinical } from './ClinicalContext';
 import { useAuth } from './AuthContext';
 import { elegirRangoNormativo, notaEs } from './vozNormas';
+import { diaAR, fechaHora, edad } from '../utils/fechas';
 
 /** Nota entre paréntesis para la mediana (solo presentación). */
 const notaMusical = (hz?: number | null) => (notaEs(hz) ? `(${notaEs(hz)})` : '');
@@ -25,16 +26,7 @@ const TASK_LABEL: Record<string, string> = {
 const fmtDb = (v: any) => (v === null || v === undefined ? '—' : Number(v).toFixed(1));
 const fmtHz = (v: any) => (v === null || v === undefined ? '—' : Number(v).toFixed(0));
 
-function edadDe(fechaNac: string): number | null {
-  try {
-    if (!fechaNac) return null;
-    const d = new Date(fechaNac.slice(0, 10));
-    const h = new Date();
-    let e = h.getFullYear() - d.getFullYear();
-    if (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())) e--;
-    return e;
-  } catch { return null; }
-}
+const edadDe = (fechaNac: string): number | null => edad(fechaNac);
 
 function LineChart({ puntos, refMin, refMax, unidad, color }: any) {
   const W = 560, H = 190, P = 34;
@@ -400,7 +392,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
             {[['A', cmpA, setCmpA], ['B', cmpB, setCmpB]].map(([l, v, set]: any) => (
               <select key={l} value={v} onChange={e => set(e.target.value)} className="px-2 py-1.5 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5">
                 <option value="">Sesión {l}…</option>
-                {sesiones.map(s => <option key={s.id} value={s.id}>{(s.recorded_at || '').slice(0, 10)} · {s.status}</option>)}
+                {sesiones.map(s => <option key={s.id} value={s.id}>{diaAR(s.recorded_at)} · {s.status}</option>)}
               </select>
             ))}
           </div>
@@ -408,7 +400,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
             <div className="grid grid-cols-2 gap-3 text-xs">
               {cmpDatos.map((d: any, i: number) => (
                 <div key={i} className="p-3 rounded-xl border border-gray-200 dark:border-white/10">
-                  <p className="font-bold mb-1">Sesión {i === 0 ? 'A' : 'B'} · {(d.sesion.recorded_at || '').slice(0, 10)}</p>
+                  <p className="font-bold mb-1">Sesión {i === 0 ? 'A' : 'B'} · {diaAR(d.sesion.recorded_at)}</p>
                   {(d.acustica || []).map((a: any) => (
                     <p key={a.task_type} className="mt-1">
                       <span className="font-semibold">{TASK_LABEL[a.task_type] || a.task_type}:</span> F0 {fmtHz(a.f0_median_hz)} Hz {notaMusical(a.f0_median_hz)} · rango {fmtHz(a.f0_p5_hz)}–{fmtHz(a.f0_p95_hz)} Hz · SD {fmtDb(a.f0_sd_semitones)} st
@@ -432,7 +424,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
             <div key={s.id} className="bg-white/80 dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden">
               <button onClick={() => setSelId(abierta ? null : s.id)} className="w-full px-4 py-3 flex items-center gap-3 text-left">
                 <span className="px-2 py-1 rounded-lg text-[10px] font-black bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/30">Grabada offline / sincronizada</span>
-                <span className="text-xs font-bold">{(s.recorded_at || '').slice(0, 16).replace('T', ' ')}</span>
+                <span className="text-xs font-bold">{fechaHora(s.recorded_at)}</span>
                 <span className="text-[11px] text-gray-500">{s.audio_duration_sec ? `${Math.round(s.audio_duration_sec / 60)} min · ` : ''}{s.audio_codec || ''} {s.audio_bitrate_kbps ? `${s.audio_bitrate_kbps} kbps` : ''}</span>
                 <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${s.status === 'processed' ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30' : s.status === 'error' ? 'bg-red-500/10 text-red-600 border-red-500/30' : 'bg-amber-500/10 text-amber-700 border-amber-500/30'}`}>{s.status}</span>
                 {!s.consent_recorded
@@ -639,7 +631,7 @@ export default function SesionesVozModule({ pacienteId }: Props) {
         {(devices || []).map((d: any) => (
           <div key={d.id} className="flex items-center gap-2 py-1.5 border-t border-gray-100 dark:border-white/5">
             <span className="font-bold">{d.device_name || 'Companion'}</span>
-            <span className="text-gray-400">{(d.created_at || '').slice(0, 10)}{d.last_seen_at ? ` · visto ${(d.last_seen_at || '').slice(0, 10)}` : ''}</span>
+            <span className="text-gray-400">{diaAR(d.created_at)}{d.last_seen_at ? ` · visto ${diaAR(d.last_seen_at)}` : ''}</span>
             {d.revoked
               ? <span className="text-red-500 font-bold">revocado</span>
               : <button onClick={() => revocar(d.id)} className="ml-auto text-red-500 font-bold flex items-center gap-1"><Trash2 size={13} /> Revocar</button>}

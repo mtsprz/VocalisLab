@@ -39,6 +39,10 @@ def _limpio(d: dict, excluir=("id", "paciente_id", "token", "created_at", "updat
     return {k: v for k, v in (d or {}).items() if k not in excluir and v not in (None, "", [], {})}
 
 
+def _dia(v) -> str:
+    return __import__("fechas").dia_ar(v)
+
+
 def practica_resumen(sb, pid: str) -> dict:
     try:
         ses = (sb.table("practica_sesiones").select("*").eq("paciente_id", pid)
@@ -64,8 +68,8 @@ def practica_resumen(sb, pid: str) -> dict:
                         d[k].append(x[k])
                 d["altura_no_medible"] += 1 if x.get("altura_no_medible") else 0
     return {"rutinas_enviadas": len(rut),
-            "dias_con_practica": len({str(s.get("creada_at"))[:10] for s in ses}),
-            "primera": str(ses[-1].get("creada_at"))[:10], "ultima": str(ses[0].get("creada_at"))[:10],
+            "dias_con_practica": len({_dia(s.get("creada_at")) for s in ses}),
+            "primera": _dia(ses[-1].get("creada_at")), "ultima": _dia(ses[0].get("creada_at")),
             "por_ejercicio": {k: {"medida": v["medida"], "logro_promedio_pct": round(sum(v["logro"]) / len(v["logro"]), 1),
                                   **{f"{c}_promedio": round(sum(v[c]) / len(v[c]), 1) for c in ("tramo_max_s", "cortes", "intensidad_sd_db") if v[c]},
                                   "veces_altura_no_medible": v["altura_no_medible"]} for k, v in por_ej.items()}}
@@ -79,7 +83,7 @@ def expediente(datos: dict, practica: dict, situacion: dict) -> dict:
     try:
         from datetime import date
         fn = date.fromisoformat(str(p.get("fecha_nacimiento"))[:10])
-        hoy = date.today()
+        hoy = __import__("fechas").hoy_ar()
         edad = hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
     except Exception:
         pass
@@ -90,7 +94,7 @@ def expediente(datos: dict, practica: dict, situacion: dict) -> dict:
                      "tipo_atencion": p.get("tipo_atencion") or "voz"},
         "anamnesis": {k: (_corto(v) if isinstance(v, str) else v)
                       for k, v in _limpio(datos.get("anamnesis") or {}, ("id", "paciente_id", "created_at")).items()},
-        "informes_orl": [{"fecha": i.get("fecha_informe") or str(i.get("fecha") or "")[:10],
+        "informes_orl": [{"fecha": i.get("fecha_informe") or _dia(i.get("fecha")),
                           "diagnostico": i.get("diagnostico_principal"), "metodo": i.get("metodo_exploracion"),
                           "profesional": i.get("profesional_orl"),
                           "hallazgos": {k: _corto(v, 500) for k, v in (i.get("datos_estructurados") or {}).items()
@@ -105,10 +109,10 @@ def expediente(datos: dict, practica: dict, situacion: dict) -> dict:
                                                       "cpps_db", "avqi", "origen", "fuente") if a.get(k) not in (None, "")}
                                for a in datos.get("analisis_acusticos") or []],
         "f0_conversacional": datos.get("f0_conversacional") or [],
-        "autoevaluaciones": [{"fecha": str(a.get("completada_at") or "")[:10], "autopercepcion": a.get("autopercepcion"),
+        "autoevaluaciones": [{"fecha": _dia(a.get("completada_at")), "autopercepcion": a.get("autopercepcion"),
                               "vhi10": a.get("vhi10_score"), "riesgo": a.get("riesgo_vocal_score"),
                               "comentario": _corto(a.get("comentario"), 300)} for a in datos.get("autoevaluaciones") or []],
-        "plan_vigente": {"fecha": str((datos.get("plan_vigente") or {}).get("creada_at") or "")[:10],
+        "plan_vigente": {"fecha": _dia((datos.get("plan_vigente") or {}).get("creada_at")),
                          "diagnostico_funcional": plan.get("diagnostico_funcional_fonoaudiologico"),
                          "objetivos": plan.get("objetivos_terapeuticos"),
                          "ejercicios": [e.get("name") or e.get("id") for e in plan.get("ejercicios_recomendados") or []][:15]} if plan else None,
