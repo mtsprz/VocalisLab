@@ -11,6 +11,8 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 interface Props {
   pacienteId: string | null;
   initialExerciseIds?: string[];
+  /** Abre «Práctica en casa» con el origen indicado (fonoar, cuadernillo, tvso). */
+  onArmarPractica?: (origen: string) => void;
 }
 
 interface Exercise {
@@ -310,7 +312,7 @@ const DEFAULT_SECTIONS: Section[] = [
   }
 ];
 
-export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Props) {
+export default function CuadernilloModule({ pacienteId, initialExerciseIds, onArmarPractica }: Props) {
   const clinical = useClinical();
   const { user } = useAuth();
   const [enviandoWA, setEnviandoWA] = useState(false);
@@ -393,6 +395,15 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
   const pacienteNombreClinico = clinical.data.paciente?.nombre_completo || '';
   // Pacientes de centros con cuadernillo propio (Fonoar): no se genera uno.
   const centroPaciente = centroPorId(clinical.data.paciente?.centro);
+  // Cuadernillo propio del centro (Fonoar): se muestra tal cual está cargado.
+  const [cuadFonoar, setCuadFonoar] = useState<any>(null);
+  const [verFonoar, setVerFonoar] = useState(false);
+  useEffect(() => {
+    if (!centroPaciente?.cuadernilloPropio && !verFonoar) return;
+    if (cuadFonoar) return;
+    fetch(`${BACKEND_URL}/api/cuadernillos/fonoar`).then(r => (r.ok ? r.json() : null)).then(setCuadFonoar).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centroPaciente?.cuadernilloPropio, verFonoar]);
   // El nombre del PDF: editable, pre-cargado desde la ficha clínica.
   const pacienteNombre = nombrePaciente || pacienteNombreClinico;
   const pacienteTelefono = (clinical.data.paciente?.telefono || '').replace(/\D/g, '');
@@ -944,15 +955,57 @@ export default function CuadernilloModule({ pacienteId, initialExerciseIds }: Pr
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6">
-      {centroPaciente?.cuadernilloPropio && (
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-          <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
-            {pacienteNombreClinico || 'Este paciente'} se atiende en {centroPaciente.nombre}: usa el cuadernillo que entrega el centro.
-          </p>
-          <p className="text-xs text-amber-700 dark:text-amber-300/90 mt-1">
-            No hace falta generar uno. Seguí su evolución con Anamnesis, Escalas, Análisis Praat, PitchMeter y Voz y sesiones.
-            Si igual lo necesitás, podés generarlo (se pide confirmación).
-          </p>
+      {/* Cuadernillo de Fonoar: el que usan los pacientes de ese centro */}
+      {(centroPaciente?.cuadernilloPropio || verFonoar) ? (
+        <div className="p-5 rounded-2xl bg-white/80 dark:bg-white/5 border border-indigo-300 dark:border-indigo-500/40 space-y-3">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-black text-slate-900 dark:text-white">Cuadernillo de Fonoar</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                {centroPaciente?.cuadernilloPropio
+                  ? `${pacienteNombreClinico || 'Este paciente'} se atiende en ${centroPaciente.nombre} y trabaja con este cuadernillo. No hace falta generar otro.`
+                  : 'Vista del cuadernillo de Fonoar (referencia).'}
+              </p>
+            </div>
+            {pacienteId && onArmarPractica && (
+              <button onClick={() => onArmarPractica('fonoar')}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">
+                Armar la práctica en casa con este cuadernillo
+              </button>
+            )}
+            {!centroPaciente?.cuadernilloPropio && (
+              <button onClick={() => setVerFonoar(false)} className="text-xs text-slate-500 underline">Cerrar</button>
+            )}
+          </div>
+          {!cuadFonoar ? <p className="text-xs text-slate-500">Cargando el cuadernillo…</p> : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {cuadFonoar.areas.map((a: any) => (
+                <div key={a.area} className="rounded-xl border border-slate-200 dark:border-white/10 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300 mb-1.5">{a.area}</p>
+                  <ul className="space-y-1">
+                    {a.ejercicios.map((e: any) => (
+                      <li key={`${e.numero}-${e.nombre}`} className="text-xs text-slate-800 dark:text-slate-200 flex gap-2">
+                        <span className="font-bold tabular-nums w-10 shrink-0">{e.numero === 'Rutina' ? '—' : e.numero}</span>
+                        <span className="flex-1">{e.nombre}<span className="block text-[10px] text-slate-500">Guía: {e.guia}</span></span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+          {cuadFonoar?.aviso && <p className="text-[10px] text-slate-500">{cuadFonoar.aviso}</p>}
+          {centroPaciente?.cuadernilloPropio && (
+            <p className="text-[11px] text-slate-500">Si igual necesitás un cuadernillo de la app para este paciente, armalo abajo (se pide confirmación al generarlo).</p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <button onClick={() => setVerFonoar(true)} className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-white/10 font-semibold">Ver cuadernillo de Fonoar</button>
+          {pacienteId && onArmarPractica && (<>
+            <button onClick={() => onArmarPractica('cuadernillo')} className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-white/10 font-semibold">Práctica en casa con su cuadernillo de la app</button>
+            <button onClick={() => onArmarPractica('tvso')} className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-white/10 font-semibold">Práctica de tracto vocal semiocluido (tubos)</button>
+          </>)}
         </div>
       )}
       {/* Alerta de seguridad clínica (contraindicaciones vs diagnóstico) */}

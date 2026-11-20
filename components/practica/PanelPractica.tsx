@@ -39,7 +39,12 @@ function limites(e: any, base: number): [number, number] {
  * notas y no se puede enviar si sale del rango. El profesional confirma antes
  * de mandar el enlace. Abajo: registro diario de práctica.
  */
-export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
+const MAX_EJERCICIOS = 25;  // alcanza para un cuadernillo completo (Fonoar: 23)
+/** Ejercicio listo para la rutina: repeticiones sugeridas y margen tonal. */
+const preparar = (e: any, margen: number) => ({ ...e, repeticiones: e.repeticiones_sugeridas || 3,
+  tolerancia_cents: usaTonoE(e) ? Math.max(e.tolerancia_cents || 0, margen) : (e.tolerancia_cents || 100) });
+
+export default function PanelPractica({ pacienteId, origenInicial }: { pacienteId: string; origenInicial?: string }) {
   const [sug, setSug] = useState<any>(null);
   const [base, setBase] = useState<string>('');
   const [rmin, setRmin] = useState<string>('');
@@ -58,18 +63,22 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   const [vozClaves, setVozClaves] = useState<string[]>([]);
   const [verVoz, setVerVoz] = useState(false);
   // De dónde salen los ejercicios: 'auto' = según el centro y si tiene cuadernillo.
-  const [origen, setOrigen] = useState('auto');
+  const [origen, setOrigen] = useState(origenInicial || 'auto');
 
   const cargar = () => {
     fetch(`${BACKEND_URL}/api/practicas?paciente_id=${pacienteId}`).then(r => r.json()).then(setLista).catch(() => {});
   };
-  useEffect(() => { setOrigen('auto'); }, [pacienteId]);
+  useEffect(() => { setOrigen(origenInicial || 'auto'); }, [pacienteId, origenInicial]);
   useEffect(() => {
     setSug(null); setElegidos([]); setNuevo(null); setError(''); setConfirmado(false);
     fetch(`${BACKEND_URL}/api/practicas/sugerencias?paciente_id=${pacienteId}&origen=${origen}`)
       .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.detail || `Error ${r.status}`); return j; })
       .then(j => {
         setSug(j);
+        if (j.origen !== 'sueltos' && (j.ejercicios || []).some((e: any) => e.ref_cuadernillo)) {
+          const margen = Math.max(OIDO.sin_experiencia.cents, j.tolerancia_sugerida?.cents || 100);
+          setElegidos((j.ejercicios || []).slice(0, MAX_EJERCICIOS).map((e: any) => preparar(e, margen)));
+        }
         setBase(j.tono_base?.hz ? String(j.tono_base.hz) : '');
         setRmin(j.rango?.min_hz ? String(Math.round(j.rango.min_hz)) : '');
         setRmax(j.rango?.max_hz ? String(Math.round(j.rango.max_hz)) : '');
@@ -92,7 +101,9 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   }), [elegidos, b, lo, hi, tonoOk, rangoOk]);
   const hayFuera = revisados.some(e => e._fuera);
   const necesitaTono = revisados.some(e => e._tono);
-  const listo = elegidos.length > 0 && (!necesitaTono || (tonoOk && baseEnRango)) && rangoOk && !hayFuera && confirmado;
+  // El rango tonal solo se exige si hay ejercicios con altura (cuerpo y respiración no lo necesitan).
+  const rangoNecesario = necesitaTono;
+  const listo = elegidos.length > 0 && (!necesitaTono || (tonoOk && baseEnRango)) && (!rangoNecesario || rangoOk) && !hayFuera && confirmado;
   /** Margen tonal según el oído del paciente y su cuadro (el más amplio de los dos). */
   const margenSugerido = Math.max(OIDO[oido].cents, sug?.tolerancia_sugerida?.cents || 100);
   const aplicarOido = (o: string) => {
@@ -102,7 +113,16 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
   };
 
   const alternar = (e: any) => { setConfirmado(false); setElegidos(v => v.some(x => x.bank_id === e.bank_id)
-    ? v.filter(x => x.bank_id !== e.bank_id) : [...v, { ...e, repeticiones: e.repeticiones_sugeridas || 3, tolerancia_cents: usaTonoE(e) ? Math.max(e.tolerancia_cents || 0, margenSugerido) : (e.tolerancia_cents || 100) }].slice(0, 8)); };
+    ? v.filter(x => x.bank_id !== e.bank_id) : [...v, preparar(e, margenSugerido)].slice(0, MAX_EJERCICIOS)); };
+  /** Marca o desmarca un bloque entero (área del cuadernillo) con un clic. */
+  const alternarBloque = (bloque: string) => {
+    setConfirmado(false);
+    const del = (sug?.ejercicios || []).filter((e: any) => (e.bloque || 'Otros') === bloque);
+    const todos = del.every((e: any) => elegidos.some(x => x.bank_id === e.bank_id));
+    setElegidos(v => todos ? v.filter(x => !del.some((e: any) => e.bank_id === x.bank_id))
+      : [...v, ...del.filter((e: any) => !v.some(x => x.bank_id === e.bank_id)).map((e: any) => preparar(e, margenSugerido))]
+          .sort((a: any, b: any) => (a.orden_cuadernillo ?? 999) - (b.orden_cuadernillo ?? 999)).slice(0, MAX_EJERCICIOS));
+  };
   const cambiar = (bid: string, k: string, val: any) => { setConfirmado(false); setElegidos(v => v.map(x => x.bank_id === bid ? { ...x, [k]: val } : x)); };
 
   /** Acota amplitud/escalera al rango de trabajo. */
@@ -196,7 +216,8 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
               ))}</p>
             )}
             {!tonoOk && <p className="text-amber-700 dark:text-amber-300">Cargá el tono de inicio: no hay F0 medida para este paciente.</p>}
-            {!rangoOk && <p className="text-amber-700 dark:text-amber-300">Cargá el rango de trabajo (mínimo y máximo).</p>}
+            {!rangoOk && rangoNecesario && <p className="text-amber-700 dark:text-amber-300">Cargá el rango de trabajo (mínimo y máximo).</p>}
+            {!rangoNecesario && elegidos.length > 0 && <p className="text-slate-500">Los ejercicios elegidos no tienen altura objetivo: el rango no es obligatorio.</p>}
             {tonoOk && rangoOk && !baseEnRango && <p className="text-red-600">El tono de inicio está fuera del rango de trabajo.</p>}
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={guardarRango} onChange={e => setGuardarRango(e.target.checked)} />
               Guardar este rango como rango clínico del paciente</label>
@@ -233,6 +254,22 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
             )}
             {sug.origen === 'sueltos' && <p className="text-slate-500">Práctica fuera del cuadernillo: todos los ejercicios con guía (los del plan vigente primero).</p>}
             {sug.aviso_origen && <p className="text-amber-700 dark:text-amber-300">{sug.aviso_origen}</p>}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-bold">{elegidos.length} de {sug.ejercicios.length} elegidos</span>
+            <button onClick={() => { setConfirmado(false); setElegidos(sug.ejercicios.slice(0, MAX_EJERCICIOS).map((e: any) => preparar(e, margenSugerido))); }}
+              className="px-2 py-1 rounded-lg border border-indigo-300 text-indigo-700 dark:text-indigo-300 font-semibold">Todos</button>
+            <button onClick={() => { setConfirmado(false); setElegidos([]); }} className="px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 font-semibold">Ninguno</button>
+            {[...new Set(sug.ejercicios.map((e: any) => e.bloque || 'Otros'))].map((bl: any) => {
+              const del = sug.ejercicios.filter((e: any) => (e.bloque || 'Otros') === bl);
+              const n = del.filter((e: any) => elegidos.some(x => x.bank_id === e.bank_id)).length;
+              return (
+                <button key={bl} onClick={() => alternarBloque(bl)}
+                  className={`px-2 py-1 rounded-lg border font-semibold ${n === del.length ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-200' : n ? 'border-indigo-300 text-indigo-700 dark:text-indigo-300' : 'border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-300'}`}>
+                  {bl} {n}/{del.length}
+                </button>
+              );
+            })}
           </div>
           <div className="grid sm:grid-cols-2 gap-1.5">
             {sug.ejercicios.map((e: any) => (
@@ -287,7 +324,7 @@ export default function PanelPractica({ pacienteId }: { pacienteId: string }) {
               </div>
               <textarea value={indicaciones} onChange={e => setIndicaciones(e.target.value)} rows={2} className={inp + ' w-full'} placeholder="Indicación general" />
               <label className="flex items-start gap-1.5 font-semibold">
-                <input type="checkbox" className="mt-0.5" checked={confirmado} disabled={(necesitaTono && (!tonoOk || !baseEnRango)) || !rangoOk || hayFuera} onChange={e => setConfirmado(e.target.checked)} />
+                <input type="checkbox" className="mt-0.5" checked={confirmado} disabled={(necesitaTono && (!tonoOk || !baseEnRango)) || (rangoNecesario && !rangoOk) || hayFuera} onChange={e => setConfirmado(e.target.checked)} />
                 Revisé el tono de inicio ({tonoOk ? `${nota(b)}, ${hz1(b)} Hz` : '—'}) y el rango de trabajo ({rangoOk ? `${nota(lo)}–${nota(hi)}` : '—'}): son los indicados para este paciente.
               </label>
               <div className="flex flex-wrap gap-2">

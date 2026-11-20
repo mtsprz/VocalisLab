@@ -39,6 +39,12 @@ export const DEMO = {
   nombre: 'León', estado: 'activa', consentimiento: true, profesional: 'Matías Pérez · Fonoaudiólogo',
   indicaciones: 'Dos veces por día, mañana y tarde.', veces_por_dia: 2, practicas_hoy: 1, voz: [],
   ejercicios: [
+    { bank_id: 'descenso_laringeo', nombre: 'Descenso laríngeo: bostezo o succión', medida: 'pasos', modelo: 'sin_modelo', guia: 'sostenida', base_hz: 118, repeticiones: 2, tolerancia_cents: 100,
+      ref_cuadernillo: 'Cuadernillo Fonoar · 4b. Descenso laríngeo: bostezo o succión',
+      consigna: 'Dedo apoyado suave sobre la nuez para sentir que baja. Sin forzar.',
+      pasos: [{ tipo: 'inhala', segundos: 4, texto: 'Bostezá lento por la boca (o succioná como con un sorbete)' },
+              { tipo: 'accion', segundos: 5, texto: 'Mantené la laringe baja, sin tensión' },
+              { tipo: 'descanso', segundos: 4, texto: 'Soltá despacio, sin movimientos bruscos' }] },
     { bank_id: 'glissandos', nombre: 'Glissandos ascendentes y descendentes', medida: 'tono', modelo: 'sonoro', guia: 'rampa', base_hz: 118, amplitud: 5, duracion_s: 6, repeticiones: 2, tolerancia_cents: 200, consigna: 'Sirena suave sobre /u/: subí y bajá siguiendo la rampa.' },
     { bank_id: 'tubo_agua', nombre: 'Tubo en agua', medida: 'flujo', modelo: 'sin_modelo', guia: 'sostenida', base_hz: 118, duracion_objetivo_s: 8, margen_db: 6, repeticiones: 2, tolerancia_cents: 100, consigna: 'Tubo en el agua: burbujeo parejo y sonido continuo, sin empujar.' },
     { bank_id: 'messa_di_voce', nombre: 'Messa di voce', medida: 'intensidad', modelo: 'sonoro', guia: 'sostenida', base_hz: 118, duracion_s: 8, patron_intensidad: 'arco', margen_db: 4, repeticiones: 2, tolerancia_cents: 100, consigna: 'Misma nota: empezá suave, crecé y volvé a suave.' },

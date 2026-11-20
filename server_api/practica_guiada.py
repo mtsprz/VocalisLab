@@ -111,6 +111,7 @@ GUIA_POR_EJERCICIO.setdefault('mano_boca', {"medida": "pasos", "guia": "sostenid
 GUIA_POR_EJERCICIO.setdefault('b_prolongada', {"medida": "pasos", "guia": "sostenida", "modelo": "sin_modelo", "repeticiones_sugeridas": 6, "consigna": 'Labios cerrados y mejillas que se inflan un poco; laringe cómoda.', "pasos": [{'tipo': 'inhala', 'segundos': 3, 'texto': 'Tomá aire'}, {'tipo': 'sonido', 'segundos': 5, 'texto': '«Bbbb» prolongada en tono cómodo'}, {'tipo': 'descanso', 'segundos': 3, 'texto': 'Soltá'}]})
 
 MEDIDAS = ("tono", "sostenido", "flujo", "intensidad", "pulsos", "libre", "pasos")
+MAX_EJERCICIOS = 25  # alcanza para un cuadernillo completo (Fonoar: 23)
 # pasos: ejercicio sin medición de voz (cuerpo, masajes, respiración, descenso laríngeo):
 # una secuencia de pasos con cuenta regresiva; se registra que se hizo y cuánto duró.
 TIPOS_PASO = ("inhala", "retiene", "exhala", "sonido", "accion", "descanso")
@@ -418,7 +419,9 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
     base = perfil["tono_base"]
     rango = perfil["rango"]
     from api_clinica import banco_ejercicios_completo
-    banco = {e["id"]: e for s in banco_ejercicios_completo().get("sections", []) for e in s.get("exercises", []) if e.get("id")}
+    _secciones = banco_ejercicios_completo().get("sections", [])
+    banco = {e["id"]: e for s in _secciones for e in s.get("exercises", []) if e.get("id")}
+    seccion_de = {e["id"]: nombre_limpio(s.get("name")) for s in _secciones for e in s.get("exercises", []) if e.get("id")}
     plan_ids = []
     try:
         rec = (sb.table("recomendaciones_terapeuticas").select("*").eq("paciente_id", paciente_id)
@@ -442,7 +445,7 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
     aviso = ""
     # Entradas en orden: (clave única, id del banco, orden, referencia para el paciente, ajuste de guía).
     # Un mismo ejercicio del banco puede estar con distinto número (Fonoar 12, 13 y 14 = escalas).
-    entradas, sin_guia, vistos = [], [], {}
+    entradas, sin_guia, vistos, bloque_de = [], [], {}, {}
     if elegido == "fonoar":
         cat = catalogo_fonoar()
         if cat:
@@ -452,6 +455,7 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
                 if bid in GUIA_POR_EJERCICIO and bid in banco:
                     vistos[bid] = vistos.get(bid, 0) + 1
                     clave = bid if vistos[bid] == 1 else f"{bid}~{e.get('numero')}"
+                    bloque_de[clave] = AREAS_FONOAR.get(e.get("area"), e.get("area") or "")
                     entradas.append((clave, bid, i, ref, e.get("guia") or {}, e.get("nombre")))
                 else:
                     sin_guia.append({"orden": e.get("numero"), "nombre": e.get("nombre")})
@@ -490,6 +494,9 @@ async def sugerencias(paciente_id: str, origen: str = "auto"):
                     base_hz=base["hz"], en_plan=bid in plan_ids, origen=elegido if con_ref else "sueltos")
         if ref:
             item["ref_cuadernillo"], item["orden_cuadernillo"] = ref, orden
+        # Bloque para seleccionar de a grupos: área del cuadernillo de Fonoar, etapa del
+        # apartado de tubos, o sección del banco.
+        item["bloque"] = bloque_de.get(clave) or (ref.split(" · ")[0] if elegido == "tvso" and ref else "") or seccion_de.get(bid, "")
         lista.append(item)
     if not con_ref:
         lista.sort(key=lambda x: (not x["en_plan"], x["nombre"]))
@@ -525,19 +532,25 @@ async def crear(request: Request):
     if not p:
         raise HTTPException(status_code=404, detail="Paciente inexistente")
     ejercicios = body.get("ejercicios") or []
-    if not 1 <= len(ejercicios) <= 8:
-        raise HTTPException(status_code=400, detail="La rutina lleva de 1 a 8 ejercicios.")
+    if not 1 <= len(ejercicios) <= MAX_EJERCICIOS:
+        raise HTTPException(status_code=400, detail=f"La rutina lleva de 1 a {MAX_EJERCICIOS} ejercicios.")
     if body.get("confirmado") is not True:
-        raise HTTPException(status_code=400, detail="Confirmá que revisaste el tono de inicio y el rango de trabajo.")
+        raise HTTPException(status_code=400, detail="Confirmá que revisaste la rutina antes de enviarla.")
+    # El rango tonal solo hace falta si algún ejercicio tiene altura objetivo
+    # (una rutina de cuerpo, respiración y masajes no lo necesita).
+    con_altura = any(usa_tono(e) for e in ejercicios if isinstance(e, dict))
     rango = body.get("rango") or {}
     lo, hi = _f(rango.get("min_hz")), _f(rango.get("max_hz"))
     if not (lo and hi and _st(hi, lo) >= 2):
-        raise HTTPException(status_code=400, detail="Falta el rango de trabajo (mínimo y máximo en Hz, al menos 2 semitonos).")
+        if con_altura:
+            raise HTTPException(status_code=400, detail="Falta el rango de trabajo (mínimo y máximo en Hz, al menos 2 semitonos).")
+        lo = hi = None
     base = tono_base(sb, pid, p)["hz"]
     ejercicios = [normalizar_ejercicio(e, base) for e in ejercicios]
     for e in ejercicios:
         if not usa_tono(e):
-            e["rango_min_hz"], e["rango_max_hz"] = round(lo, 1), round(hi, 1)
+            if lo and hi:
+                e["rango_min_hz"], e["rango_max_hz"] = round(lo, 1), round(hi, 1)
             continue
         grave, agudo = limites_hz(e)
         if grave < lo * 2 ** (-0.5 / 12) or agudo > hi * 2 ** (0.5 / 12):
@@ -546,7 +559,7 @@ async def crear(request: Request):
                 f"sale del rango de trabajo {nombre_nota(lo)}–{nombre_nota(hi)} ({lo:.0f}–{hi:.0f} Hz). "
                 "Bajá la amplitud o cambiá el tono de inicio."))
         e["rango_min_hz"], e["rango_max_hz"] = round(lo, 1), round(hi, 1)
-    if body.get("guardar_rango_paciente"):
+    if body.get("guardar_rango_paciente") and lo and hi:
         try:
             sb.table("pacientes").update({"f0_ref_min_hz": round(lo, 1), "f0_ref_max_hz": round(hi, 1)}).eq("id", pid).execute()
         except Exception as e:
@@ -559,7 +572,7 @@ async def crear(request: Request):
     fila = {"token": token, "paciente_id": pid, "activa": True, "saludo": saludo,
             "ejercicios": ejercicios, "indicaciones": str(body.get("indicaciones") or "")[:500],
             "vence_at": (_ahora() + timedelta(days=dias)).isoformat(),
-            "veces_por_dia": veces, "rango": {"min_hz": round(lo, 1), "max_hz": round(hi, 1)}}
+            "veces_por_dia": veces, "rango": {"min_hz": round(lo, 1), "max_hz": round(hi, 1)} if lo and hi else None}
     try:
         guardada = (sb.table("practicas").insert(fila).execute().data or [fila])[0]
     except Exception as e:
@@ -786,3 +799,31 @@ async def guardar_sesion(token: str, request: Request):
             except Exception:
                 pass
     return {"ok": True}
+
+
+# ─── Cuadernillo de Fonoar (consulta para la pantalla de cuadernillos) ─────
+
+AREAS_FONOAR = {"corporal": "Trabajo corporal", "laringeo": "Descenso laríngeo", "orofaringeo": "Apertura de la boca",
+                "respiratorio": "Trabajo respiratorio", "vocalizaciones": "Vocalizaciones",
+                "transferencia": "Transferencia al habla", "rutinas": "Rutinas"}
+
+
+@router.get("/api/cuadernillos/fonoar")
+async def cuadernillo_fonoar():
+    """El cuadernillo de Fonoar cargado, por áreas, con el tipo de guía de cada número."""
+    cat = catalogo_fonoar()
+    if not cat:
+        raise HTTPException(status_code=404, detail="El cuadernillo de Fonoar no está cargado.")
+    tipos = {"tono": "con altura (pelotita)", "sostenido": "sonido sostenido", "flujo": "sonido con aire",
+             "intensidad": "volumen", "pulsos": "pulsos", "libre": "habla libre", "pasos": "con tiempo"}
+    areas = []
+    for e in cat["ejercicios"]:
+        g = GUIA_POR_EJERCICIO.get(e.get("bank_id")) or {}
+        item = {"numero": e.get("numero"), "nombre": e.get("nombre"), "bank_id": e.get("bank_id"),
+                "guia": tipos.get(g.get("medida"), "sin guía")}
+        area = AREAS_FONOAR.get(e.get("area"), e.get("area") or "Otros")
+        if not areas or areas[-1]["area"] != area:
+            areas.append({"area": area, "ejercicios": []})
+        areas[-1]["ejercicios"].append(item)
+    return {"titulo": cat.get("titulo"), "total": len(cat["ejercicios"]), "areas": areas,
+            "aviso": "Solo numeración y títulos, para ubicar cada ejercicio en el cuadernillo en papel del paciente."}

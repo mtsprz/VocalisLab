@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Calendar, Users, FileText, Mic, BarChart3, Music,
   Stethoscope, Activity, ChevronRight, Menu, X, Sun, Moon, Sparkles, LogOut,
-  AudioWaveform, Video, ClipboardList
+  AudioWaveform, Video, ClipboardList, Dumbbell
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginScreen from './LoginScreen';
@@ -23,8 +23,9 @@ import VideoconferenciaModule from './VideoconferenciaModule';
 import CloudflareImageGenerator from './CloudflareImageGenerator';
 import SesionesVozModule from './SesionesVozModule';
 import GrabadorEmergencia from './GrabadorEmergencia';
+import PracticaModule from './practica/PracticaModule';
 
-type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'ficha' | 'sala' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia' | 'imagenes' | 'sesiones' | 'grabador';
+type ActiveModule = 'dashboard' | 'agenda' | 'pacientes' | 'ficha' | 'sala' | 'anamnesis' | 'escalas' | 'analisis' | 'recomendacion' | 'pitch' | 'cuadernillo' | 'videoconferencia' | 'imagenes' | 'sesiones' | 'grabador' | 'practica';
 
 const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -40,6 +41,7 @@ const NAV_ITEMS: { id: ActiveModule; label: string; icon: React.ReactNode }[] = 
   { id: 'pitch', label: 'Pitch Meter', icon: <Music size={20} /> },
   { id: 'sala', label: 'Sala virtual', icon: <Video size={20} /> },
   { id: 'cuadernillo', label: 'Cuadernillo', icon: <FileText size={20} /> },
+  { id: 'practica', label: 'Práctica en casa', icon: <Dumbbell size={20} /> },
   { id: 'imagenes', label: 'Generador Imagen', icon: <Sparkles size={20} /> },
 ];
 
@@ -47,6 +49,7 @@ function AppInner() {
   const { user, logout } = useAuth();
   const clinical = useClinical();
   const [activeModule, setActiveModule] = useState<ActiveModule>('dashboard');
+  const [origenPractica, setOrigenPractica] = useState<string | undefined>(undefined);
   // En móvil el sidebar arranca cerrado (overlay); en PC arranca abierto
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(
     () => typeof window === 'undefined' || window.innerWidth >= 768
@@ -139,7 +142,10 @@ function AppInner() {
       case 'pitch':
         return <PitchMeterModule />;
       case 'cuadernillo':
-        return <CuadernilloModule pacienteId={selectedPacienteId} initialExerciseIds={initialExerciseIds} />;
+        return <CuadernilloModule pacienteId={selectedPacienteId} initialExerciseIds={initialExerciseIds}
+          onArmarPractica={(origen) => { setOrigenPractica(origen); setActiveModule('practica'); }} />;
+      case 'practica':
+        return <PracticaModule pacienteId={selectedPacienteId || ''} origenInicial={origenPractica} />;
       case 'imagenes':
         return <CloudflareImageGenerator />;
       case 'videoconferencia':
@@ -183,7 +189,7 @@ function AppInner() {
             {NAV_ITEMS.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setActiveModule(item.id)}
+                onClick={() => { setOrigenPractica(undefined); setActiveModule(item.id); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   activeModule === item.id
                     ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 shadow-sm'

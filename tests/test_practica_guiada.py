@@ -343,3 +343,31 @@ def test_apartado_tracto_vocal_semiocluido(cliente):
     assert r["origen"] == "tvso" and ids[0] == "descenso_laringeo"
     assert ids.index("laxvox_agua") < ids.index("tubo_aire_libre") < ids.index("oclusion_nasal")
     assert r["ejercicios"][2]["ref_cuadernillo"].startswith("Tubos")
+
+
+def test_pantalla_cuadernillo_fonoar(cliente):
+    c, _ = cliente
+    r = c.get("/api/cuadernillos/fonoar").json()
+    assert r["total"] == 23 and r["areas"][0]["area"] == "Trabajo corporal"
+    todos = [e for a in r["areas"] for e in a["ejercicios"]]
+    assert all(e["guia"] != "sin guía" for e in todos)
+    assert next(e for e in todos if e["numero"] == "4b")["guia"] == "con tiempo"
+
+
+def test_fonoar_trae_bloques_y_rutina_sin_rango(cliente):
+    c, base = cliente
+    base.t["pacientes"][0]["centro"] = "fonoar_la_plata"
+    r = c.get("/api/practicas/sugerencias?paciente_id=p1").json()
+    bloques = {e["bloque"] for e in r["ejercicios"]}
+    assert {"Trabajo corporal", "Descenso laríngeo", "Vocalizaciones"} <= bloques
+    # Rutina solo de cuerpo y respiración: no exige rango tonal.
+    cuerpo = [e for e in r["ejercicios"] if e["bloque"] in ("Trabajo corporal", "Trabajo respiratorio")]
+    resp = c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": cuerpo, "confirmado": True})
+    assert resp.status_code == 200, resp.text
+    # Con altura, el rango sigue siendo obligatorio.
+    altura = [e for e in r["ejercicios"] if e["medida"] == "tono"][:1]
+    assert c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": altura, "confirmado": True}).status_code == 400
+    # Cuadernillo completo en una sola rutina.
+    todo = c.post("/api/practicas", json={"paciente_id": "p1", "ejercicios": r["ejercicios"], "confirmado": True,
+                                          "rango": {"min_hz": 90, "max_hz": 260}})
+    assert todo.status_code == 200, todo.text
