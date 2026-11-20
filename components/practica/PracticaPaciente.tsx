@@ -5,7 +5,8 @@ import {
   tocarCamino, tocarNota, clic, nombreLimpio, compararTono, medidaDe, usaTono, objetivoDb, tiemposPulsos, crearTimbre,
 } from '../../utils/guiaPractica';
 import { Locutor } from '../../utils/locutor';
-import { Escenario, MedicionSZ, NOCHE } from './visuales';
+import { AnilloCuenta, Escenario, MedicionSZ, NOCHE } from './visuales';
+import { AnimacionPaso } from './animaciones';
 import type { Paso } from '../../utils/guiaPractica';
 /** Color y tamaño de la esfera por tipo de paso (inhalar crece, exhalar se achica). */
 const PASO_VISUAL: Record<string, { color: string; escala: number; texto: string }> = {
@@ -277,8 +278,12 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       for (let k = 0; k < pasos.length && corriendo.current; k++) {
         const p = pasos[k];
         setPasoActual({ paso: p, n: k + 1, total: pasos.length }); setAviso(p.texto);
+        // Primero la indicación completa; el tiempo del paso corre recién cuando terminó
+        // de hablar (nunca se pisa la frase con la cuenta).
+        setReloj(null);
+        await decir(`paso:${e.bank_id || ''}:${k}`, p.texto, 150);
+        if (!corriendo.current) break;
         clic(ctx, ctx.currentTime + 0.02, p.tipo !== 'descanso');
-        decir(`paso:${e.bank_id || ''}:${k}`, p.texto, 0);
         const ini = performance.now();
         while (corriendo.current) {
           const resta = p.segundos - (performance.now() - ini) / 1000;
@@ -454,9 +459,10 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
       // 4) Respirá.
       if (r < e.repeticiones - 1 && corriendo.current) {
         setEtapa('pausa'); setAviso('Respirá tranquilo'); dibujar(0, null, 'nada');
-        const p0 = performance.now(), totalP = PAUSA_MS / 1000;
+        const totalP = PAUSA_MS / 1000;
         setReloj({ restante: totalP, total: totalP });
-        decir('respira', 'Respirá.', 0);
+        await decir('respira', 'Respirá.', 0);
+        const p0 = performance.now();
         await durante(totalP, () => setReloj({ restante: Math.max(0, totalP - (performance.now() - p0) / 1000), total: totalP }));
       }
     }
@@ -617,11 +623,18 @@ export default function PracticaPaciente({ token = '', vistaPrevia, onCerrar }: 
           <div className="flex justify-between text-sm"><b>{nombreLimpio(ej.nombre)}</b><span className="text-slate-500">Repetición {rep} de {ej.repeticiones}</span></div>
           {pasoActual ? (
             <div className="flex flex-col items-center gap-3 py-2">
-              <Escenario tamano="w-48 h-48" color={PASO_VISUAL[pasoActual.paso.tipo].color} escala={PASO_VISUAL[pasoActual.paso.tipo].escala}
-                fraccion={reloj ? reloj.restante / reloj.total : 1} centro={reloj ? Math.ceil(reloj.restante) : pasoActual.paso.segundos} />
+              <div className="relative w-64 h-64 max-w-full rounded-3xl bg-[#0d1320] ring-1 ring-[#233047] overflow-hidden">
+                <AnimacionPaso bankId={ej.bank_id} paso={pasoActual.paso} clave={`${idx}-${rep}-${pasoActual.n}`}
+                  corriendo={!!reloj} color={PASO_VISUAL[pasoActual.paso.tipo].color} />
+                <div className="absolute top-2 right-2 w-16 h-16">
+                  <AnilloCuenta fraccion={reloj ? reloj.restante / reloj.total : 1} color={PASO_VISUAL[pasoActual.paso.tipo].color} />
+                  <span className="absolute inset-0 flex items-center justify-center text-xl font-black tabular-nums text-slate-100" aria-live="polite">
+                    {reloj ? Math.ceil(reloj.restante) : pasoActual.paso.segundos}</span>
+                </div>
+              </div>
               <p className="text-xl font-black" style={{ color: PASO_VISUAL[pasoActual.paso.tipo].color }}>{PASO_VISUAL[pasoActual.paso.tipo].texto}</p>
               <p className="text-center font-semibold text-slate-100 min-h-12" aria-live="polite">{pasoActual.paso.texto}</p>
-              <p className="text-xs text-[#8d98ad]">Paso {pasoActual.n} de {pasoActual.total}</p>
+              <p className="text-xs text-[#8d98ad]">{reloj ? `Paso ${pasoActual.n} de ${pasoActual.total}` : `Escuchá la indicación · paso ${pasoActual.n} de ${pasoActual.total}`}</p>
             </div>
           ) : medidaDe(ej) === 'pasos' ? (
             <p className="text-center font-semibold text-slate-200 py-6" aria-live="polite">{aviso || 'Preparate…'}</p>

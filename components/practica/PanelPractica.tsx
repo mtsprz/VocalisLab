@@ -315,6 +315,27 @@ export default function PanelPractica({ pacienteId, origenInicial }: { pacienteI
                     {e._tono && e.guia === 'rampa' && <label>Amplitud <input type="number" min={1} max={24} value={e.amplitud} onChange={x => cambiar(e.bank_id, 'amplitud', Number(x.target.value))} className={inp + ' w-14'} /> semitonos</label>}
                     {e._tono && e.medida !== 'sostenido' && e.guia === 'sostenida' && <label>Duración <input type="number" min={2} max={30} value={e.duracion_s || 6} onChange={x => cambiar(e.bank_id, 'duracion_s', Number(x.target.value))} className={inp + ' w-14'} /> s</label>}
                   </div>
+                  {e.medida === 'pasos' && Array.isArray(e.pasos) && e.pasos.length > 0 && (() => {
+                    const fijar = (k: number, s: number) => cambiar(e.bank_id, 'pasos',
+                      e.pasos.map((p: any, j: number) => j === k ? { ...p, segundos: Math.max(1, Math.min(120, Math.round(s))) } : p));
+                    const total = e.pasos.reduce((a: number, p: any) => a + (Number(p.segundos) || 0), 0);
+                    return (
+                      <div className="rounded-lg border border-slate-200 dark:border-white/10 p-2 space-y-1">
+                        <p className="text-xs font-semibold text-slate-500">Tiempo de cada paso (la cuenta empieza cuando termina la indicación hablada)</p>
+                        {e.pasos.map((p: any, k: number) => (
+                          <div key={k} className="flex items-center gap-2 text-sm">
+                            <span className="w-5 text-right text-slate-400">{k + 1}.</span>
+                            <span className="flex-1 truncate" title={p.texto}>{p.texto}</span>
+                            <button type="button" aria-label="Menos tiempo" onClick={() => fijar(k, p.segundos - 1)} className="w-7 h-7 rounded bg-slate-100 dark:bg-white/10 font-bold">−</button>
+                            <input type="number" min={1} max={120} value={p.segundos} onChange={x => fijar(k, Number(x.target.value) || 1)} className={inp + ' w-14 text-center'} />
+                            <button type="button" aria-label="Más tiempo" onClick={() => fijar(k, p.segundos + 1)} className="w-7 h-7 rounded bg-slate-100 dark:bg-white/10 font-bold">+</button>
+                            <span className="text-slate-500 w-4">s</span>
+                          </div>
+                        ))}
+                        <p className="text-xs text-slate-500">Cada repetición: {total} s de trabajo + la lectura de las indicaciones · {e.repeticiones} repeticiones.</p>
+                      </div>
+                    );
+                  })()}
                   <input value={e.consigna || ''} onChange={x => cambiar(e.bank_id, 'consigna', x.target.value)} className={inp + ' w-full'} placeholder="Consigna para el paciente" />
                 </div>
               ))}
